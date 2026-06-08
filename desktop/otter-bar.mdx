@@ -1,10 +1,10 @@
 ---
 title: "otter-bar"
 sidebarTitle: "Status bar"
-description: "Wayland status bar with workspaces, system tray, volume, MPRIS, battery, and configurable widgets."
+description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other widgets."
 ---
 
-`otter-bar` is the Otter Shell status bar. It renders on the top or bottom of each output using `zwlr_layer_shell_v1` and hot-reloads both its own config and the shared theme.
+`otter-bar` is the Otter Shell status bar. It anchors to the top or bottom of each output via `zwlr_layer_shell_v1` and reloads its own config and the shared theme without restarting.
 
 ## Features
 
@@ -29,14 +29,14 @@ otter-bar
 
 Add to compositor autostart — see [Session setup](/desktop/session-setup).
 
-The default menu button runs `otter-launcher`. Configure with `button_menu_command` in the bar config.
+The default menu button runs `otter-launcher`. Set `button_menu_command` in the bar config to change that.
 
 ## Configuration
 
 Config file: `~/.config/otter-shell/otter-bar.conf` (fallback: `/etc/otter-shell/otter-bar.conf`). A default config is created on first run.
 
 <Tip>
-  Use [otter-settings](/desktop/otter-settings) to edit bar layout, widgets, and colors with drag-and-drop — much easier than editing the config file by hand.
+  Use [otter-settings](/desktop/otter-settings) to drag widgets around instead of editing layout strings in a file.
 </Tip>
 
 Key settings:
@@ -55,7 +55,7 @@ layout_right = tray, mpris, volume, clock, battery, button_menu
 button_menu_command = otter-launcher
 ```
 
-Widget color fields are optional — omit them to inherit from [theme.conf](/configuration/themes).
+Widget color fields are optional. Omit them to inherit from [theme.conf](/configuration/themes).
 
 ### Weather widget
 

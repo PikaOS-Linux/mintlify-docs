@@ -1,10 +1,10 @@
 ---
 title: "otter-idle"
 sidebarTitle: "Idle daemon"
-description: "Idle management with configurable timeouts, DPMS control, and systemd-logind sleep integration."
+description: "Idle timeouts, DPMS control, and systemd-logind sleep hooks."
 ---
 
-`otter-idle` detects user inactivity and runs configurable commands — typically locking the session or turning off displays. It integrates with systemd-logind for sleep events and screen saver inhibition.
+`otter-idle` watches for inactivity and runs commands you configure, usually `loginctl lock-session` or turning displays off. It also hooks into systemd-logind for sleep events and screen saver inhibition.
 
 ## Usage
 
@@ -65,13 +65,13 @@ DPMS backend selection:
 
 ## Inhibitor handling
 
-Three layers of idle inhibition:
+Three layers can block idle actions:
 
 1. **Wayland-native** (`zwp_idle_inhibit_manager_v1`) — handled by compositor
 2. **D-Bus** (`org.freedesktop.ScreenSaver`) — tracked by otter-idle (video players, etc.)
 3. **systemd** (`loginctl inhibit`) — checked via logind ListInhibitors
 
-Set `ignore_dbus_inhibit = true` or `ignore_systemd_inhibit = true` to bypass respective layers.
+Set `ignore_dbus_inhibit = true` or `ignore_systemd_inhibit = true` to skip those checks.
 
 ## Logind integration
 

@@ -1,10 +1,10 @@
 ---
 title: "otter-greeter"
 sidebarTitle: "Display manager"
-description: "Wayland display manager with PAM authentication, fingerprint support, and AccountsService user discovery."
+description: "Wayland display manager with PAM login, fingerprint auth, and AccountsService user list."
 ---
 
-`otter-greeter` is Otter Shell's Wayland display manager. It handles login before your user compositor session starts.
+`otter-greeter` handles login before your user compositor session starts.
 
 ## Components
 
@@ -13,7 +13,7 @@ description: "Wayland display manager with PAM authentication, fingerprint suppo
 | `otter-greeterd` | Root daemon — PAM, logind seats, AccountsService, IPC, session launch |
 | `otter-greeter-ui` | Unprivileged Wayland login UI |
 
-The greeter UI runs on **Hyprland** configured for the login screen only. Your user session uses whichever compositor you configure separately — the greeter does not dictate your desktop compositor.
+The greeter UI runs on **Hyprland** for the login screen only. Your session compositor is separate. The greeter does not pick one for you.
 
 ## Installation
 

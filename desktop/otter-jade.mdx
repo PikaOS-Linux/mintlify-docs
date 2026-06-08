@@ -1,10 +1,10 @@
 ---
 title: "otter-jade"
 sidebarTitle: "Desktop pet"
-description: "Animated otter tamagotchi on a Wayland layer-shell surface with care mechanics and persistent state."
+description: "Desktop pet otter with growth stages, care mechanics, and saved state."
 ---
 
-`otter-jade` is an animated otter desktop pet. Jade grows from egg to pup, teen, and adult stages, moves along screen edges, and responds to pointer input.
+`otter-jade` is a desktop pet otter. Jade hatches from an egg, grows through pup and teen stages to adult, walks along screen edges, and reacts to pointer input.
 
 ## Usage
 
@@ -12,7 +12,7 @@ description: "Animated otter tamagotchi on a Wayland layer-shell surface with ca
 otter-jade
 ```
 
-Optional autostart — add to compositor autostart if you want Jade at login.
+Optional autostart. Add to compositor autostart if you want Jade at login.
 
 ```bash
 # Reset persisted state on launch
@@ -33,7 +33,7 @@ otter-jade --demo
 
 - Four stages: egg, pup, teen, adult
 - Sprite animations for idle, walk, sleep, happy, hungry, dirty, eating, cleaning, petting, and more
-- Visual need cues without meters — hunger, cleanliness, and mood affect behavior
+- Hunger, cleanliness, and mood show up in behavior, not meters
 - Random color and rare shiny rolls when the egg hatches
 - State stored at `$XDG_STATE_HOME/otter-shell/otter-jade.state` (fallback: `$HOME/.local/state/otter-shell/`)
 

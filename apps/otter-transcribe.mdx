@@ -1,10 +1,10 @@
 ---
 title: "On-Device Speech Transcription with otter-transcribe"
 sidebarTitle: "Transcription"
-description: "otter-transcribe transcribes microphone audio on-device via PipeWire. Requires the otter-shell-extras metapackage."
+description: "Transcribe microphone audio on-device via PipeWire. Requires the otter-shell-extras metapackage."
 ---
 
-otter-transcribe is Otter Shell's on-device speech-to-text tool. It runs as a background daemon, records your microphone via PipeWire, and transcribes speech using a locally embedded Parakeet model — no network connection or cloud service required.
+otter-transcribe is Otter Shell's on-device speech-to-text tool. It runs as a background daemon, records your microphone through PipeWire, and transcribes with a locally embedded Parakeet model. No network or cloud service involved.
 
 <Note>
   `otter-transcribe` is part of **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.
@@ -23,7 +23,7 @@ otter-transcribe --model /path/to/model.gguf
 ```
 
 <Note>
-The daemon hot-reloads config changes via inotify — you don't need to restart it after editing `otter-transcribe.conf`. Changes to theme colors and transcription settings take effect immediately.
+The daemon hot-reloads config changes via inotify. You do not need to restart it after editing `otter-transcribe.conf`. Theme colors and transcription settings apply immediately.
 </Note>
 
 ## Controlling with Hotkeys
@@ -52,12 +52,12 @@ otter-transcribe supports three output modes that control where transcribed text
 | `stdout` | Prints the transcript from the daemon process |
 
 <Note>
-Use `clipboard` or `stdout` if virtual keyboard injection is blocked by your compositor or application. Chromium and Electron apps use physical evdev keycodes, which `focused` mode handles automatically for better compatibility.
+Use `clipboard` or `stdout` if virtual keyboard injection is blocked by your compositor or application. Chromium and Electron apps use physical evdev keycodes, which `focused` mode handles for better compatibility.
 </Note>
 
 ## Recording Indicator
 
-While recording is active, a bottom-center layer-shell indicator displays live PCM level bars so you always know when the microphone is open. Disable it by setting `show_indicator = false` in the config file.
+While recording is active, a bottom-center layer-shell indicator shows live PCM level bars so you know when the microphone is open. Set `show_indicator = false` in the config file to hide it.
 
 ## Configuration
 
@@ -77,14 +77,14 @@ graph_height = 28
 graph_bars = 24
 ```
 
-**Key settings explained:**
+**Key settings:**
 
-- **`stream`** — When `true`, each finalized utterance chunk is emitted in real time as the model reaches an utterance boundary. Set to `false` to receive one final value for the entire recording instead of incremental chunks.
+- **`stream`** — When `true`, each finalized utterance chunk is emitted in real time as the model reaches an utterance boundary. Set to `false` to get one final value for the entire recording instead of incremental chunks.
 
 - **`target`** — The PipeWire audio source to capture from. `@DEFAULT_SOURCE@` uses the system default microphone. Replace it with a specific PipeWire node name to target a different input device.
 
-- **`max_seconds`** — The maximum recording length in seconds. When this limit is reached, the daemon finalizes the current recording and emits any remaining transcript, but stays alive and ready for future `toggle` or `start` commands.
+- **`max_seconds`** — Maximum recording length in seconds. When the limit is reached, the daemon finalizes the current recording and emits any remaining transcript, but stays alive for future `toggle` or `start` commands.
 
 - **`show_indicator`** — Controls the bottom-center PCM level indicator. Set to `false` to hide it while still receiving transcription output.
 
-The indicator's colors (`background_color`, `border_color`, `graph_color`, `graph_peak_color`, `text_color`) inherit automatically from `otter-theme` when left unset in the config file.
+The indicator's colors (`background_color`, `border_color`, `graph_color`, `graph_peak_color`, `text_color`) inherit from `otter-theme` when left unset in the config file.

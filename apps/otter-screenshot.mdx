@@ -1,14 +1,14 @@
 ---
 title: "Capture Screenshots on Wayland with otter-screenshot"
 sidebarTitle: "Screenshot"
-description: "otter-screenshot captures regions, windows, or the full screen natively on Wayland. No X11, no grim — just drag to select and copy to clipboard."
+description: "Capture regions, windows, or the full screen on Wayland. Drag to select, then copy to clipboard or save to a file."
 ---
 
-`otter-screenshot` is Otter Shell's native Wayland screenshot tool. It captures using the `ext_image_copy_capture_v1` protocol directly — there are no X11 fallbacks, no dependency on `grim`, and no external capture tool involved. By default, drag to select a region and the result is copied to the clipboard as `image/png`. Pass `--output` to write to a file instead.
+`otter-screenshot` is Otter Shell's Wayland screenshot tool. It captures through the `ext_image_copy_capture_v1` protocol. No X11 fallbacks, no `grim`, no external capture tool. By default you drag to select a region and the result goes to the clipboard as `image/png`. Pass `--output` to write a file instead.
 
 ## Basic Usage
 
-Run `otter-screenshot` without any arguments to enter region-selection mode. Drag with the left mouse button to define the area, or press <kbd>Esc</kbd> / <kbd>Ctrl+C</kbd> before selecting to cancel.
+Run `otter-screenshot` without arguments to enter region-selection mode. Drag with the left mouse button to define the area. Press <kbd>Esc</kbd> or <kbd>Ctrl+C</kbd> before selecting to cancel.
 
 ```bash
 otter-screenshot                                       # drag to select a region
@@ -28,21 +28,21 @@ otter-screenshot --freeze --output region.png          # freeze before selecting
 | `--freeze` | — | Capture the screen first, then display that frozen image behind the selection overlay. Useful when the content you want to capture would disappear while you drag. |
 | `--cursor` | — | Include the cursor in the captured image. The cursor is hidden by default. |
 | `--border` | — | Keep the selection border in the final image. By default the border is only a visual selection aid and is cropped out. |
-| `--tonemap-hdr` | — | Apply a simple SDR tonemap before encoding. Use this as a best-effort fallback when capturing HDR outputs — it is not color-managed output. |
+| `--tonemap-hdr` | — | Apply a simple SDR tonemap before encoding. Use this as a best-effort fallback when capturing HDR outputs. It is not color-managed output. |
 | `--help` | `-h` | Print usage and exit. |
 
 ## Clipboard
 
-When no `--output` path is given, `otter-screenshot` pipes the PNG through `wl-copy --type image/png`. Otter Shell ships its own `wl-copy` as part of the native data-control implementation, so no additional clipboard utility is needed.
+When no `--output` path is given, `otter-screenshot` pipes the PNG through `wl-copy --type image/png`. Otter Shell ships its own `wl-copy` as part of the native data-control implementation, so you do not need a separate clipboard utility.
 
-File output writes directly to disk and does not touch the clipboard at all.
+File output writes directly to disk and does not touch the clipboard.
 
 ## Compositor Requirements
 
 <Warning>
-  `otter-screenshot` requires the compositor to expose the `ext_image_copy_capture_v1` protocol for output capture. If the compositor does not support it, the tool exits with an error rather than falling back to another capture path.
+  `otter-screenshot` requires the compositor to expose the `ext_image_copy_capture_v1` protocol for output capture. If the compositor does not support it, the tool exits with an error. It does not fall back to another capture path.
 
-  Active-window capture (`--active`) additionally requires both `ext_foreign_toplevel_list_v1` and `ext_foreign_toplevel_image_capture_source_manager_v1`. If either protocol is absent, the `--active` flag will not function.
+  Active-window capture (`--active`) also requires `ext_foreign_toplevel_list_v1` and `ext_foreign_toplevel_image_capture_source_manager_v1`. If either protocol is missing, `--active` will not work.
 </Warning>
 
 ## Binding a Shortcut

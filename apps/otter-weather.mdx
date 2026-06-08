@@ -1,14 +1,14 @@
 ---
 title: "Weather Forecasts and Bar Widget with otter-weather"
 sidebarTitle: "Weather"
-description: "otter-weather fetches current conditions and a 7-day forecast from Open-Meteo. Feed data to the bar widget, view a popup, or print to stdout."
+description: "Fetch current conditions and a 7-day forecast from Open-Meteo. Feed the bar widget, open a popup, or print to stdout."
 ---
 
-otter-weather fetches current weather conditions and a 7-day forecast from Open-Meteo and feeds the bar weather widget or opens a popup. Configure your latitude and longitude, run it as a watch daemon, and get live weather on your desktop.
+otter-weather fetches current conditions and a 7-day forecast from Open-Meteo. It feeds the bar weather widget or opens a popup. Set your latitude and longitude, run it as a watch daemon, and weather shows up on your desktop.
 
 ## Usage
 
-Run `otter-weather` without arguments to fetch and print a forecast for the configured location, or pass coordinates directly to override the config.
+Run `otter-weather` without arguments to fetch and print a forecast for the configured location. Pass coordinates to override the config.
 
 ```bash
 otter-weather                             # fetch and print (default: London)
@@ -22,17 +22,16 @@ otter-weather --layer                     # open 7-day popup from cache
 
 ## Bar Widget Integration
 
-The otter-bar weather widget reads from a bounded local cache file. Use `--write-cache` to refresh that cache after a fetch, and combine it with `--watch SECONDS` to keep it updated automatically in the background. Add the following line to your compositor autostart to keep weather data fresh:
+The otter-bar weather widget reads from a bounded local cache file. Use `--write-cache` to refresh that cache after a fetch. Add `--watch SECONDS` to keep it updated in the background. A typical autostart line:
 
 ```bash
 otter-weather --watch 900 --write-cache &
 ```
 
-The `--layer` flag opens the cached forecast in a small layer-shell popup that closes when clicked — useful for binding to the bar widget button.
+The `--layer` flag opens the cached forecast in a small layer-shell popup that closes when clicked. Bind it to the bar widget button.
 
 <Note>
-  Responses are capped at 128 KiB, keeping the cache file small and fetch time
-  predictable regardless of network conditions.
+  Responses are capped at 128 KiB, so the cache file stays small and fetch time stays predictable.
 </Note>
 
 ## Configuration
@@ -48,7 +47,7 @@ write_cache = false
 watch_seconds = 0
 ```
 
-The default location is London. Set `latitude` and `longitude` to your city's coordinates to get a local forecast. Leave `cache_path` empty to use the default XDG cache location. Note that `--watch` mode reloads this config file between each refresh, so you can change your location without restarting the daemon.
+The default location is London. Set `latitude` and `longitude` to your city's coordinates. Leave `cache_path` empty for the default XDG cache location. In `--watch` mode the config file reloads between refreshes, so you can change location without restarting the daemon.
 
 <Tip>
   Find your coordinates at [Open-Meteo's geocoding API](https://open-meteo.com/en/docs/geocoding-api) or use a site like [latlong.net](https://www.latlong.net).

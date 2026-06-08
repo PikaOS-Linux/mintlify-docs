@@ -1,10 +1,10 @@
 ---
 title: "otter-settings"
 sidebarTitle: "Settings app"
-description: "The primary way to configure Otter Shell — graphical editor for every app config, themes, and bar layout."
+description: "Graphical editor for Otter Shell app configs, themes, and bar layout."
 ---
 
-**`otter-settings` is the recommended way to configure Otter Shell.** It provides a tabbed GUI for every app config file, a theme browser with live preview, and a drag-and-drop widget layout editor for the status bar. You do not need to hand-edit `.conf` files unless you prefer the terminal.
+**`otter-settings` is how most people configure Otter Shell.** Tabbed UI for every app config, a theme browser with live preview, and drag-and-drop bar layout. You can still edit `.conf` files in a terminal if you prefer that.
 
 ## Usage
 
@@ -15,7 +15,7 @@ otter-settings
 Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotkey (for example `Super+Comma`).
 
 <Note>
-  Changes write directly to `~/.config/otter-shell/*.conf`. Running apps pick them up via inotify — click **Apply** and most daemons reload without a restart.
+  Changes write directly to `~/.config/otter-shell/*.conf`. Running apps pick them up via inotify. Click **Apply** and most daemons reload without a restart.
 </Note>
 
 ## Why use otter-settings
@@ -24,11 +24,11 @@ Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotke
 |---------|--------|
 | No syntax to learn | Toggles, dropdowns, color swatches, and number steppers instead of raw key-value files |
 | Search | Find any config field by key, label, value, or section |
-| Bar layout | Drag-and-drop widget chips — easier than editing `layout_left` strings by hand |
+| Bar layout | Drag widget chips instead of editing `layout_left` strings by hand |
 | Themes | Browse and preview all 12 presets before applying |
-| Safe saves | Preserves comments, field order, and custom fields when writing configs |
+| Safe saves | Keeps comments, field order, and custom fields when writing configs |
 
-Manual editing remains fully supported — otter-settings and text editors read the same files.
+Text editors still work. otter-settings and `$EDITOR` read the same files.
 
 ## Features
 
@@ -60,9 +60,9 @@ Manual editing remains fully supported — otter-settings and text editors read 
 
 ## What otter-settings does not configure
 
-Global compositor hotkeys (launcher, screenshot, lock) must be bound in your Wayland compositor config — otter-settings only covers Otter Shell app settings. See [Keybinds](/configuration/keybinds).
+Global compositor hotkeys (launcher, screenshot, lock) live in your Wayland compositor config. otter-settings only covers Otter Shell app settings. See [Keybinds](/configuration/keybinds).
 
-`otter-screenshot` has no persistent config file — use CLI flags only.
+`otter-screenshot` has no persistent config file. Use CLI flags only.
 
 ## Theme presets
 

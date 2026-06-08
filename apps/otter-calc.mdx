@@ -1,14 +1,14 @@
 ---
 title: "Quick Calculations at the Command Line with otter-calc"
 sidebarTitle: "Calculator"
-description: "otter-calc evaluates math expressions from the terminal or launcher. Pass --copy to send the result straight to the clipboard via otter-copy."
+description: "Evaluate math expressions from the terminal or launcher. Pass --copy to send the result to clipboard via otter-copy."
 ---
 
-otter-calc is a quick expression evaluator for Otter Shell. Type a math expression on the command line, get the result immediately, and optionally copy it to the clipboard with `--copy`.
+otter-calc evaluates math expressions from the command line. Type an expression, get the result. Pass `--copy` to put it on the clipboard.
 
 ## Usage
 
-Pass your expression as a single argument or as multiple arguments — otter-calc joins them automatically before evaluating.
+Pass your expression as a single argument or as multiple arguments. otter-calc joins them before evaluating.
 
 ```bash
 otter-calc '2 + 3 * 4'          # evaluates to 14
@@ -24,7 +24,7 @@ otter-calc reads its configuration from `~/.config/otter-shell/otter-calc.conf`.
 copy_result = false
 ```
 
-Set `copy_result = true` to always copy the result to the clipboard without passing `--copy` each time.
+Set `copy_result = true` to always copy the result without passing `--copy` each time.
 
 <Note>
   `--copy` uses the shared Otter clipboard helper (`otter-copy`). In packaged

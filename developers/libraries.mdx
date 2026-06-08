@@ -1,10 +1,10 @@
 ---
 title: "Otter Shell libraries"
 sidebarTitle: "Libraries"
-description: "Reference for all shared Otter Shell Zig libraries — purpose, dependencies, and usage patterns."
+description: "Shared Otter Shell Zig libraries: what each one does and how apps use them."
 ---
 
-Otter Shell applications share eleven libraries. They are bundled into application binaries at build time — there are no separate library packages for end users.
+Otter Shell apps share eleven libraries. They link into application binaries at build time. There are no separate library packages for end users.
 
 ## Library stack
 
@@ -30,9 +30,9 @@ Typical app dependency chain: **otter-ui → otter-wayland + otter-render + otte
 
 Pure Zig utilities with no external dependencies.
 
-- `BoundedArray` — Fixed-capacity arrays without heap allocation
+- `BoundedArray`: fixed-capacity arrays without heap allocation
 - Logging helpers
-- `FilePath` — Path manipulation
+- `FilePath`: path manipulation
 - Inotify wrappers
 - Config and runtime path helpers (`~/.config/otter-shell/`)
 
@@ -45,22 +45,22 @@ Used by every other library and application.
 Pure geometry types:
 
 - `Point`, `Rect`, `Size`, `Padding`, `Transform`, `Align`
-- Integer-only math — no floating point in layout paths
+- Integer-only math: no floating point in layout paths
 
 ---
 
 ## otter-conf
 
-Comptime-generic configuration parser. Define a Zig struct, get a specialized parser at compile time.
+Comptime-generic configuration parser. Define a Zig struct and you get a specialized parser at compile time.
 
 **Features:**
 
 - Flat `key = value` format with `#` comments
 - Types: booleans, integers, floats, strings, enums, arrays, optionals, nested structs
 - Memory-mapped file I/O
-- Forward-compatible — unknown fields silently skipped
+- Forward-compatible: unknown fields are silently skipped
 - Serialization back to disk
-- `Watcher` — inotify-based hot-reload
+- `Watcher`: inotify-based hot-reload
 
 ```zig
 const otter_conf = @import("otter_conf");
@@ -116,21 +116,21 @@ Wayland client library wrapping common protocols.
 **Protocols:**
 
 - `wl_compositor`, `wl_seat`, `wl_shm`, `wl_output`
-- `zwlr_layer_shell_v1` — panels and overlays
-- `ext_workspace_manager_v1` — workspace tracking
-- `zwlr_foreign_toplevel_manager_v1` — active window tracking
-- `zwp_text_input_v3` — IME for CJK input
-- `ext_session_lock_v1` — lockscreen
-- `wl_data_device` — clipboard and drag-and-drop
-- `wp_viewporter` — HiDPI buffer scaling
+- `zwlr_layer_shell_v1`: panels and overlays
+- `ext_workspace_manager_v1`: workspace tracking
+- `zwlr_foreign_toplevel_manager_v1`: active window tracking
+- `zwp_text_input_v3`: IME for CJK input
+- `ext_session_lock_v1`: lockscreen
+- `wl_data_device`: clipboard and drag-and-drop
+- `wp_viewporter`: HiDPI buffer scaling
 
 **Key modules:**
 
-- `Connection` — Event loop and dispatch
-- `Keyboard` — xkbcommon wrapper with key repeat
-- `TextInput` — IME integration (check `isComposing()` before handling keys)
-- `Clipboard` — Paste and drag-and-drop
-- `DamageTracker` — Dirty rect accumulation with overflow fallback to full redraw
+- `Connection`: event loop and dispatch
+- `Keyboard`: xkbcommon wrapper with key repeat
+- `TextInput`: IME integration (check `isComposing()` before handling keys)
+- `Clipboard`: paste and drag-and-drop
+- `DamageTracker`: dirty rect accumulation with overflow fallback to full redraw
 
 ---
 
@@ -138,10 +138,10 @@ Wayland client library wrapping common protocols.
 
 Terminal rendering boundary for embeddable terminal views.
 
-- `DynamicCommandList` — Terminal-specific draw commands
-- `PowerlineOps`, `BlockOps` — Powerline and block glyph rendering
-- `CellRenderer` — Generic cell renderer with comptime hooks
-- `cell_glyphs` — Custom cell glyph support
+- `DynamicCommandList`: terminal-specific draw commands
+- `PowerlineOps`, `BlockOps`: powerline and block glyph rendering
+- `CellRenderer`: generic cell renderer with comptime hooks
+- `cell_glyphs`: custom cell glyph support
 
 Used by `otter-term` and available for any app embedding terminal output.
 
@@ -152,8 +152,8 @@ Used by `otter-term` and available for any app embedding terminal output.
 Shared visual theme with semantic color tokens, spacing, popup styles, bar chrome, and font tokens.
 
 - 12 bundled presets: Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, One Dark
-- `loader.loadTheme(allocator)` — reads `~/.config/otter-shell/theme.conf`
-- Pure data structs — no I/O in the theme module itself
+- `loader.loadTheme(allocator)`: reads `~/.config/otter-shell/theme.conf`
+- Pure data structs: no I/O in the theme module itself
 - Apps watch `theme.conf` via inotify for hot-reload
 
 Widget configs use `?Color = null` fields resolved as: widget config → theme token → compiled default.
@@ -185,7 +185,7 @@ Pure-Zig bounded helpers for small CLI tools. No Wayland, D-Bus, or rendering de
 | Color conversion | otter-pick |
 | Recorder encoder selection | otter-rec |
 
-Config schemas for small apps live in `src/app_configs.zig` — shared with `otter-settings` for consistent defaults.
+Config schemas for small apps live in `src/app_configs.zig`, shared with `otter-settings` for consistent defaults.
 
 ---
 
@@ -219,7 +219,7 @@ Desktop integration: icons, applications, D-Bus, and system services.
 Compile-time flags: `-Denable_dbus=false`, `-Denable_pipewire=false`, `-Denable_pam=false`.
 
 <Note>
-  `sd_bus_process()` handles one message per call — loop until the queue is drained.
+  `sd_bus_process()` handles one message per call. Loop until the queue is drained.
 </Note>
 
 ---
@@ -246,9 +246,9 @@ Widget framework and Surface Description frame API.
 
 **Other modules:**
 
-- `input_buffer.zig` — Text input with cursor and selection
-- `icon_cache.zig` — Cached XDG icon rendering
-- `scroll_state.zig` — Vertical scroll tracking
+- `input_buffer.zig`: text input with cursor and selection
+- `icon_cache.zig`: cached XDG icon rendering
+- `scroll_state.zig`: vertical scroll tracking
 
 ---
 
@@ -284,4 +284,4 @@ otter-shell/
 └── otter-bar/ … (applications)
 ```
 
-Read each component's `README.md` for detailed API examples and build instructions.
+Read each component's `README.md` for API examples and build instructions.

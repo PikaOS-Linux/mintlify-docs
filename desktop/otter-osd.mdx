@@ -1,10 +1,10 @@
 ---
 title: "otter-osd"
 sidebarTitle: "On-screen display"
-description: "Volume, brightness, and lock-key indicators as transient Wayland overlays."
+description: "Short-lived overlays for volume, brightness, and lock-key state."
 ---
 
-`otter-osd` shows transient on-screen indicators for volume, brightness, and lock keys. It runs as a daemon and accepts commands via a UNIX socket.
+`otter-osd` shows brief on-screen indicators for volume, brightness, and lock keys. Run it as a daemon; scripts, the bar, and compositor keybindings send commands over a UNIX socket.
 
 ## Usage
 
@@ -29,13 +29,13 @@ otter-osd scroll-lock
 
 The optional step value (default `5`) applies to volume and brightness commands.
 
-[otter-timer](/apps/otter-timer) and [otter-rec](/apps/otter-rec) also communicate with `otter-osd` for completion notifications.
+[otter-timer](/apps/otter-timer) and [otter-rec](/apps/otter-rec) also talk to `otter-osd` for completion notifications.
 
 ## Architecture
 
-Single binary, two modes:
+One binary, two roles:
 
-- **Daemon** (no args) — Connects to Wayland, creates a UNIX datagram socket, renders overlays on demand. Surfaces are created lazily and destroyed after timeout for zero idle RAM.
+- **Daemon** (no args) — Connects to Wayland, creates a UNIX datagram socket, renders overlays on demand. Surfaces are created lazily and destroyed after timeout so idle RAM stays near zero.
 - **Client** (with args) — Sends a command to the daemon and exits.
 
 Socket path: `$XDG_RUNTIME_DIR/otter-shell/osd-{WAYLAND_DISPLAY}.sock`
@@ -57,4 +57,4 @@ font_size = 15
 animation_duration = 150
 ```
 
-Color fields inherit from [theme.conf](/configuration/themes) when omitted. Position and size changes require surface recreation — save the config and the daemon recreates the overlay on reload.
+Color fields inherit from [theme.conf](/configuration/themes) when omitted. Position and size changes need new surfaces. Save the config and the daemon recreates the overlay on reload.

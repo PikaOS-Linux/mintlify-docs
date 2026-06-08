@@ -4,7 +4,7 @@ sidebarTitle: "Quick Start"
 description: "Launch your terminal, autostart shell daemons, and try screenshot, clipboard, and notes in under five minutes."
 ---
 
-This guide covers the essential first steps after installing Otter Shell. You need a running Wayland compositor session before any Otter app can open windows.
+A short walkthrough right after install. You need a Wayland compositor running first. No compositor, no windows.
 
 <Steps>
   <Step title="Launch the terminal">
@@ -12,11 +12,11 @@ This guide covers the essential first steps after installing Otter Shell. You ne
     otter-term
     ```
 
-    Otter Terminal is CPU-rendered via the shared Otter render stack — no GPU dependency for the terminal grid itself.
+    Otter Terminal renders on the CPU through the shared Otter render stack. The terminal grid itself doesn't need a GPU.
   </Step>
 
   <Step title="Start background daemons">
-    Several Otter Shell components must run as daemons. Start the essentials now:
+    Several pieces run as daemons. Start these for now:
 
     ```bash
     otter-bar &
@@ -28,11 +28,11 @@ This guide covers the essential first steps after installing Otter Shell. You ne
     otter-polkit &
     ```
 
-    For a permanent setup, add these to your compositor autostart. See [Session setup](/desktop/session-setup) for a complete autostart block and compositor-specific examples.
+    For a permanent setup, add these to your compositor autostart. See [Session setup](/desktop/session-setup) for a full autostart block and compositor-specific examples.
   </Step>
 
   <Step title="Open the launcher">
-    Run the application launcher (bind this to a compositor hotkey for daily use):
+    Run the application launcher. Bind this to a compositor hotkey for daily use:
 
     ```bash
     otter-launcher
@@ -46,7 +46,7 @@ This guide covers the essential first steps after installing Otter Shell. You ne
     otter-screenshot
     ```
 
-    Click and drag to select a region. The image is copied to your clipboard automatically.
+    Click and drag to select a region. The image copies to your clipboard automatically.
   </Step>
 
   <Step title="Create a sticky note">
@@ -54,7 +54,7 @@ This guide covers the essential first steps after installing Otter Shell. You ne
     otter-note new
     ```
 
-    Bind a compositor hotkey to this command for quick access — for example `Super+N`.
+    Bind a compositor hotkey to this command for quick access, for example `Super+N`.
   </Step>
 
   <Step title="Check the weather">
@@ -75,7 +75,7 @@ This guide covers the essential first steps after installing Otter Shell. You ne
 </Steps>
 
 <Tip>
-  **Bind global hotkeys in your compositor** — Wayland apps cannot grab system-wide shortcuts on their own. Examples:
+  **Bind global hotkeys in your compositor.** Wayland apps can't grab system-wide shortcuts on their own. Examples:
 
   **Hyprland** (`~/.config/hypr/hyprland.conf`):
 
@@ -103,13 +103,13 @@ This guide covers the essential first steps after installing Otter Shell. You ne
 
 <CardGroup cols={2}>
   <Card title="Session setup" icon="desktop" href="/desktop/session-setup">
-    Autostart every shell daemon your desktop needs.
+    Autostart the shell daemons your desktop needs.
   </Card>
   <Card title="Status bar" icon="bars" href="/desktop/otter-bar">
-    Configure widgets, tray, and launcher button.
+    Set up widgets, tray, and the launcher button.
   </Card>
   <Card title="Settings" icon="sliders" href="/desktop/otter-settings">
-    Configure the bar, theme, and all app settings graphically.
+    Bar, theme, and app settings in the GUI.
   </Card>
   <Card title="Configuration" icon="gear" href="/configuration/overview">
     Manual config files and hot-reload behavior.

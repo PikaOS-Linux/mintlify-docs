@@ -1,21 +1,21 @@
 ---
 title: "Install Otter Shell on PikaOS"
 sidebarTitle: "Installation"
-description: "Install the Otter Shell desktop with pikman. The otter-shell metapackage includes the full shell; otter-shell-extras adds optional speech tools."
+description: "Install Otter Shell with pikman. `otter-shell` is the full desktop; `otter-shell-extras` adds speech tools if you want them."
 ---
 
-Otter Shell is distributed as native packages for PikaOS. Packages are built and versioned together in the [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) repository. Use **pikman** to install — it is the recommended package manager on PikaOS.
+Otter Shell ships as native packages on PikaOS. Everything is built and versioned together in the [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) repository. Use **pikman** to install.
 
 ## System requirements
 
 - **PikaOS** — Otter Shell packages target PikaOS repositories.
-- **Wayland compositor** — Otter Shell is Wayland-only. Use any compositor that supports the protocols your chosen apps need (for example `zwlr_layer_shell_v1` for the status bar, launcher, and most overlays).
-- **No Zig runtime needed** — Applications ship as native binaries. End users do not need Zig installed.
+- **Wayland compositor** — Otter Shell is Wayland-only. Pick any compositor that supports the protocols your apps need (for example `zwlr_layer_shell_v1` for the status bar, launcher, and most overlays).
+- **No Zig runtime needed** — Apps ship as native binaries. You don't need Zig installed.
 
 <Note>
-  Otter Shell does **not** install a compositor for you. You choose and configure your own Wayland session (Hyprland, Sway, Niri, and others are common on PikaOS). The display manager (`otter-greeter`) uses Hyprland only for the login screen — your user session compositor is separate.
+  Otter Shell does **not** install a compositor. You pick and configure your own Wayland session. Hyprland, Sway, and Niri are common on PikaOS. The display manager (`otter-greeter`) uses Hyprland only for the login screen. Your user session compositor is separate.
 
-  Screenshot and color-picker tools (`otter-screenshot`, `otter-pick`, `otter-shot`) require the compositor to expose `ext_image_copy_capture_v1`.
+  Screenshot and color-picker tools (`otter-screenshot`, `otter-pick`, `otter-shot`) need the compositor to expose `ext_image_copy_capture_v1`.
 </Note>
 
 ## Install with pikman
@@ -36,7 +36,7 @@ Otter Shell is distributed as native packages for PikaOS. Packages are built and
     pikman install otter-shell
     ```
 
-    This installs every component pinned to the same version. See the package table below for the full list.
+    This pulls every component at the same version. See the package table below for the full list.
 
     For optional speech tools (transcription and text-to-speech), also install:
 
@@ -44,7 +44,7 @@ Otter Shell is distributed as native packages for PikaOS. Packages are built and
     pikman install otter-shell-extras
     ```
 
-    `otter-shell` **recommends** `otter-shell-extras` but does not require it — transcription and voice synthesis are not part of the base metapackage.
+    `otter-shell` **recommends** `otter-shell-extras` but does not require it. Transcription and voice synthesis are not in the base metapackage.
   </Step>
 
   <Step title="Install individual packages (optional)">
@@ -60,7 +60,7 @@ Otter Shell is distributed as native packages for PikaOS. Packages are built and
 
 | Metapackage | Contents |
 |-------------|----------|
-| `otter-shell` | Full desktop shell — bar, launcher, notifications, wallpaper, OSD, logout, settings, polkit, lock, idle, greeter, terminal, Jade pet, screenshot tools, clipboard, notes, timer, weather, and all other core helpers. Includes `otter-shell-fonts`. |
+| `otter-shell` | Full desktop shell: bar, launcher, notifications, wallpaper, OSD, logout, settings, polkit, lock, idle, greeter, terminal, Jade pet, screenshot tools, clipboard, notes, timer, weather, and other core helpers. Includes `otter-shell-fonts`. |
 | `otter-shell-extras` | Optional speech tools only: `otter-transcribe` and `otter-vox`. |
 
 ## Packages in `otter-shell`
@@ -103,4 +103,4 @@ These packages are installed when you run `pikman install otter-shell`:
 otter-term
 ```
 
-A terminal window should open on your Wayland session. Continue with the [Quick Start](/quickstart) and [Session setup](/desktop/session-setup) guides to autostart shell daemons.
+A terminal window should open on your Wayland session. Then follow the [Quick Start](/quickstart) and [Session setup](/desktop/session-setup) guides to autostart shell daemons.

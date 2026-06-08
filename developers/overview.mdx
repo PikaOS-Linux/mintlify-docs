@@ -1,14 +1,14 @@
 ---
 title: "Developer overview"
 sidebarTitle: "Overview"
-description: "Otter Shell monorepo structure, shared libraries, and how components relate."
+description: "How the Otter Shell monorepo is laid out and how components connect."
 ---
 
-Otter Shell is a Zig-based Wayland desktop environment. Applications share a stack of libraries for rendering, Wayland integration, configuration, and desktop services.
+Otter Shell is a Wayland desktop built in Zig. Every app pulls from the same libraries for rendering, Wayland, config, and desktop services.
 
 ## Repository structure
 
-The [otter-shell](https://git.pika-os.com/otter-shell) organization contains **independent git repositories** for each component — the monorepo folder on disk is a convenience layout, not a single git repo. Commits and pushes happen **per component**.
+The [otter-shell](https://git.pika-os.com/otter-shell) organization holds **independent git repositories** for each component. The monorepo folder on disk is a checkout layout, not a single git repo. You commit and push **per component**.
 
 | Repository | Type |
 |------------|------|
@@ -16,7 +16,7 @@ The [otter-shell](https://git.pika-os.com/otter-shell) organization contains **i
 | `otter-ui`, `otter-render`, `otter-wayland`, … | Shared libraries |
 | `otter-zenith` | Debian packaging and release assembly |
 
-Packaging is handled by [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith), which clones tagged component releases and builds `.deb` packages for PikaOS.
+[otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) handles packaging. It clones tagged component releases and builds `.deb` packages for PikaOS.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ All UI apps follow the same rendering path:
 
 ## Requirements
 
-- **Zig 0.16.0** — all Otter packages require this version
+- **Zig 0.16.0**: all Otter packages require this version
 - System dev libraries: `libwayland-dev`, `libfontconfig-dev`, `libfreetype-dev`, `libxkbcommon-dev`
 - Optional: `libpam0g-dev` (lock/greeter), `libghostty-vt-dev-git` (terminal), FFmpeg dev (recorder)
 - A wlroots-based compositor with `zwlr_layer_shell_v1` for most UI apps
@@ -57,12 +57,12 @@ All apps read configs from `~/.config/otter-shell/<app>.conf`. Shared visual sty
 
 These exist in the source tree but are **not packaged** in `otter-shell` or `otter-shell-extras`:
 
-- `otter-dock` — Application dock with magnification
-- `otter-hypr` — Hyprland layout and titlebar companion
-- `otter-theme-gen` — Wallpaper-reactive theme generator
+- `otter-dock`: application dock with magnification
+- `otter-hypr`: Hyprland layout and titlebar companion
+- `otter-theme-gen`: wallpaper-reactive theme generator
 
 ## Next steps
 
-- [Building from source](/developers/building) — Compile any component locally
-- [Creating an app](/developers/creating-an-app) — Start a new app with Otter libraries
-- [Libraries reference](/developers/libraries) — API overview for each shared library
+- [Building from source](/developers/building): compile any component locally
+- [Creating an app](/developers/creating-an-app): start a new app with Otter libraries
+- [Libraries reference](/developers/libraries): API overview for each shared library

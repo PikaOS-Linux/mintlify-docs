@@ -1,28 +1,28 @@
 ---
 title: "Themes and colors"
 sidebarTitle: "Themes"
-description: "Customize Otter Shell appearance with otter-settings theme browser or theme.conf. Per-app color overrides inherit from the shared theme."
+description: "Change Otter Shell colors and spacing in otter-settings or theme.conf. Per-app overrides inherit from the shared theme when left blank."
 ---
 
-Otter Shell apps share a unified visual theme through `otter-theme`. The easiest way to change colors, spacing, and presets is the **Theme** tab in [otter-settings](/desktop/otter-settings) — it includes a live preview of all 12 built-in presets.
+Otter Shell apps share one visual theme through `otter-theme`. The **Theme** tab in [otter-settings](/desktop/otter-settings) is the fastest way to change colors, spacing, and presets. It shows a live preview of all 12 built-in presets.
 
 ```bash
 otter-settings
 ```
 
-Select a preset in the theme browser and click **Apply**. Changes write to `~/.config/otter-shell/theme.conf` and propagate to running apps that watch the theme file.
+Pick a preset in the theme browser and click **Apply**. Changes write to `~/.config/otter-shell/theme.conf` and reach running apps that watch the theme file.
 
 <Tip>
-  Prefer otter-settings over hand-editing `theme.conf` unless you need keys the UI does not expose. The settings app preserves comments and field order when saving.
+  Use otter-settings unless you need keys the UI doesn't expose. The settings app keeps comments and field order when saving.
 </Tip>
 
 ## Theme config file
 
-Advanced users can edit `~/.config/otter-shell/theme.conf` directly. Apps such as otter-bar, otter-transcribe, and otter-term read this file at startup and re-apply it when it changes on disk.
+You can also edit `~/.config/otter-shell/theme.conf` directly. Apps like otter-bar, otter-transcribe, and otter-term read this file at startup and re-apply it when it changes on disk.
 
 ## Terminal colors
 
-Configure otter-term's 16-color palette and UI chrome in otter-settings under the **Terminal** tab, or edit `~/.config/otter-shell/otter-term.conf`:
+Set otter-term's 16-color palette and UI chrome in otter-settings under the **Terminal** tab, or edit `~/.config/otter-shell/otter-term.conf`:
 
 ```conf
 colors_background = "#1e1e2e"
@@ -41,11 +41,11 @@ colors_cyan    = "#94e2d5"
 colors_white   = "#bac2de"
 ```
 
-Terminal color changes hot-reload as soon as you save — open terminals update immediately.
+Terminal color changes hot-reload on save. Open terminals update right away.
 
 ## App-level color overrides
 
-Individual apps expose color keys that override the shared theme. For example, in otter-transcribe's **Transcribe** tab (or `otter-transcribe.conf`):
+Individual apps can override the shared theme with their own color keys. In otter-transcribe's **Transcribe** tab (or `otter-transcribe.conf`):
 
 ```conf
 background_color  = ""

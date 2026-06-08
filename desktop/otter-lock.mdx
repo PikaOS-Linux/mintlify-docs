@@ -1,10 +1,10 @@
 ---
 title: "otter-lock"
 sidebarTitle: "Lockscreen"
-description: "Wayland session lockscreen with PAM authentication, fingerprint support, and clock display."
+description: "Session lock screen with PAM login, fingerprint auth, and optional clock."
 ---
 
-`otter-lock` secures your session using the `ext-session-lock-v1` protocol. It renders a lockscreen on all outputs when triggered by `loginctl lock-session` or [otter-idle](/desktop/otter-idle).
+`otter-lock` locks the session over `ext-session-lock-v1`. It covers every output when `loginctl lock-session` runs or [otter-idle](/desktop/otter-idle) fires a lock.
 
 ## Usage
 
@@ -14,9 +14,9 @@ Lock the session:
 loginctl lock-session
 ```
 
-Bind this to a compositor hotkey — for example `Super+L`.
+Bind this to a compositor hotkey. For example `Super+L`.
 
-`otter-lock` is invoked by logind when a lock is requested; it does not need to run as a persistent daemon.
+logind starts `otter-lock` when a lock is requested. You do not run it as a persistent daemon.
 
 ## Configuration
 
@@ -39,7 +39,7 @@ Colors inherit from [theme.conf](/configuration/themes) when not explicitly set.
 
 ### Wallpaper background
 
-When [otter-wallpaper](/desktop/otter-wallpaper) is running, the lockscreen reads `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` to display the same wallpaper behind the lock UI.
+When [otter-wallpaper](/desktop/otter-wallpaper) is running, the lockscreen reads `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` to show the same wallpaper behind the lock UI.
 
 ## Authentication
 

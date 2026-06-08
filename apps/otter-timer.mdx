@@ -1,10 +1,10 @@
 ---
 title: "Run Countdown Timers and Get Notified with otter-timer"
 sidebarTitle: "Timer"
-description: "otter-timer runs a countdown and emits a desktop ping when finished. Supports flexible duration strings, custom messages, and completion shell commands."
+description: "Count down a duration and get a desktop ping when it finishes. Flexible duration strings, custom messages, and completion commands."
 ---
 
-otter-timer counts down a duration and emits a desktop ping via `otter-osd` when available, and always prints `timer done` on completion. It supports flexible duration strings, custom notification messages, and running an arbitrary shell command when the timer finishes — making it useful for anything from tea timers to Pomodoro sessions to automated workflows.
+otter-timer counts down a duration and pings the desktop through `otter-osd` when available. It always prints `timer done` on completion. You can set a custom notification message or run a shell command when the timer ends.
 
 ## Usage
 
@@ -18,7 +18,7 @@ otter-timer --no-notify 1h                  # skip desktop notification
 
 ## Duration Format
 
-Durations combine one or more segments using `s` (seconds), `m` (minutes), `h` (hours), and `d` (days). Chain segments together in any order to express compound durations:
+Durations use `s` (seconds), `m` (minutes), `h` (hours), and `d` (days). Chain segments in any order:
 
 ```bash
 otter-timer 1h30m
@@ -45,5 +45,5 @@ notify = true
 | `notify` | Set to `false` to suppress the desktop notification |
 
 <Tip>
-Set `default_duration` to your most common timer length — for example `25m` for Pomodoro sessions — so you can start a timer by running `otter-timer` with no arguments.
+Set `default_duration` to your usual timer length, like `25m` for Pomodoro, so you can run `otter-timer` with no arguments.
 </Tip>

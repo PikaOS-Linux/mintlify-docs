@@ -1,10 +1,10 @@
 ---
 title: "Create a new Otter Shell app"
 sidebarTitle: "Creating an app"
-description: "Start a new Wayland application using Otter libraries — dependencies, UI pattern, and config setup."
+description: "Start a Wayland app on the Otter stack: dependencies, UI patterns, and config."
 ---
 
-This guide walks through creating a new Wayland application that integrates with the Otter Shell stack.
+This guide covers how to build a new Wayland application on the Otter Shell stack.
 
 ## 1. Create the project
 
@@ -98,7 +98,7 @@ try frame.finish();
 render.quad_renderer.rasterize(ui.render.DefaultCommandList, &state.commands, surface, null, null, true);
 ```
 
-Use `state.hitTest(point)` for pointer input — no parallel hit arrays needed.
+Use `state.hitTest(point)` for pointer input. You do not need parallel hit arrays.
 
 ## 5. Add configuration
 

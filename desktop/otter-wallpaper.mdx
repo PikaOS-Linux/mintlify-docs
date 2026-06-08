@@ -1,10 +1,10 @@
 ---
 title: "otter-wallpaper"
 sidebarTitle: "Wallpaper"
-description: "Wayland wallpaper daemon with per-display config, rotation, and lockscreen integration."
+description: "Wallpaper daemon with per-monitor paths, rotation, and lock screen sync."
 ---
 
-`otter-wallpaper` renders desktop backgrounds on the Wayland background layer using `zwlr_layer_shell_v1`. Images are decoded, drawn to SHM buffers, and freed immediately to minimize memory use.
+`otter-wallpaper` draws backgrounds on the Wayland background layer using `zwlr_layer_shell_v1`. It decodes each image, draws to an SHM buffer, then frees the decoded data right away to keep memory use low.
 
 ## Usage
 
@@ -42,7 +42,7 @@ Per-display overrides use `display_0_name`, `display_0_path`, through `display_7
 
 ## Lockscreen integration
 
-When a wallpaper changes, `otter-wallpaper` writes the current path for each output to:
+When the wallpaper changes, `otter-wallpaper` writes the current path for each output to:
 
 ```
 $XDG_RUNTIME_DIR/otter-shell/wallpaper-state
@@ -63,4 +63,4 @@ layer-rule {
 
 ## Hot reload
 
-Config and theme changes apply via inotify without restart. The current wallpaper is preserved on reload.
+Config and theme changes apply via inotify without restart. Reload keeps the current wallpaper.

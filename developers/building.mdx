@@ -4,7 +4,7 @@ sidebarTitle: "Building"
 description: "Compile Otter Shell components locally with Zig 0.16.0 and run tests."
 ---
 
-Each Otter Shell component is an independent Zig project. Build commands are the same across apps and libraries.
+Each component is its own Zig project. The build commands are the same whether you are working on an app or a library.
 
 ## Prerequisites
 
@@ -64,7 +64,7 @@ cd otter-zenith
 ./main.sh
 ```
 
-This clones tagged component releases, assembles a source tree, and runs `dpkg-buildpackage`. End users install the result with `pikman install otter-shell` — they do not need Zig.
+This clones tagged component releases, assembles a source tree, and runs `dpkg-buildpackage`. End users install the result with `pikman install otter-shell`. They do not need Zig.
 
 ## Benchmarks
 
@@ -85,7 +85,7 @@ git commit -m "your message"
 git push origin main
 ```
 
-Do not commit from the monorepo root — it is not a git repository.
+Do not commit from the monorepo root. It is not a git repository.
 
 ## App structure convention
 

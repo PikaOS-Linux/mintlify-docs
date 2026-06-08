@@ -1,10 +1,10 @@
 ---
 title: "otter-polkit"
 sidebarTitle: "Polkit agent"
-description: "Wayland polkit authentication agent with password dialog and fingerprint support."
+description: "Session polkit agent with a password dialog and optional fingerprint auth."
 ---
 
-`otter-polkit` registers as the polkit authentication agent for your session. When an application requests elevated privileges (package installs, disk operations, etc.), it displays a password dialog on a layer-shell overlay.
+`otter-polkit` is the polkit authentication agent for your session. When an app needs elevated privileges (package installs, disk operations, and the like), you get a password dialog on a layer-shell overlay.
 
 ## Usage
 

@@ -1,10 +1,10 @@
 ---
 title: "On-Device Text-to-Speech with Kokoro TTS via otter-vox"
 sidebarTitle: "Text to Speech"
-description: "otter-vox converts text to speech on-device using an embedded Kokoro TTS model. Requires the otter-shell-extras metapackage."
+description: "Convert text to speech on-device with an embedded Kokoro TTS model. Requires the otter-shell-extras metapackage."
 ---
 
-otter-vox turns text into speech on your local machine using an embedded Kokoro TTS model — no internet connection required.
+otter-vox turns text into speech on your machine using an embedded Kokoro TTS model. No internet connection required.
 
 <Note>
   `otter-vox` is part of **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.
@@ -12,7 +12,7 @@ otter-vox turns text into speech on your local machine using an embedded Kokoro 
 
 ## Usage
 
-Pipe text into otter-vox or pass it as a positional argument. Use `--no-play` to write a WAV stream to stdout, or `-o` to save directly to a file.
+Pipe text into otter-vox or pass it as a positional argument. Use `--no-play` to write a WAV stream to stdout, or `-o` to save to a file.
 
 ```bash
 printf 'Welcome to Otter Shell.' | otter-vox --no-play | pw-play -  # pipe to PipeWire
@@ -24,7 +24,7 @@ otter-vox --list-voices                                               # list all
 
 ## Voices
 
-otter-vox ships with a full set of Kokoro voice files embedded in the binary, covering several languages and accents.
+otter-vox ships with Kokoro voice files embedded in the binary, covering several languages and accents.
 
 | Prefix | Language / Accent | Example voices |
 |--------|------------------|----------------|
@@ -54,12 +54,10 @@ otter-vox ships with a full set of Kokoro voice files embedded in the binary, co
 
 ## Output Options
 
-otter-vox gives you full control over where the generated audio goes.
-
-- **Default** — plays audio immediately via your system audio output.
-- **`--no-play`** — writes a raw WAV stream to stdout so you can pipe it to another program.
-- **`-o PATH` / `--output PATH`** — saves audio to a file instead of (or alongside) playing it.
-- **`-o speech.wav` with playback enabled** — saves the file and plays it simultaneously.
+- **Default** plays audio through your system audio output.
+- **`--no-play`** writes a raw WAV stream to stdout for piping to another program.
+- **`-o PATH` / `--output PATH`** saves audio to a file instead of (or alongside) playing it.
+- **`-o speech.wav` with playback enabled** saves the file and plays it at the same time.
 
 ## Configuration
 
@@ -73,4 +71,4 @@ voice = "bm_george"
 cpu_threads = 4
 ```
 
-Setting `model_dir = ""` uses the embedded model, which is extracted automatically at runtime. Set `model_dir` to a custom directory path to use your own Kokoro model and voice files instead.
+Setting `model_dir = ""` uses the embedded model, extracted automatically at runtime. Set `model_dir` to a directory path to use your own Kokoro model and voice files.

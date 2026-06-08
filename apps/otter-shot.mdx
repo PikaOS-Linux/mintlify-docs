@@ -1,74 +1,74 @@
 ---
 title: "Create Polished Product Screenshots with otter-shot"
 sidebarTitle: "Product Shot"
-description: "otter-shot frames window screenshots with gradients, shadows, corner radius, and custom chrome. Export polished PNG images to file or clipboard."
+description: "Frame window screenshots with gradients, shadows, corner radius, and custom chrome. Export PNG to file or clipboard."
 ---
 
-otter-shot is Otter Shell's product-shot composer. Capture a live window, a hand-drawn region, or your entire desktop, then frame the result with a gradient background, drop shadow, rounded corners, padding, and an optional synthetic window chrome border. When you are happy with the composition, export it as a polished PNG — either through the portal save picker to a file of your choice, or straight to the clipboard ready to paste anywhere.
+otter-shot is Otter Shell's product-shot composer. Capture a live window, a hand-drawn region, or your entire desktop, then frame it with a gradient background, drop shadow, rounded corners, padding, and optional synthetic window chrome. Export the result as a PNG through the portal save picker or straight to the clipboard.
 
 ## Launching
 
-Run `otter-shot` from the app launcher or from a terminal. The composer window opens immediately; no arguments are required.
+Run `otter-shot` from the app launcher or a terminal. The composer window opens immediately. No arguments required.
 
 ```bash
 otter-shot
 ```
 
-otter-shot ships a `.desktop` file so it appears in the app launcher alongside your other applications. You can also bind it to a compositor shortcut if you capture product shots frequently.
+otter-shot ships a `.desktop` file so it appears in the app launcher. Bind it to a compositor shortcut if you use it often.
 
 <Note>
-  otter-shot appears in your application launcher automatically thanks to its installed `.desktop` entry. No manual PATH setup is needed.
+  otter-shot appears in your application launcher through its installed `.desktop` entry. No manual PATH setup needed.
 </Note>
 
 ## Capture Sources
 
-otter-shot gives you four ways to bring content into the composer.
+Four ways to bring content into the composer.
 
 <CardGroup cols={2}>
   <Card title="Focused Window" icon="window-maximize">
-    Captures the currently focused window immediately when you click the source button. No selection step is needed.
+    Captures the currently focused window when you click the source button. No selection step.
   </Card>
   <Card title="Selected Window" icon="list-ul">
-    Opens a live list of all toplevels reported by the compositor. Click any row to capture that specific window.
+    Opens a live list of all toplevels reported by the compositor. Click a row to capture that window.
   </Card>
   <Card title="All Screens" icon="display">
-    Captures the full desktop across every connected output in a single frame.
+    Captures the full desktop across every connected output in one frame.
   </Card>
   <Card title="Dragged Selection" icon="crop">
-    Draws the same frozen Wayland selection overlay used by otter-rec. Drag to define a custom rectangular region.
+    Uses the same frozen Wayland selection overlay as otter-rec. Drag to define a rectangular region.
   </Card>
 </CardGroup>
 
 <Note>
-  If your compositor exposes `ext_foreign_toplevel_list_v1` metadata but not the full capture protocol, the window list still appears in the inspector — but those rows are marked as metadata-only rather than silently failing when you try to capture them.
+  If your compositor exposes `ext_foreign_toplevel_list_v1` metadata but not the full capture protocol, the window list still appears in the inspector. Those rows are marked metadata-only instead of failing silently when you try to capture them.
 </Note>
 
 ## Composer Controls
 
-After capture, the right-hand inspector panel gives you full control over the framing. Scroll the inspector if the controls exceed the visible height.
+After capture, the right-hand inspector panel controls the framing. Scroll the inspector if the controls exceed the visible height.
 
-- **Source** — re-capture using any of the four source modes without closing the composer.
-- **Background** — choose between a predefined gradient, a wallpaper image selected through the xdg-desktop-portal file picker, or the current `otter-wallpaper` state (the wallpaper already displayed on your desktop). Click the wallpaper field to open the portal picker.
-- **Frame** — adjust padding around the captured content, corner radius, drop shadow intensity and offset, and border color.
-- **Options** — toggle synthetic window chrome to add a mock title bar or control buttons to the frame.
-- **Size** — set the output canvas dimensions. Controls update the preview in real time.
-- **Export** — choose between saving to a file or copying to clipboard (see [Exporting](#exporting) below).
+- **Source** re-captures using any of the four source modes without closing the composer.
+- **Background** picks a predefined gradient, a wallpaper image through the xdg-desktop-portal file picker, or the current `otter-wallpaper` state on your desktop. Click the wallpaper field to open the portal picker.
+- **Frame** adjusts padding around the captured content, corner radius, drop shadow intensity and offset, and border color.
+- **Options** toggles synthetic window chrome to add a mock title bar or control buttons.
+- **Size** sets the output canvas dimensions. Controls update the preview in real time.
+- **Export** saves to a file or copies to clipboard (see [Exporting](#exporting) below).
 
 ## Exporting
 
-otter-shot gives you two export paths once your composition looks right.
+Two export paths once the composition looks right.
 
 <Steps>
   <Step title="Export PNG to file">
     Click **Export PNG** in the inspector. The xdg-desktop-portal save picker opens so you can choose a filename and destination directory. otter-shot writes the framed PNG only after you confirm the picker.
   </Step>
   <Step title="Copy to clipboard">
-    Click **Clipboard** to copy the framed PNG directly as `image/png`. Paste it immediately into any application that accepts image data — chat apps, design tools, issue trackers, and so on.
+    Click **Clipboard** to copy the framed PNG as `image/png`. Paste it into any application that accepts image data.
   </Step>
 </Steps>
 
 ## Compositor Requirements
 
 <Warning>
-  otter-shot requires the `ext_image_copy_capture_v1` protocol for all capture operations. Screen and dragged-selection capture additionally require output capture source support from the compositor. Window capture requires both `ext_image_copy_capture_v1` and `ext_foreign_toplevel_list_v1`. If your compositor does not expose these protocols, the affected capture sources will be unavailable.
+  otter-shot requires the `ext_image_copy_capture_v1` protocol for all capture operations. Screen and dragged-selection capture also require output capture source support from the compositor. Window capture requires both `ext_image_copy_capture_v1` and `ext_foreign_toplevel_list_v1`. If your compositor does not expose these protocols, the affected capture sources will be unavailable.
 </Warning>

@@ -1,10 +1,10 @@
 ---
 title: "otter-launcher"
 sidebarTitle: "Launcher"
-description: "Wayland application launcher with fuzzy search, IME support, and calculator, emoji, and clipboard extensions."
+description: "App launcher with fuzzy search, IME, and calculator, emoji, and clipboard modes."
 ---
 
-`otter-launcher` is the Otter Shell application launcher. It displays a centered overlay with fuzzy search, similar to fuzzel, rofi, or wofi, built on the shared Otter UI stack.
+`otter-launcher` opens a centered search overlay. Same idea as fuzzel, rofi, or wofi, built on the shared Otter UI stack.
 
 ## Usage
 
@@ -12,14 +12,14 @@ description: "Wayland application launcher with fuzzy search, IME support, and c
 otter-launcher
 ```
 
-Bind to a compositor hotkey — for example `Super+D`:
+Bind to a compositor hotkey. For example `Super+D`:
 
 ```ini
 # Hyprland
 bind = $mainMod, D, exec, otter-launcher
 ```
 
-The launcher is a one-shot process: it opens, you search and launch (or press Escape), and it exits. A socket prevents duplicate overlays — invoking it again closes the existing instance.
+Each run is one shot: open, search, launch (or press Escape), exit. A socket blocks duplicate overlays. Calling the launcher again closes the one that is already open.
 
 ## Launcher extensions
 
@@ -45,14 +45,14 @@ Extensions appear above application matches:
 | Ctrl+W | Delete last word |
 | Backspace | Delete character |
 
-During IME composition, Escape and Enter are handled by the IME.
+During IME composition, Escape and Enter go to the IME.
 
 ## Configuration
 
 Config file: `~/.config/otter-shell/otter-launcher.conf`. A default config is created on first run.
 
 <Tip>
-  Edit launcher size, colors, and placeholder text in [otter-settings](/desktop/otter-settings) under the **Launcher** tab.
+  Change launcher size, colors, and placeholder text in [otter-settings](/desktop/otter-settings) under the **Launcher** tab.
 </Tip>
 
 ```conf
@@ -71,7 +71,7 @@ Most color fields inherit from [theme.conf](/configuration/themes) when omitted.
 
 ## Terminal detection
 
-For `.desktop` entries with `Terminal=true`, the launcher detects a terminal emulator:
+For `.desktop` entries with `Terminal=true`, the launcher picks a terminal emulator:
 
 1. `$TERMINAL` environment variable
 2. Probes `$PATH` for `xdg-terminal-exec`, `foot`, `otter-term`, `ghostty`, `kitty`, `alacritty`, and others

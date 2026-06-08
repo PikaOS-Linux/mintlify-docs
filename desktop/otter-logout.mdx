@@ -1,10 +1,10 @@
 ---
 title: "otter-logout"
 sidebarTitle: "Power menu"
-description: "Wayland power menu overlay for lock, logout, suspend, reboot, and shutdown."
+description: "Power menu overlay for lock, logout, suspend, reboot, and shutdown."
 ---
 
-`otter-logout` displays a power menu overlay with lock, logout, suspend, reboot, and shutdown actions. It is a one-shot process — invoke it from a hotkey or the bar menu button.
+`otter-logout` is a power menu: lock, logout, suspend, reboot, shutdown. Run it from a hotkey or the bar menu button. One process per open; it exits when you pick an action or dismiss it.
 
 ## Usage
 
@@ -12,7 +12,7 @@ description: "Wayland power menu overlay for lock, logout, suspend, reboot, and 
 otter-logout
 ```
 
-Bind to a compositor hotkey — for example `Super+Shift+E`:
+Bind to a compositor hotkey. For example `Super+Shift+E`:
 
 ```ini
 # Hyprland

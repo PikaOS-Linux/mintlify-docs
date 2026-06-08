@@ -1,10 +1,10 @@
 ---
 title: "Configure Otter Shell with otter-settings"
 sidebarTitle: "Overview"
-description: "Use otter-settings to configure every Otter Shell app graphically. Changes write to ~/.config/otter-shell/ and hot-reload automatically."
+description: "Configure Otter Shell in otter-settings or by editing files in ~/.config/otter-shell/. Most changes hot-reload without a restart."
 ---
 
-The recommended way to configure Otter Shell is **`otter-settings`** — a graphical editor with a tab for every app, a theme browser, and a drag-and-drop bar layout editor. It writes to the same `~/.config/otter-shell/*.conf` files as manual editing, so you can switch between GUI and text at any time.
+The easiest path is **`otter-settings`**, a graphical editor with a tab per app, a theme browser, and a drag-and-drop bar layout editor. It writes the same `~/.config/otter-shell/*.conf` files you'd edit by hand, so you can switch between GUI and text whenever you want.
 
 ```bash
 otter-settings
@@ -13,7 +13,7 @@ otter-settings
 Launch it from [otter-launcher](/desktop/otter-launcher), bind a compositor hotkey, or run the command above. See the full [otter-settings](/desktop/otter-settings) reference for tabs, features, and theme presets.
 
 <Note>
-  Most settings take effect immediately after you click **Apply** — running apps watch their config files via inotify and reload without a restart.
+  Most settings take effect right after you click **Apply**. Running apps watch their config files via inotify and reload without a restart.
 </Note>
 
 ## What you can configure in otter-settings
@@ -30,11 +30,11 @@ Launch it from [otter-launcher](/desktop/otter-launcher), bind a compositor hotk
 | Lock / Logout / Idle / Polkit / Jade | Session and overlay settings |
 | Recorder / Voice | `otter-rec` and `otter-vox` options |
 
-Global compositor hotkeys (screenshot, launcher, lock) are **not** configured in otter-settings — bind those in your compositor config. See [Keybinds](/configuration/keybinds).
+Global compositor hotkeys (screenshot, launcher, lock) are **not** in otter-settings. Bind those in your compositor config. See [Keybinds](/configuration/keybinds).
 
 ## Manual config files
 
-Every app also stores settings as a plain-text file in `~/.config/otter-shell/`. Use manual editing when you prefer the terminal, need to script changes, or want to preserve custom comments otter-settings might not expose in the UI.
+Every app also stores settings as a plain-text file in `~/.config/otter-shell/`. Edit by hand when you prefer the terminal, need to script changes, or want to keep custom comments the UI might not show.
 
 | App | Config file |
 |-----|-------------|
@@ -63,7 +63,7 @@ Every app also stores settings as a plain-text file in `~/.config/otter-shell/`.
 | otter-weather | `~/.config/otter-shell/otter-weather.conf` |
 | otter-screenshot | *(no persistent config — CLI flags only)* |
 
-System-wide defaults may also exist under `/etc/otter-shell/`. User configs always take priority.
+System-wide defaults may also exist under `/etc/otter-shell/`. User configs always win.
 
 ## File format
 
@@ -76,7 +76,7 @@ url_enabled = true
 
 Quote string values with double quotes. Booleans are `true` or `false`. An empty string `""` falls back to the compiled default.
 
-On first launch, apps normalize their config file — missing keys are added with defaults and unknown keys are removed.
+On first launch, apps normalize their config file. Missing keys get defaults; unknown keys are removed.
 
 ## Hot reload
 
@@ -86,7 +86,7 @@ Most daemons watch their config (and often `theme.conf`) with inotify:
 - **otter-term** — hot-reloads fonts, colors, padding, and scrollback
 - **otter-transcribe** — reloads settings and watches `theme.conf`
 
-Changes made in otter-settings trigger the same hot-reload path as saving the file by hand.
+Changes in otter-settings hit the same hot-reload path as saving the file by hand.
 
 ## System-wide defaults
 

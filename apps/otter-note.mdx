@@ -1,10 +1,10 @@
 ---
 title: "Sticky Markdown Notes for Your Desktop with otter-note"
 sidebarTitle: "Notes"
-description: "otter-note pins markdown notes to a layer-shell surface. Toggle with Super+N, edit inline, preview rendered markdown, and save automatically on exit."
+description: "Pin markdown notes to a layer-shell surface. Toggle with Super+N, edit inline, preview rendered markdown, save on exit."
 ---
 
-otter-note creates sticky markdown notes that float above your desktop using a Wayland layer-shell surface. You can pin notes to any corner, edit them directly, preview rendered markdown, and bind `Super+N` for instant access. Notes persist across sessions and are stored as plain markdown files, so you can read and edit them with any text editor outside Otter Shell.
+otter-note creates sticky markdown notes that float above your desktop on a Wayland layer-shell surface. Pin notes to any corner, edit them in place, preview rendered markdown, and bind `Super+N` for quick access. Notes persist across sessions as plain markdown files. You can edit them with any text editor outside Otter Shell.
 
 ## Commands
 
@@ -19,9 +19,9 @@ otter-note --path /tmp/notes.md add test note  # use a custom file
 
 ## Editing Notes
 
-In edit mode, the layer-shell surface edits your markdown file directly. Press **Ctrl+S** to save at any point, or simply close the surface — it saves automatically on exit. Press **Ctrl+M** to toggle rendered markdown preview so you can read formatted output without leaving the surface.
+In edit mode, the layer-shell surface edits your markdown file directly. Press **Ctrl+S** to save, or close the surface and it saves on exit. Press **Ctrl+M** to toggle rendered markdown preview.
 
-In view mode, only the header buttons accept pointer and keyboard input. The note body is fully pass-through, so apps underneath continue to receive events normally and the note never blocks your workflow.
+In view mode, only the header buttons accept pointer and keyboard input. The note body is pass-through, so apps underneath keep receiving events and the note does not block your work.
 
 | Shortcut | Action |
 |---|---|
@@ -30,7 +30,7 @@ In view mode, only the header buttons accept pointer and keyboard input. The not
 
 ## Pinning
 
-Use `--pin` to position the note surface in a specific corner of your display before opening it. For example, to pin to the top-right corner:
+Use `--pin` to position the note surface in a corner before opening it:
 
 ```bash
 otter-note --pin top-right new
@@ -44,10 +44,10 @@ otter-note reads its settings from `~/.config/otter-shell/otter-note.conf`:
 notes_path = ""
 ```
 
-When `notes_path` is empty, otter-note stores notes at `$XDG_DATA_HOME/otter-shell/notes.md`, falling back to `~/.local/share/otter-shell/notes.md` if `XDG_DATA_HOME` is unset. Set `notes_path` to an absolute path to redirect storage to a custom location, for example a synced folder.
+When `notes_path` is empty, otter-note stores notes at `$XDG_DATA_HOME/otter-shell/notes.md`, falling back to `~/.local/share/otter-shell/notes.md` if `XDG_DATA_HOME` is unset. Set `notes_path` to an absolute path to store notes elsewhere, like a synced folder.
 
 ## Hotkey Setup
 
 <Tip>
-Bind `otter-note new` to `Super+N` in your compositor config for quick sticky note access from anywhere on the desktop.
+Bind `otter-note new` to `Super+N` in your compositor config for sticky note access from anywhere on the desktop.
 </Tip>
