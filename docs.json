@@ -2,16 +2,15 @@
   "$schema": "https://mintlify.com/docs.json",
   "name": "Otter Shell",
   "theme": "palm",
-  "favicon": "/favicon.png",
+  "favicon": "https://git.pika-os.com/avatars/6602ffebe01fba6c2a6d596496b37ee4957c3d6bb248cfcd2c676625a640bbc6?size=200",
   "logo": {
-    "light": "/logo/otter-shell.png",
-    "dark": "/logo/otter-shell.png",
-    "href": "https://git.pika-os.com/otter-shell"
+    "light": "https://git.pika-os.com/avatars/6602ffebe01fba6c2a6d596496b37ee4957c3d6bb248cfcd2c676625a640bbc6?size=200",
+    "dark": "https://git.pika-os.com/avatars/6602ffebe01fba6c2a6d596496b37ee4957c3d6bb248cfcd2c676625a640bbc6?size=200"
   },
   "colors": {
-    "primary": "#649c25",
-    "light": "#accb8c",
-    "dark": "#d8e6ca"
+    "primary": "#2C6E7F",
+    "light": "#7FD4C1",
+    "dark": "#1F4E5A"
   },
   "navigation": {
     "tabs": [
