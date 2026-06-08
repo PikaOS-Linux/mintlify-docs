@@ -48,12 +48,18 @@ File output writes directly to disk and does not touch the clipboard at all.
 ## Binding a Shortcut
 
 <Tip>
-  Bind `otter-screenshot` to a hotkey so you can trigger it instantly from anywhere on the desktop. For example, in a River compositor config you would add:
+  Bind `otter-screenshot` to a hotkey in your compositor config. Examples:
 
-  ```bash
-  riverctl map normal Super S spawn otter-screenshot
-  riverctl map normal Super Shift S spawn "otter-screenshot --freeze --output ~/Pictures/screenshot.png"
+  **Hyprland:**
+  ```ini
+  bind = $mainMod, P, exec, otter-screenshot
+  bind = $mainMod SHIFT, P, exec, otter-screenshot --freeze --output ~/Pictures/screenshot.png
   ```
 
-  Replace `Super S` with whichever key combination suits your workflow. Consult your compositor's documentation for the equivalent binding syntax.
+  **Sway:**
+  ```
+  bindsym $mod+p exec otter-screenshot
+  ```
+
+  See [Keybinds](/configuration/keybinds) for more compositor examples.
 </Tip>

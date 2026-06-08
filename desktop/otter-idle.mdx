@@ -1,0 +1,78 @@
+---
+title: "otter-idle"
+sidebarTitle: "Idle daemon"
+description: "Idle management with configurable timeouts, DPMS control, and systemd-logind sleep integration."
+---
+
+`otter-idle` detects user inactivity and runs configurable commands — typically locking the session or turning off displays. It integrates with systemd-logind for sleep events and screen saver inhibition.
+
+## Usage
+
+```bash
+otter-idle
+```
+
+Autostart at login — see [Session setup](/desktop/session-setup).
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-idle.conf`
+
+```conf
+lock_cmd = pidof otter-lock || otter-lock
+unlock_cmd =
+
+before_sleep_cmd = loginctl lock-session
+after_sleep_cmd = dpms:on
+
+ignore_dbus_inhibit = false
+ignore_systemd_inhibit = false
+
+# Lock after 5 minutes idle
+listener_1_timeout = 300
+listener_1_on_timeout = loginctl lock-session
+listener_1_on_resume =
+
+# DPMS off after 6 minutes, on when active
+listener_2_timeout = 360
+listener_2_on_timeout = dpms:off
+listener_2_on_resume = dpms:on
+```
+
+Up to 8 listeners (`listener_1` through `listener_8`). Each has:
+
+| Field | Description |
+|-------|-------------|
+| `timeout` | Idle seconds before firing (0 = disabled) |
+| `on_timeout` | Command when user becomes idle |
+| `on_resume` | Command when activity resumes (only if `on_timeout` ran) |
+
+### Built-in DPMS commands
+
+| Command | Effect |
+|---------|--------|
+| `dpms:off` | Turn displays off |
+| `dpms:on` | Turn displays on |
+| `dpms:standby` | Standby mode |
+| `dpms:suspend` | Suspend mode |
+
+Any other value runs as a shell command via `/bin/sh -c`.
+
+DPMS backend selection:
+
+1. `wlr-output-power-management-unstable-v1` (preferred)
+2. Compositor IPC fallback (Hyprland, Sway, Niri detected from `$XDG_CURRENT_DESKTOP`)
+
+## Inhibitor handling
+
+Three layers of idle inhibition:
+
+1. **Wayland-native** (`zwp_idle_inhibit_manager_v1`) — handled by compositor
+2. **D-Bus** (`org.freedesktop.ScreenSaver`) — tracked by otter-idle (video players, etc.)
+3. **systemd** (`loginctl inhibit`) — checked via logind ListInhibitors
+
+Set `ignore_dbus_inhibit = true` or `ignore_systemd_inhibit = true` to bypass respective layers.
+
+## Logind integration
+
+Responds to logind `Lock`, `Unlock`, and `PrepareForSleep` signals. Default `lock_cmd` ensures [otter-lock](/desktop/otter-lock) is available when a lock is requested.

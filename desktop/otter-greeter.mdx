@@ -1,0 +1,59 @@
+---
+title: "otter-greeter"
+sidebarTitle: "Display manager"
+description: "Wayland display manager with PAM authentication, fingerprint support, and AccountsService user discovery."
+---
+
+`otter-greeter` is Otter Shell's Wayland display manager. It handles login before your user compositor session starts.
+
+## Components
+
+| Binary | Role |
+|--------|------|
+| `otter-greeterd` | Root daemon — PAM, logind seats, AccountsService, IPC, session launch |
+| `otter-greeter-ui` | Unprivileged Wayland login UI |
+
+The greeter UI runs on **Hyprland** configured for the login screen only. Your user session uses whichever compositor you configure separately — the greeter does not dictate your desktop compositor.
+
+## Installation
+
+After `pikman install otter-shell`, enable the systemd service:
+
+```bash
+sudo systemctl enable otter-greeter.service
+```
+
+System files installed:
+
+- `/etc/otter-shell/otter-greeter.conf`
+- `/etc/otter-shell/otter-greeter-hyprland.conf`
+- `/etc/pam.d/otter-greeter`
+- `/etc/pam.d/otter-greeter-autologin`
+- `/usr/lib/systemd/system/otter-greeter.service`
+
+A dedicated system user `otter-greeter` is created during package installation.
+
+## Configuration
+
+Main config: `/etc/otter-shell/otter-greeter.conf`
+
+| Setting | Default |
+|---------|---------|
+| Greeter compositor | `/usr/bin/start-hyprland -- --config /etc/otter-shell/otter-greeter-hyprland.conf` |
+| Display VT | `7` |
+| State path | `/var/lib/otter-greeter/state.conf` |
+| Runtime sockets | `/run/otter-greeter/<seat>.sock` |
+
+Wayland sessions are discovered from configured `.desktop` directories. X11 sessions are ignored.
+
+## Authentication
+
+- PAM handles password authentication
+- Fingerprint auth is PAM-controlled (via fprintd when configured)
+- Autologin is attempted once per daemon process per seat; failure falls back to interactive login
+- Expired-password flows use PAM conversation prompts on the auth surface
+- User listing prefers AccountsService; falls back to `/etc/passwd` for normal login users
+
+## Dependencies
+
+`otter-greeter` depends on `otter-wallpaper` (same version), Hyprland (greeter compositor only), `accountsservice`, and `adduser`.

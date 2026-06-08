@@ -1,0 +1,53 @@
+---
+title: "otter-settings"
+sidebarTitle: "Settings"
+description: "Graphical configuration editor and theme browser for all Otter Shell apps."
+---
+
+`otter-settings` is the graphical settings editor for Otter Shell. It reads and writes the same `~/.config/otter-shell/*.conf` files as manual editing, preserving comments and field order.
+
+## Usage
+
+```bash
+otter-settings
+```
+
+Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotkey.
+
+## Features
+
+- Tab-based UI for every Otter Shell app config
+- Theme browser with live preview of all 12 built-in presets
+- Search across config keys, labels, values, and sections
+- Drag-and-drop widget layout editor for [otter-bar](/desktop/otter-bar)
+- Custom button creation and deletion for the bar
+- Type-aware controls: toggles, color swatches, dropdowns, number steppers, text inputs
+- Clipboard paste (Ctrl+V) in text fields via Wayland data device
+- Hot reload — saved changes are picked up by running apps via inotify
+
+## Config files managed
+
+| Tab | File |
+|-----|------|
+| Bar | `otter-bar.conf` |
+| Launcher | `otter-launcher.conf` |
+| Notifications | `notifications.conf` |
+| Wallpaper | `otter-wallpaper.conf` |
+| OSD | `otter-osd.conf` |
+| Jade | `otter-jade.conf` |
+| Logout | `otter-logout.conf` |
+| Polkit | `otter-polkit.conf` |
+| Lock | `otter-lock.conf` |
+| Idle | `otter-idle.conf` |
+| Terminal | `otter-term.conf` |
+| Recorder | `otter-rec.conf` |
+| Voice | `otter-vox.conf` |
+| Theme | `theme.conf` |
+
+Changes to `theme.conf` propagate to all running apps that watch the theme file.
+
+## Theme presets
+
+Built-in presets include Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, and One Dark. Select a preset in the theme browser to preview and apply.
+
+See [Themes](/configuration/themes) for token reference.

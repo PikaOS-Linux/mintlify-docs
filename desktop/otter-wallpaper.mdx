@@ -1,0 +1,66 @@
+---
+title: "otter-wallpaper"
+sidebarTitle: "Wallpaper"
+description: "Wayland wallpaper daemon with per-display config, rotation, and lockscreen integration."
+---
+
+`otter-wallpaper` renders desktop backgrounds on the Wayland background layer using `zwlr_layer_shell_v1`. Images are decoded, drawn to SHM buffers, and freed immediately to minimize memory use.
+
+## Usage
+
+```bash
+otter-wallpaper
+```
+
+Autostart at login — see [Session setup](/desktop/session-setup).
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-wallpaper.conf`
+
+```conf
+path = /usr/share/wallpapers/pika/
+rotation_interval = 300
+rotation_order = random
+scale_mode = cover
+same_on_all_displays = true
+overview_enabled = false
+overview_blur_radius = 20
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `path` | `/usr/share/wallpapers/pika/` | File or directory |
+| `rotation_interval` | `300` | Seconds between rotations (0 = disabled) |
+| `rotation_order` | `random` | `sequential` or `random` |
+| `scale_mode` | `cover` | `cover` (fill+crop) or `fit` (letterbox) |
+| `same_on_all_displays` | `true` | Same image on all outputs |
+| `overview_enabled` | `false` | Blurred overview surface for Niri |
+| `overview_blur_radius` | `20` | Blur strength for overview |
+
+Per-display overrides use `display_0_name`, `display_0_path`, through `display_7_*`.
+
+## Lockscreen integration
+
+When a wallpaper changes, `otter-wallpaper` writes the current path for each output to:
+
+```
+$XDG_RUNTIME_DIR/otter-shell/wallpaper-state
+```
+
+Format: one `output_name=path` line per output. [otter-lock](/desktop/otter-lock) reads this file to show the same wallpaper behind the lock screen.
+
+## Niri overview
+
+When `overview_enabled = true`, a blurred layer surface is created with namespace `otter-wallpaper-overview`. Add to your Niri config:
+
+```kdl
+layer-rule {
+    match namespace="^otter-wallpaper-overview$"
+    place-within-backdrop true
+}
+```
+
+## Hot reload
+
+Config and theme changes apply via inotify without restart. The current wallpaper is preserved on reload.

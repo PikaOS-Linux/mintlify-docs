@@ -1,0 +1,160 @@
+---
+title: "Create a new Otter Shell app"
+sidebarTitle: "Creating an app"
+description: "Start a new Wayland application using Otter libraries — dependencies, UI pattern, and config setup."
+---
+
+This guide walks through creating a new Wayland application that integrates with the Otter Shell stack.
+
+## 1. Create the project
+
+Initialize a Zig project and add Otter library dependencies in `build.zig.zon`:
+
+```json
+{
+    "name": "my-otter-app",
+    "version": "0.1.0",
+    "dependencies": {
+        "otter_ui": { "path": "../otter-ui" },
+        "otter_wayland": { "path": "../otter-wayland" },
+        "otter_render": { "path": "../otter-render" },
+        "otter_theme": { "path": "../otter-theme" },
+        "otter_conf": { "path": "../otter-conf" },
+        "otter_config_types": { "path": "../otter-config-types" },
+        "otter_utils": { "path": "../otter-utils" }
+    }
+    // Add otter_desktop if you need D-Bus, icons, or .desktop parsing
+}
+```
+
+When building outside the monorepo, fetch libraries by URL:
+
+```bash
+zig fetch --save git+https://git.pika-os.com/otter-shell/otter-conf
+```
+
+## 2. Wire imports in build.zig
+
+```zig
+const otter_ui = b.dependency("otter_ui", .{ .target = target, .optimize = optimize });
+const otter_wayland = b.dependency("otter_wayland", .{ .target = target, .optimize = optimize });
+const otter_render = b.dependency("otter_render", .{ .target = target, .optimize = optimize });
+
+exe.root_module.addImport("otter_ui", otter_ui.module("otter_ui"));
+exe.root_module.addImport("otter_wayland", otter_wayland.module("otter_wayland"));
+exe.root_module.addImport("otter_render", otter_render.module("otter_render"));
+```
+
+## 3. Choose your app pattern
+
+### Layer-shell overlay (launcher, logout, settings style)
+
+- Connect to Wayland via `otter-wayland`
+- Create a `zwlr_layer_shell_v1` surface
+- Describe UI with **Surface Description** (`otter-ui` `UiFrame`)
+- One-shot: use `ArenaAllocator`, exit after user action
+- Example references: `otter-launcher`, `otter-logout`
+
+### Persistent daemon (bar, notifications, wallpaper style)
+
+- Long-running event loop polling Wayland + D-Bus/inotify FDs
+- Use `GeneralPurposeAllocator`
+- Hot-reload config via `otter-conf.Watcher`
+- Example references: `otter-bar`, `otter-notifications`
+
+### CLI tool (calc, weather, emoji style)
+
+- Minimal dependencies: `otter-tools-core` + `otter-conf`
+- No Wayland window unless adding a `--layer` popup mode
+- Example references: `otter-calc`, `otter-weather`
+
+## 4. Build the UI with Surface Description
+
+New app UI should use the bounded `UiState` frame API:
+
+```zig
+const ui = @import("otter_ui");
+
+const caps = ui.ui_frame.Capacities{ .elements = 64, .hit_regions = 64, .overlays = 8 };
+var state: ui.UiState(caps) = .{};
+
+var frame = state.begin(.{
+    .viewport = .{ .x = 0, .y = 0, .width = width, .height = height },
+    .scale = surface.scale,
+    .font = font,
+});
+
+const root = ui.SurfaceNode{
+    .id = ui.SurfaceId.namedComptime("root"),
+    .kind = .column,
+    .layout = .{ .width = .fill, .height = .fill, .gap = 8, .padding = ui.Padding.uniform(12) },
+    .children = &children,
+};
+
+_ = try frame.render(&root, frame.viewport);
+try frame.finish();
+
+// Rasterize via otter-render
+render.quad_renderer.rasterize(ui.render.DefaultCommandList, &state.commands, surface, null, null, true);
+```
+
+Use `state.hitTest(point)` for pointer input — no parallel hit arrays needed.
+
+## 5. Add configuration
+
+Define a config struct and use `otter-conf` to parse it:
+
+```zig
+const otter_conf = @import("otter_conf");
+
+const Config = struct {
+    font_size: u16 = 14,
+    enabled: bool = true,
+    label: []const u8 = "Hello",
+};
+
+var config = try otter_conf.load(Config, allocator, config_path, .{});
+defer otter_conf.freeConfig(Config, allocator, &config);
+```
+
+Store the config at `~/.config/otter-shell/my-app.conf`. On first run, normalize the file (add missing defaults, strip unknown keys).
+
+For typed configs shared with `otter-settings`, add struct definitions to `otter-config-types` and register a tab in `otter-settings/src/tabs.zig`.
+
+## 6. Apply theming
+
+Load the shared theme:
+
+```zig
+const theme = try otter_theme.loader.loadTheme(allocator);
+defer theme.deinit(allocator);
+```
+
+Widget config fields should use `?Color = null` and resolve via `config.field orelse theme.token`. Precedence: widget config → `theme.conf` → compiled defaults.
+
+## 7. Install a .desktop file
+
+For launcher integration, install a freedesktop `.desktop` entry:
+
+```ini
+[Desktop Entry]
+Name=My App
+Exec=my-otter-app
+Icon=my-otter-app
+Type=Application
+Categories=Utility;
+```
+
+Place in `data/applications/` and install icons under `data/icons/hicolor/`.
+
+## Reference implementations
+
+| Pattern | Study these sources |
+|---------|-------------------|
+| Status bar daemon | `otter-bar/src/main.zig`, `otter-bar/src/config.zig` |
+| One-shot overlay | `otter-launcher/src/main.zig`, `otter-launcher/src/draw.zig` |
+| Settings GUI | `otter-settings/src/app.zig`, `otter-settings/src/draw_form.zig` |
+| CLI helper | `otter-calc/src/main.zig`, `otter-tools-core/src/calc.zig` |
+| Config-only daemon | `otter-idle/src/main.zig` |
+
+See [Libraries reference](/developers/libraries) for per-library API details.

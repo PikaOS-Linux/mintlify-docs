@@ -1,78 +1,106 @@
 ---
-title: "Install Otter Shell on PikaOS Using the APT Repository"
+title: "Install Otter Shell on PikaOS"
 sidebarTitle: "Installation"
-description: "Get the Otter Shell desktop suite on PikaOS by adding the APT repository and running a single apt install command. All components update automatically."
+description: "Install the Otter Shell desktop with pikman. The otter-shell metapackage includes the full shell; otter-shell-extras adds optional speech tools."
 ---
 
-Otter Shell is distributed as native Debian packages for PikaOS through the official **otter-shell** PPA. Every component — from the terminal emulator to the screenshot tool — is packaged and maintained in the [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) repository, so you get a fully integrated desktop with a single `apt install` command and automatic updates through the standard PikaOS package pipeline.
+Otter Shell is distributed as native packages for PikaOS. Packages are built and versioned together in the [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) repository. Use **pikman** to install — it is the recommended package manager on PikaOS.
 
-## System Requirements
+## System requirements
 
-Before you install, confirm your system meets the following requirements:
-
-- **PikaOS** (Ubuntu-based) — Otter Shell packages target PikaOS and its APT repositories.
-- **Wayland compositor** — River is the packaged default and is pulled in automatically via `otter-zenith`. Any other Wayland compositor works as long as it supports the required protocols.
-- **No Zig runtime needed** — Otter Shell applications are compiled to native binaries; end users do not need Zig installed.
+- **PikaOS** — Otter Shell packages target PikaOS repositories.
+- **Wayland compositor** — Otter Shell is Wayland-only. Use any compositor that supports the protocols your chosen apps need (for example `zwlr_layer_shell_v1` for the status bar, launcher, and most overlays).
+- **No Zig runtime needed** — Applications ship as native binaries. End users do not need Zig installed.
 
 <Note>
-  Otter Shell is **Wayland-only**. X11 is not supported. Additionally, the screenshot and color-picker tools (`otter-screenshot` and `otter-pick`) require your compositor to expose the `ext_image_copy_capture_v1` protocol. River, the default compositor, supports this out of the box.
+  Otter Shell does **not** install a compositor for you. You choose and configure your own Wayland session (Hyprland, Sway, Niri, and others are common on PikaOS). The display manager (`otter-greeter`) uses Hyprland only for the login screen — your user session compositor is separate.
+
+  Screenshot and color-picker tools (`otter-screenshot`, `otter-pick`, `otter-shot`) require the compositor to expose `ext_image_copy_capture_v1`.
 </Note>
 
-## Installation
+## Install with pikman
 
 <Steps>
-  <Step title="Confirm the Otter Shell repository is available">
-    Otter Shell ships through the PikaOS default repositories via the **otter-zenith** package pipeline, so no manual PPA configuration is needed on a standard PikaOS installation. If you are on a minimal or custom PikaOS base and need to add the repository manually, follow the PikaOS repository guide before continuing.
-  </Step>
-
-  <Step title="Update your package index">
-    Refresh APT's package index to pick up the latest Otter Shell releases:
+  <Step title="Update package lists">
+    Refresh available packages:
 
     ```bash
-    sudo apt update
+    pikman update
     ```
   </Step>
 
   <Step title="Install Otter Shell">
-    Install the full desktop environment with all components in one command:
+    Install the full desktop metapackage:
 
     ```bash
-    sudo apt install otter-shell
+    pikman install otter-shell
     ```
 
-    This pulls in every Otter Shell application as a single meta-package:
+    This installs every component pinned to the same version. See the package table below for the full list.
 
-    | Package | Description |
-    |---|---|
-    | `otter-term` | Terminal emulator |
-    | `otter-screenshot` | Region and fullscreen screenshot tool |
-    | `otter-clip` | Clipboard manager daemon |
-    | `otter-rec` | Screen recorder |
-    | `otter-shot` | Product-shot composer |
-    | `otter-note` | Sticky notes |
-    | `otter-cal` | Calendar |
-    | `otter-timer` | Timer and stopwatch |
-    | `otter-transcribe` | Audio transcription |
-    | `otter-calc` | Calculator |
-    | `otter-emoji` | Emoji picker |
-    | `otter-pick` | Color picker |
-    | `otter-vox` | Voice assistant |
-    | `otter-weather` | Weather widget |
-
-    If you only need specific tools, install them individually instead. For example, to install just the terminal:
+    For optional speech tools (transcription and text-to-speech), also install:
 
     ```bash
-    sudo apt install otter-term
+    pikman install otter-shell-extras
+    ```
+
+    `otter-shell` **recommends** `otter-shell-extras` but does not require it — transcription and voice synthesis are not part of the base metapackage.
+  </Step>
+
+  <Step title="Install individual packages (optional)">
+    If you only need specific tools, install packages by name:
+
+    ```bash
+    pikman install otter-term otter-bar otter-launcher
     ```
   </Step>
 </Steps>
 
-## Verify the Installation
+## Metapackages
 
-Once the install finishes, confirm everything is working by launching the terminal emulator:
+| Metapackage | Contents |
+|-------------|----------|
+| `otter-shell` | Full desktop shell — bar, launcher, notifications, wallpaper, OSD, logout, settings, polkit, lock, idle, greeter, terminal, Jade pet, screenshot tools, clipboard, notes, timer, weather, and all other core helpers. Includes `otter-shell-fonts`. |
+| `otter-shell-extras` | Optional speech tools only: `otter-transcribe` and `otter-vox`. |
+
+## Packages in `otter-shell`
+
+These packages are installed when you run `pikman install otter-shell`:
+
+| Package | Description |
+|---------|-------------|
+| `otter-bar` | Status bar with widgets, system tray, and MPRIS |
+| `otter-launcher` | Application launcher overlay |
+| `otter-notifications` | Notification daemon (freedesktop.org spec) |
+| `otter-wallpaper` | Wallpaper daemon |
+| `otter-osd` | On-screen display for volume, brightness, and lock keys |
+| `otter-logout` | Power menu overlay |
+| `otter-settings` | Graphical settings editor |
+| `otter-polkit` | Polkit authentication agent |
+| `otter-lock` | Session lockscreen |
+| `otter-idle` | Idle management daemon |
+| `otter-greeter` | Display manager (login screen) |
+| `otter-term` | Terminal emulator |
+| `otter-jade` | Desktop pet |
+| `otter-screenshot` | Region and fullscreen screenshots |
+| `otter-shot` | Product-shot composer |
+| `otter-rec` | Screen recorder |
+| `otter-clip` | Clipboard manager |
+| `otter-note` | Sticky notes |
+| `otter-cal` | Calendar helper for the bar |
+| `otter-calc` | Calculator helper |
+| `otter-emoji` | Emoji picker helper |
+| `otter-timer` | Countdown timer |
+| `otter-pick` | Color picker |
+| `otter-weather` | Weather fetcher and bar widget |
+| `otter-shell-fonts` | Bundled fallback fonts |
+
+**Not in either metapackage:** `otter-transcribe` and `otter-vox` (install via `otter-shell-extras`).
+
+## Verify the installation
 
 ```bash
 otter-term
 ```
 
-A new terminal window should open on your Wayland session. If it does, Otter Shell is installed and functional. You are ready to move on to the [Quick Start](/quickstart) guide.
+A terminal window should open on your Wayland session. Continue with the [Quick Start](/quickstart) and [Session setup](/desktop/session-setup) guides to autostart shell daemons.

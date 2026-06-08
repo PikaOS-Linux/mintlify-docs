@@ -1,98 +1,117 @@
 ---
-title: "Quick Start: Run Otter Shell on PikaOS in Five Minutes"
+title: "Quick start with Otter Shell"
 sidebarTitle: "Quick Start"
-description: "Launch your terminal, start the clipboard daemon, bind compositor hotkeys, and take your first screenshot in under five minutes on PikaOS."
+description: "Launch your terminal, autostart shell daemons, and try screenshot, clipboard, and notes in under five minutes."
 ---
 
-This guide walks you through the essential first steps after installing Otter Shell. In under five minutes you will have a working terminal, a persistent clipboard daemon running in the background, and a screenshot workflow ready to go — plus a few extras like sticky notes and weather at your fingertips.
+This guide covers the essential first steps after installing Otter Shell. You need a running Wayland compositor session before any Otter app can open windows.
 
 <Steps>
-  <Step title="Launch the Otter Terminal">
-    Start by opening the Otter Shell terminal emulator. Run the following command from your compositor's run launcher or an existing terminal session:
-
+  <Step title="Launch the terminal">
     ```bash
     otter-term
     ```
 
-    A lightweight, GPU-accelerated terminal window opens immediately. You can use this terminal for all subsequent steps.
+    Otter Terminal is CPU-rendered via the shared Otter render stack — no GPU dependency for the terminal grid itself.
   </Step>
 
-  <Step title="Start the Clipboard Daemon">
-    `otter-clip` manages your clipboard history, but it needs to run as a background daemon to capture copies made in other applications. Start it now:
+  <Step title="Start background daemons">
+    Several Otter Shell components must run as daemons. Start the essentials now:
 
     ```bash
+    otter-bar &
+    otter-wallpaper &
+    otter-notifications &
+    otter-osd &
     otter-clip daemon &
+    otter-idle &
+    otter-polkit &
     ```
 
-    The `&` sends the process to the background so it keeps running after you close the terminal. For a permanent setup, add this command to your compositor's **autostart** configuration so it launches automatically every time your session starts.
+    For a permanent setup, add these to your compositor autostart. See [Session setup](/desktop/session-setup) for a complete autostart block and compositor-specific examples.
   </Step>
 
-  <Step title="Take Your First Screenshot">
-    With your compositor's hotkey bound (see the tip below), press it to invoke the screenshot tool — or run it directly:
+  <Step title="Open the launcher">
+    Run the application launcher (bind this to a compositor hotkey for daily use):
 
+    ```bash
+    otter-launcher
+    ```
+
+    Type to search applications. Try extensions: `=2+3*4` for calculator results, `:heart` for emoji, or `clip` for clipboard history.
+  </Step>
+
+  <Step title="Take a screenshot">
     ```bash
     otter-screenshot
     ```
 
-    Your cursor changes to a crosshair. Click and drag to select the region you want to capture. When you release, the screenshot is automatically copied to your clipboard and is ready to paste anywhere.
+    Click and drag to select a region. The image is copied to your clipboard automatically.
   </Step>
 
-  <Step title="Create a Sticky Note">
-    `otter-note` lets you keep persistent notes on your desktop. Create your first note with:
-
+  <Step title="Create a sticky note">
     ```bash
     otter-note new
     ```
 
-    A floating note window appears. Type your content and it is saved automatically. For quick access throughout the day, bind `Super+N` in your compositor config to this command.
+    Bind a compositor hotkey to this command for quick access — for example `Super+N`.
   </Step>
 
-  <Step title="Check the Weather">
-    Get a snapshot of current conditions right from the command line:
+  <Step title="Check the weather">
+    Print current conditions to stdout:
 
     ```bash
     otter-weather
     ```
 
-    The weather widget displays your current location's conditions inline. You can pin it to a scratchpad or compositor widget layer for persistent visibility.
+    To show weather on the status bar, configure `otter-bar` with a weather widget and run the cache watcher:
+
+    ```bash
+    otter-weather --watch 900 --write-cache &
+    ```
+
+    See [otter-weather](/apps/otter-weather) and [otter-bar](/desktop/otter-bar) for widget setup.
   </Step>
 </Steps>
 
 <Tip>
-  **Bind hotkeys in your River compositor config** to make the most-used tools instantly accessible. Add entries like the following to your River init script:
+  **Bind global hotkeys in your compositor** — Wayland apps cannot grab system-wide shortcuts on their own. Examples:
 
-  ```bash
-  # Screenshot — select a region and copy to clipboard
-  riverctl map normal Super Print spawn otter-screenshot
+  **Hyprland** (`~/.config/hypr/hyprland.conf`):
 
-  # Screen recorder — start/stop recording
-  riverctl map normal Super R spawn otter-rec
-
-  # Transcription — toggle listening on/off
-  riverctl map normal Super T spawn 'otter-transcribectl toggle'
-
-  # Sticky notes
-  riverctl map normal Super N spawn 'otter-note new'
+  ```ini
+  bind = $mainMod, D, exec, otter-launcher
+  bind = $mainMod, P, exec, otter-screenshot
+  bind = $mainMod, R, exec, otter-rec
+  bind = $mainMod, V, exec, otter-clip popup
+  bind = $mainMod, N, exec, otter-note new
+  bind = $mainMod, L, exec, loginctl lock-session
   ```
 
-  Re-run your River init script for changes to take effect without restarting your session.
+  **Sway** (`~/.config/sway/config`):
+
+  ```
+  bindsym $mod+d exec otter-launcher
+  bindsym $mod+p exec otter-screenshot
+  bindsym $mod+v exec otter-clip popup
+  ```
+
+  See [Keybinds](/configuration/keybinds) for a full reference.
 </Tip>
 
-## What's Next
-
-Dive deeper into any individual Otter Shell component or learn how to configure the environment to fit your workflow.
+## What's next
 
 <CardGroup cols={2}>
-  <Card title="Terminal" icon="terminal" href="/apps/otter-term">
-    Explore `otter-term` features, configuration, and keyboard shortcuts.
+  <Card title="Session setup" icon="desktop" href="/desktop/session-setup">
+    Autostart every shell daemon your desktop needs.
   </Card>
-  <Card title="Screenshot" icon="camera" href="/apps/otter-screenshot">
-    Learn region capture, fullscreen mode, and annotation options in `otter-screenshot`.
+  <Card title="Status bar" icon="bars" href="/desktop/otter-bar">
+    Configure widgets, tray, and launcher button.
   </Card>
-  <Card title="Clipboard" icon="clipboard" href="/apps/otter-clip">
-    Set up clipboard history, search past entries, and manage the `otter-clip` daemon.
+  <Card title="Settings" icon="sliders" href="/desktop/otter-settings">
+    Edit configs graphically instead of by hand.
   </Card>
-  <Card title="Configuration" icon="sliders" href="/configuration/overview">
-    Customise keybindings, theming, and per-application settings across Otter Shell.
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Learn the shared config file format.
   </Card>
 </CardGroup>

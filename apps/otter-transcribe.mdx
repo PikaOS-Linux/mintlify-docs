@@ -1,10 +1,14 @@
 ---
 title: "On-Device Speech Transcription with otter-transcribe"
 sidebarTitle: "Transcription"
-description: "otter-transcribe transcribes microphone audio on-device via PipeWire. Bind a hotkey to toggle recording and type the transcript into any focused input."
+description: "otter-transcribe transcribes microphone audio on-device via PipeWire. Requires the otter-shell-extras metapackage."
 ---
 
-otter-transcribe is Otter Shell's on-device speech-to-text tool. It runs as a background daemon, records your microphone via PipeWire, and transcribes speech using a locally embedded Parakeet model — no network connection or cloud service required. Bind a hotkey to `otter-transcribectl toggle` in your compositor config and start dictating into any focused input.
+otter-transcribe is Otter Shell's on-device speech-to-text tool. It runs as a background daemon, records your microphone via PipeWire, and transcribes speech using a locally embedded Parakeet model — no network connection or cloud service required.
+
+<Note>
+  `otter-transcribe` is part of **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.
+</Note>
 
 ## Starting the Daemon
 

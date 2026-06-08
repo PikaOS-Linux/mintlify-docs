@@ -1,83 +1,111 @@
 ---
-title: "Keyboard Shortcuts and Hotkey Bindings in Otter Shell"
+title: "Keyboard shortcuts and hotkey bindings"
 sidebarTitle: "Keybinds"
-description: "Default keyboard shortcuts for Otter Shell apps, plus how to bind global hotkeys in the River compositor for screenshots, recording, and transcription."
+description: "In-app shortcuts for Otter Shell apps and compositor global hotkey examples for Hyprland, Sway, and other Wayland compositors."
 ---
 
-Otter Shell apps define their own in-app keyboard shortcuts, configurable through each app's config file. For global hotkeys — like triggering a screenshot or starting transcription from anywhere on the desktop — you bind them in your Wayland compositor. Otter Shell ships the [River](https://isaacfreund.com/software/river/) compositor as its default, and all examples below target River's `riverctl` configuration.
+Otter Shell apps define in-app keyboard shortcuts in their config files. Global hotkeys — triggering a screenshot or opening the launcher from anywhere — must be bound in your Wayland compositor. Otter Shell does not ship or require a specific compositor.
 
-## In-App Shortcuts
+## In-app shortcuts
 
-The table below lists the default shortcuts built into each app.
-
-| App | Action | Default Shortcut |
+| App | Action | Default shortcut |
 |-----|--------|-----------------|
 | otter-term | Copy selection | `Ctrl+Shift+C` |
 | otter-term | Paste | `Ctrl+Shift+V` |
-| otter-term | Open context menu | Right-click |
+| otter-term | Context menu | Right-click |
 | otter-note | Save note | `Ctrl+S` |
 | otter-note | Toggle Markdown preview | `Ctrl+M` |
 | otter-screenshot | Cancel region selection | `Esc` or `Ctrl+C` |
+| otter-launcher | Close | `Escape` |
+| otter-launcher | Launch selected | `Enter` |
+| otter-launcher | Navigate | `Up` / `Down`, `Tab`, `Page Up/Down` |
+| otter-launcher | Clear search | `Ctrl+U` |
+| otter-lock | Submit password | `Enter` |
+| otter-polkit | Submit password | `Enter` |
+| otter-polkit | Cancel | `Escape` |
 
-## Changing otter-term Keybinds
+## otter-term keybinds
 
-Edit the following keys in `~/.config/otter-shell/otter-term.conf` to remap copy and paste:
+Edit `~/.config/otter-shell/otter-term.conf`:
 
 ```conf
 keybinds_copy  = "ctrl+shift+c"
 keybinds_paste = "ctrl+shift+v"
 ```
 
-Changes are picked up the next time you open a terminal window. Use lowercase key names and `+` as the separator — for example, `"ctrl+alt+c"`.
+Use lowercase key names with `+` as the separator.
 
-## Global Compositor Hotkeys
+## Recommended global hotkeys
 
-Wayland apps cannot grab global hotkeys on their own — the compositor must bind them. Add the following blocks to your River init script (typically `~/.config/river/init`) to wire up the most useful Otter Shell commands system-wide.
+Bind these in your compositor config. Adjust modifiers to match your setup.
 
-```bash
-# Add to your River config (init script)
+### Hyprland
 
-# Screenshot: select a region
-riverctl map normal Super P spawn 'otter-screenshot'
-
-# Screenshot: fullscreen
-riverctl map normal Super+Shift P spawn 'otter-screenshot --fullscreen --output ~/Pictures/screenshot.png'
-
-# Screen recorder: toggle
-riverctl map normal Super R spawn 'otter-rec'
-
-# Sticky notes
-riverctl map normal Super N spawn 'otter-note new'
-
-# Transcription: toggle
-riverctl map normal Super T spawn 'otter-transcribectl toggle'
-
-# Clipboard popup
-riverctl map normal Super V spawn 'otter-clip popup'
-
-# Color picker
-riverctl map normal Super+Shift C spawn 'otter-pick'
+```ini
+# ~/.config/hypr/hyprland.conf
+bind = $mainMod, D, exec, otter-launcher
+bind = $mainMod, P, exec, otter-screenshot
+bind = $mainMod SHIFT, P, exec, otter-screenshot --fullscreen --output ~/Pictures/screenshot.png
+bind = $mainMod, R, exec, otter-rec
+bind = $mainMod, N, exec, otter-note new
+bind = $mainMod, V, exec, otter-clip popup
+bind = $mainMod SHIFT, C, exec, otter-pick
+bind = $mainMod, L, exec, loginctl lock-session
+bind = $mainMod SHIFT, E, exec, otter-logout
 ```
 
-<Tip>
-  Add `otter-clip daemon &` to your River init autostart so clipboard history is available from your very first login. Without the daemon running, `otter-clip popup` will show an empty history.
-</Tip>
+Transcription (requires `otter-shell-extras`):
 
-## Recommended Autostart
+```ini
+bind = $mainMod, T, exec, otter-transcribectl toggle
+```
 
-Some Otter Shell services need to run in the background before you interact with them. Place the following autostart block near the top of your River init script so they launch automatically with your session:
+### Sway
+
+```
+bindsym $mod+d exec otter-launcher
+bindsym $mod+p exec otter-screenshot
+bindsym $mod+Shift+p exec otter-screenshot --fullscreen --output ~/Pictures/screenshot.png
+bindsym $mod+r exec otter-rec
+bindsym $mod+n exec otter-note new
+bindsym $mod+v exec otter-clip popup
+bindsym $mod+Shift+c exec otter-pick
+bindsym $mod+l exec loginctl lock-session
+```
+
+## Recommended autostart
+
+Add these to your compositor autostart so the desktop shell is ready at login. See [Session setup](/desktop/session-setup) for the full list and compositor-specific syntax.
 
 ```bash
-# Autostart in River init
+# Core shell daemons
+otter-bar &
+otter-wallpaper &
+otter-notifications &
+otter-osd &
+otter-idle &
+otter-polkit &
+
+# Clipboard and weather cache
 otter-clip daemon &
 otter-weather --watch 900 --write-cache &
+
+# Optional: desktop pet
+otter-jade &
+
+# Optional: transcription (otter-shell-extras)
 otter-transcribe &
 ```
 
 | Service | Purpose |
 |---------|---------|
-| `otter-clip daemon` | Monitors the Wayland clipboard and builds history for `otter-clip popup` |
-| `otter-weather --watch 900 --write-cache` | Polls weather every 15 minutes and caches results for status bar widgets |
-| `otter-transcribe` | Starts the transcription daemon in idle mode, ready for `otter-transcribectl toggle` |
+| `otter-bar` | Status bar — required for tray, clock widgets, and weather display |
+| `otter-wallpaper` | Desktop background |
+| `otter-notifications` | Notification daemon for `notify-send` and app alerts |
+| `otter-osd` | Volume/brightness overlays (used by bar scroll and `otter-timer`) |
+| `otter-idle` | Idle timeouts, DPMS, and lock-on-idle |
+| `otter-polkit` | Privilege escalation dialogs (`pkexec`, package installs) |
+| `otter-clip daemon` | Clipboard history for `otter-clip popup` |
+| `otter-weather --watch --write-cache` | Keeps bar weather widget data fresh |
 
-The `&` suffix sends each process to the background so River init continues without blocking.
+The `&` suffix runs each process in the background.

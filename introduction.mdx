@@ -1,53 +1,84 @@
 ---
-title: "Otter Shell: Fast, Lightweight Wayland Desktop for PikaOS"
+title: "Otter Shell: Wayland Desktop for PikaOS"
 sidebarTitle: "Introduction"
-description: "Otter Shell is a collection of native Wayland apps forming a lightweight Linux desktop for PikaOS — fast, resource-light, and tightly integrated."
+description: "Otter Shell is a collection of native Wayland apps forming a lightweight Linux desktop for PikaOS — shell components, utilities, and shared libraries."
 ---
 
-Otter Shell is an otterly fast, resource-light Linux desktop environment built exclusively for Wayland on PikaOS. It is composed of a collection of tightly integrated native applications — each one purpose-built, small, and efficient. From a terminal emulator to a screen recorder, clipboard manager, and on-device speech transcription, everything in Otter Shell is designed to work seamlessly together.
+Otter Shell is an otterly fast, resource-light Linux desktop environment built for Wayland on PikaOS. It is a collection of tightly integrated native applications — each purpose-built, small, and efficient — plus shared Zig libraries that power the UI stack.
 
-## What's Included
+## Desktop shell
+
+The shell layer runs as background daemons and overlays on top of your Wayland compositor:
 
 <CardGroup cols={2}>
-  <Card title="Otter Terminal" icon="terminal" href="/apps/otter-term">
-    A full-featured Wayland terminal emulator with tabs, split panes, shell integration, and URL handling.
+  <Card title="Status bar" icon="bars" href="/desktop/otter-bar">
+    Workspaces, clock, battery, volume, MPRIS, system tray, and custom widgets.
   </Card>
-  <Card title="Screenshot & Recording" icon="camera" href="/apps/otter-screenshot">
-    Capture regions, windows, or the full screen with native Wayland capture — no X11, no grim.
+  <Card title="Application launcher" icon="rocket" href="/desktop/otter-launcher">
+    Fuzzy app search with calculator, emoji, and clipboard extensions.
   </Card>
-  <Card title="Clipboard Manager" icon="clipboard" href="/apps/otter-clip">
-    Persistent clipboard history with search, pinning, image support, and a Super+V popup.
+  <Card title="Wallpaper" icon="image" href="/desktop/otter-wallpaper">
+    Per-display wallpapers with rotation and lockscreen integration.
   </Card>
-  <Card title="Screen Recorder" icon="video" href="/apps/otter-rec">
-    Hardware-accelerated recording via NVENC, Quick Sync, and VAAPI with region and window capture.
+  <Card title="Notifications" icon="bell" href="/desktop/otter-notifications">
+    freedesktop.org notification daemon — drop-in for mako or dunst.
   </Card>
-  <Card title="Product Shot Composer" icon="image" href="/apps/otter-shot">
-    Frame screenshots with gradients, shadows, corner radius, and custom chrome for polished exports.
+  <Card title="On-screen display" icon="volume-high" href="/desktop/otter-osd">
+    Volume, brightness, and lock-key indicators.
   </Card>
-  <Card title="Speech Transcription" icon="microphone" href="/apps/otter-transcribe">
-    On-device hotkey-triggered transcription using an embedded Parakeet model — no cloud required.
+  <Card title="Settings" icon="sliders" href="/desktop/otter-settings">
+    Graphical editor for every Otter Shell config file.
   </Card>
-  <Card title="Sticky Notes" icon="note-sticky" href="/apps/otter-note">
-    Markdown sticky notes on a persistent layer-shell surface, toggled with Super+N.
+  <Card title="Display manager" icon="door-open" href="/desktop/otter-greeter">
+    Wayland login greeter with PAM and fingerprint support.
   </Card>
-  <Card title="Weather Widget" icon="cloud-sun" href="/apps/otter-weather">
-    Open-Meteo weather fetcher for the bar and a 7-day forecast popup.
+  <Card title="Session services" icon="shield" href="/desktop/session-setup">
+    Lock, logout, idle, and polkit — session security and power management.
   </Card>
 </CardGroup>
 
-## Get Started
+## Applications
+
+<CardGroup cols={2}>
+  <Card title="Otter Terminal" icon="terminal" href="/apps/otter-term">
+    Wayland terminal with tabs, splits, shell integration, and URL handling.
+  </Card>
+  <Card title="Screenshot & recording" icon="camera" href="/apps/otter-screenshot">
+    Region, window, and fullscreen capture plus hardware-accelerated recording.
+  </Card>
+  <Card title="Clipboard manager" icon="clipboard" href="/apps/otter-clip">
+    Persistent history with search, pinning, and Super+V popup.
+  </Card>
+  <Card title="Product shot composer" icon="image" href="/apps/otter-shot">
+    Frame screenshots with gradients, shadows, and custom chrome.
+  </Card>
+  <Card title="Sticky notes" icon="note-sticky" href="/apps/otter-note">
+    Markdown notes on a persistent layer-shell surface.
+  </Card>
+  <Card title="Speech tools" icon="microphone" href="/apps/otter-transcribe">
+    On-device transcription and local TTS (via `otter-shell-extras`).
+  </Card>
+  <Card title="Small tools" icon="wrench" href="/apps/otter-calc">
+    Calculator, emoji picker, color picker, timer, calendar, and weather helpers.
+  </Card>
+  <Card title="Jade" icon="star" href="/desktop/otter-jade">
+    Animated otter desktop pet with tamagotchi-style care mechanics.
+  </Card>
+</CardGroup>
+
+## Get started
 
 <CardGroup cols={2}>
   <Card title="Installation" icon="download" href="/installation">
-    Install Otter Shell on PikaOS using the official package repository.
+    Install with `pikman install otter-shell`.
   </Card>
-  <Card title="Quick Start" icon="rocket" href="/quickstart">
-    Get your desktop up and running in a few minutes.
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Launch apps and bind hotkeys in a few minutes.
   </Card>
-  <Card title="Configuration" icon="sliders" href="/configuration/overview">
-    Understand the unified configuration system used across all Otter apps.
+  <Card title="Session setup" icon="desktop" href="/desktop/session-setup">
+    Autostart shell daemons in your compositor config.
   </Card>
-  <Card title="Keybinds" icon="keyboard" href="/configuration/keybinds">
-    Learn the default keyboard shortcuts and how to customize them.
+  <Card title="Developer guide" icon="code" href="/developers/overview">
+    Build from source and create apps with Otter libraries.
   </Card>
 </CardGroup>

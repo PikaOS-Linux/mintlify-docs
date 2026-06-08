@@ -1,0 +1,100 @@
+---
+title: "Build Otter Shell from source"
+sidebarTitle: "Building"
+description: "Compile Otter Shell components locally with Zig 0.16.0 and run tests."
+---
+
+Each Otter Shell component is an independent Zig project. Build commands are the same across apps and libraries.
+
+## Prerequisites
+
+Install Zig 0.16.0 and system dependencies:
+
+```bash
+# PikaOS / Debian
+sudo apt install libwayland-dev libfontconfig-dev libfreetype-dev libxkbcommon-dev
+```
+
+Additional dependencies by component:
+
+| Component | Extra packages |
+|-----------|---------------|
+| otter-term | `libghostty-vt-dev-git` |
+| otter-rec | `libavcodec-dev`, `libavformat-dev`, `libavutil-dev`, `libswscale-dev`, `libdrm-dev`, `libegl-dev`, `libgles-dev` |
+| otter-lock, otter-greeter, otter-polkit | `libpam0g-dev` |
+
+## Basic build
+
+```bash
+cd otter-bar    # or any component directory
+zig build       # compile
+zig build run   # build and run
+zig build test  # run unit tests
+zig build install  # install to prefix
+```
+
+Libraries link via **path dependencies** in sibling `build.zig.zon` files (`../otter-render`, etc.) when building from the monorepo checkout.
+
+## Build options
+
+Common flags across apps:
+
+| Flag | Effect |
+|------|--------|
+| `-Doptimize=ReleaseFast` | Release build |
+| `-Dcpu=x86_64_v3` | PikaOS packaging default (AVX2) |
+| `-Denable_dbus=false` | Remove D-Bus widgets (battery, MPRIS, tray) |
+| `-Denable_pipewire=false` | Remove PipeWire audio |
+| `-Denable_pam=false` | Remove PAM auth (lock/greeter) |
+| `-Dc_allocator=jemalloc` | Use jemalloc as C allocator |
+| `-Dc_allocator=mimalloc` | Use mimalloc as C allocator |
+
+Example release build:
+
+```bash
+zig build -Doptimize=ReleaseFast -Dcpu=x86_64_v3
+```
+
+## Packaging (otter-zenith)
+
+Official packages for PikaOS are built via [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith):
+
+```bash
+cd otter-zenith
+./main.sh
+```
+
+This clones tagged component releases, assembles a source tree, and runs `dpkg-buildpackage`. End users install the result with `pikman install otter-shell` — they do not need Zig.
+
+## Benchmarks
+
+```bash
+cd otter-conf/benchmarks && zig build bench
+cd otter-render/benchmarks && zig build -Doptimize=ReleaseFast -Dcpu=x86_64_v3
+cd otter-ui/benchmarks && zig build -Doptimize=ReleaseFast -Dcpu=x86_64_v3 bench
+cd otter-desktop/benchmarks && zig build bench
+```
+
+## Per-component git workflow
+
+Each component is its own repository. From inside a component directory:
+
+```bash
+git add .
+git commit -m "your message"
+git push origin main
+```
+
+Do not commit from the monorepo root — it is not a git repository.
+
+## App structure convention
+
+Most apps follow this layout:
+
+| File | Purpose |
+|------|---------|
+| `src/main.zig` | Entry point, Wayland event loop |
+| `src/config.zig` | Config schema and parsing |
+| `src/draw.zig` | Surface Description frame and rendering |
+
+Long-running daemons use `GeneralPurposeAllocator`. One-shot overlays (launcher, logout) use `ArenaAllocator`.

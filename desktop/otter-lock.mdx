@@ -1,0 +1,55 @@
+---
+title: "otter-lock"
+sidebarTitle: "Lockscreen"
+description: "Wayland session lockscreen with PAM authentication, fingerprint support, and clock display."
+---
+
+`otter-lock` secures your session using the `ext-session-lock-v1` protocol. It renders a lockscreen on all outputs when triggered by `loginctl lock-session` or [otter-idle](/desktop/otter-idle).
+
+## Usage
+
+Lock the session:
+
+```bash
+loginctl lock-session
+```
+
+Bind this to a compositor hotkey — for example `Super+L`.
+
+`otter-lock` is invoked by logind when a lock is requested; it does not need to run as a persistent daemon.
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-lock.conf`
+
+```conf
+blur_radius = 9
+clock_font_size = 72
+date_font_size = 18
+font_size = 14
+dialog_width = 360
+enable_fingerprint = true
+show_clock = true
+show_avatar = true
+pam_service = "otter-lock"
+screensaver_image = "/usr/share/otter-shell/lock/otter-shell.png"
+```
+
+Colors inherit from [theme.conf](/configuration/themes) when not explicitly set.
+
+### Wallpaper background
+
+When [otter-wallpaper](/desktop/otter-wallpaper) is running, the lockscreen reads `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` to display the same wallpaper behind the lock UI.
+
+## Authentication
+
+- PAM password authentication (`pam_service` config key)
+- Fingerprint via fprintd when `enable_fingerprint = true`
+- Build with `-Denable_pam=false` or `-Denable_dbus=false` disables auth features (developer builds only)
+
+## Keybindings
+
+| Key | Action |
+|-----|--------|
+| Enter | Submit password |
+| Escape | Cancel fingerprint prompt |

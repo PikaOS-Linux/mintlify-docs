@@ -1,0 +1,60 @@
+---
+title: "otter-logout"
+sidebarTitle: "Power menu"
+description: "Wayland power menu overlay for lock, logout, suspend, reboot, and shutdown."
+---
+
+`otter-logout` displays a power menu overlay with lock, logout, suspend, reboot, and shutdown actions. It is a one-shot process — invoke it from a hotkey or the bar menu button.
+
+## Usage
+
+```bash
+otter-logout
+```
+
+Bind to a compositor hotkey — for example `Super+Shift+E`:
+
+```ini
+# Hyprland
+bind = $mainMod SHIFT, E, exec, otter-logout
+```
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-logout.conf`
+
+```conf
+icon_size = 64
+button_size = 120
+button_spacing = 24
+overlay_color = "#000000aa"
+
+lock_label = "Lock"
+lock_icon = "system-lock-screen"
+lock_exec = "loginctl lock-session"
+
+logout_label = "Logout"
+logout_icon = "system-log-out"
+logout_exec = "loginctl terminate-session self"
+
+sleep_label = "Suspend"
+sleep_icon = "system-suspend"
+sleep_exec = "systemctl suspend"
+
+reboot_label = "Reboot"
+reboot_icon = "system-reboot"
+reboot_exec = "systemctl reboot"
+
+shutdown_label = "Shutdown"
+shutdown_icon = "system-shutdown"
+shutdown_exec = "systemctl poweroff"
+```
+
+Each button's label, XDG icon name, and shell command are configurable. Colors inherit from [theme.conf](/configuration/themes) when omitted.
+
+## Keybindings
+
+| Key | Action |
+|-----|--------|
+| Escape | Close menu |
+| Enter | Activate focused button |

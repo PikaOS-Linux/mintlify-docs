@@ -1,0 +1,75 @@
+---
+title: "otter-launcher"
+sidebarTitle: "Launcher"
+description: "Wayland application launcher with fuzzy search, IME support, and calculator, emoji, and clipboard extensions."
+---
+
+`otter-launcher` is the Otter Shell application launcher. It displays a centered overlay with fuzzy search, similar to fuzzel, rofi, or wofi, built on the shared Otter UI stack.
+
+## Usage
+
+```bash
+otter-launcher
+```
+
+Bind to a compositor hotkey — for example `Super+D`:
+
+```ini
+# Hyprland
+bind = $mainMod, D, exec, otter-launcher
+```
+
+The launcher is a one-shot process: it opens, you search and launch (or press Escape), and it exits. A socket prevents duplicate overlays — invoking it again closes the existing instance.
+
+## Launcher extensions
+
+Extensions appear above application matches:
+
+| Input | Action |
+|-------|--------|
+| `=2+3*4` or `calc 2+3*4` | Calculator result via [otter-calc](/apps/otter-calc) |
+| `:heart` or `emoji heart` | Emoji search via [otter-emoji](/apps/otter-emoji) |
+| `clip` or `clip query` | Clipboard history via [otter-clip](/apps/otter-clip) |
+
+## Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| Escape | Close launcher |
+| Enter | Launch selected item or copy extension result |
+| Up / Down | Move selection |
+| Tab / Shift+Tab | Next / previous |
+| Page Up / Page Down | Scroll by page |
+| Home / End | First / last item |
+| Ctrl+U | Clear search |
+| Ctrl+W | Delete last word |
+| Backspace | Delete character |
+
+During IME composition, Escape and Enter are handled by the IME.
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-launcher.conf`
+
+```conf
+width_percent = 30
+height_percent = 35
+border_width = 2
+icon_size = 32
+item_height = 48
+input_height = 40
+font_size = 16
+placeholder_text = " Search applications..."
+overlay_color = "#1b1b1b99"
+```
+
+Most color fields inherit from [theme.conf](/configuration/themes) when omitted.
+
+## Terminal detection
+
+For `.desktop` entries with `Terminal=true`, the launcher detects a terminal emulator:
+
+1. `$TERMINAL` environment variable
+2. Probes `$PATH` for `xdg-terminal-exec`, `foot`, `otter-term`, `ghostty`, `kitty`, `alacritty`, and others
+
+Each terminal uses its correct exec flag (`-e`, `--`, etc.).

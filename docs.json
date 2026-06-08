@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "name": "Otter Shell",
   "theme": "palm",
-  "favicon": "https://media.brand.dev/9bc255b9-97a6-4b9c-a45b-a636863f7c62.svg",
+  "favicon": "/favicon.png",
   "colors": {
     "primary": "#649c25",
     "light": "#accb8c",
@@ -11,14 +11,32 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Documentation",
+        "tab": "User Guide",
         "groups": [
           {
             "group": "Get Started",
             "pages": [
               "introduction",
               "installation",
-              "quickstart"
+              "quickstart",
+              "desktop/session-setup"
+            ]
+          },
+          {
+            "group": "Desktop Shell",
+            "pages": [
+              "desktop/otter-bar",
+              "desktop/otter-launcher",
+              "desktop/otter-wallpaper",
+              "desktop/otter-notifications",
+              "desktop/otter-osd",
+              "desktop/otter-settings",
+              "desktop/otter-greeter",
+              "desktop/otter-lock",
+              "desktop/otter-logout",
+              "desktop/otter-idle",
+              "desktop/otter-polkit",
+              "desktop/otter-jade"
             ]
           },
           {
@@ -56,6 +74,25 @@
               "configuration/overview",
               "configuration/themes",
               "configuration/keybinds"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Developer Guide",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "developers/overview",
+              "developers/building",
+              "developers/creating-an-app"
+            ]
+          },
+          {
+            "group": "Libraries",
+            "pages": [
+              "developers/libraries"
             ]
           }
         ]

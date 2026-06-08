@@ -1,0 +1,287 @@
+---
+title: "Otter Shell libraries"
+sidebarTitle: "Libraries"
+description: "Reference for all shared Otter Shell Zig libraries — purpose, dependencies, and usage patterns."
+---
+
+Otter Shell applications share eleven libraries. They are bundled into application binaries at build time — there are no separate library packages for end users.
+
+## Library stack
+
+| Library | Purpose | Depends on |
+|---------|---------|------------|
+| [otter-utils](#otter-utils) | Bounded arrays, logging, file paths, inotify | — |
+| [otter-geo](#otter-geo) | Geometry types (Point, Rect, Padding, Transform) | — |
+| [otter-conf](#otter-conf) | Comptime config parser and hot-reload watcher | otter-utils |
+| [otter-render](#otter-render) | CPU renderer, fonts, images, CommandList | otter-geo, otter-utils |
+| [otter-wayland](#otter-wayland) | Wayland client, layer shell, input, clipboard | otter-geo, otter-render, otter-utils |
+| [otter-vte](#otter-vte) | Terminal cell rendering primitives | otter-geo, otter-render |
+| [otter-theme](#otter-theme) | Shared theme tokens and 12 presets | otter-geo, otter-render, otter-conf, otter-utils |
+| [otter-config-types](#otter-config-types) | Typed config structs for all apps | otter-render, otter-geo, otter-conf |
+| [otter-tools-core](#otter-tools-core) | Pure-Zig helpers for small CLI tools | otter-conf, otter-utils |
+| [otter-desktop](#otter-desktop) | XDG icons, D-Bus, PipeWire, PAM, sysinfo | otter-utils |
+| [otter-ui](#otter-ui) | Surface Description frame API and widgets | otter-geo, otter-render, otter-vte, otter-theme, otter-wayland, otter-utils, otter-desktop, otter-tools-core |
+
+Typical app dependency chain: **otter-ui → otter-wayland + otter-render + otter-theme + otter-conf + otter-desktop**
+
+---
+
+## otter-utils
+
+Pure Zig utilities with no external dependencies.
+
+- `BoundedArray` — Fixed-capacity arrays without heap allocation
+- Logging helpers
+- `FilePath` — Path manipulation
+- Inotify wrappers
+- Config and runtime path helpers (`~/.config/otter-shell/`)
+
+Used by every other library and application.
+
+---
+
+## otter-geo
+
+Pure geometry types:
+
+- `Point`, `Rect`, `Size`, `Padding`, `Transform`, `Align`
+- Integer-only math — no floating point in layout paths
+
+---
+
+## otter-conf
+
+Comptime-generic configuration parser. Define a Zig struct, get a specialized parser at compile time.
+
+**Features:**
+
+- Flat `key = value` format with `#` comments
+- Types: booleans, integers, floats, strings, enums, arrays, optionals, nested structs
+- Memory-mapped file I/O
+- Forward-compatible — unknown fields silently skipped
+- Serialization back to disk
+- `Watcher` — inotify-based hot-reload
+
+```zig
+const otter_conf = @import("otter_conf");
+
+const Config = struct {
+    port: u16 = 8080,
+    debug: bool = false,
+};
+
+var config = try otter_conf.load(Config, allocator, "/path/to/config.conf", .{});
+defer otter_conf.freeConfig(Config, allocator, &config);
+```
+
+Add to your project:
+
+```bash
+zig fetch --save git+https://git.pika-os.com/otter-shell/otter-conf
+```
+
+---
+
+## otter-render
+
+CPU rendering pipeline for all Otter UI.
+
+**Features:**
+
+- ARGB color operations (Wayland argb8888 compatible)
+- FreeType font rendering with glyph caching
+- HarfBuzz shaping + itijah bidi via Text System boundary
+- Image loading (PNG, JPG, BMP, GIF via zigimg)
+- Sprite sheets and animation (integer-only ease-out quadratic)
+- `CommandList` deferred rendering + `quad_renderer` with scissor clipping and damage culling
+- SDF-based rounded rectangles
+
+```zig
+const render = @import("otter_render");
+
+const color = try render.parseColor("#FF5500");
+var surface = render.Surface.fromPixels(&pixels, width, height);
+surface.clear(render.Color.black);
+font.drawText(&surface, "Hello", .{ .x = 0, .y = 20 }, 16, render.Color.white);
+```
+
+Build flag `-Denable_text=false` produces a lean build without font/shaping support.
+
+---
+
+## otter-wayland
+
+Wayland client library wrapping common protocols.
+
+**Protocols:**
+
+- `wl_compositor`, `wl_seat`, `wl_shm`, `wl_output`
+- `zwlr_layer_shell_v1` — panels and overlays
+- `ext_workspace_manager_v1` — workspace tracking
+- `zwlr_foreign_toplevel_manager_v1` — active window tracking
+- `zwp_text_input_v3` — IME for CJK input
+- `ext_session_lock_v1` — lockscreen
+- `wl_data_device` — clipboard and drag-and-drop
+- `wp_viewporter` — HiDPI buffer scaling
+
+**Key modules:**
+
+- `Connection` — Event loop and dispatch
+- `Keyboard` — xkbcommon wrapper with key repeat
+- `TextInput` — IME integration (check `isComposing()` before handling keys)
+- `Clipboard` — Paste and drag-and-drop
+- `DamageTracker` — Dirty rect accumulation with overflow fallback to full redraw
+
+---
+
+## otter-vte
+
+Terminal rendering boundary for embeddable terminal views.
+
+- `DynamicCommandList` — Terminal-specific draw commands
+- `PowerlineOps`, `BlockOps` — Powerline and block glyph rendering
+- `CellRenderer` — Generic cell renderer with comptime hooks
+- `cell_glyphs` — Custom cell glyph support
+
+Used by `otter-term` and available for any app embedding terminal output.
+
+---
+
+## otter-theme
+
+Shared visual theme with semantic color tokens, spacing, popup styles, bar chrome, and font tokens.
+
+- 12 bundled presets: Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, One Dark
+- `loader.loadTheme(allocator)` — reads `~/.config/otter-shell/theme.conf`
+- Pure data structs — no I/O in the theme module itself
+- Apps watch `theme.conf` via inotify for hot-reload
+
+Widget configs use `?Color = null` fields resolved as: widget config → theme token → compiled default.
+
+---
+
+## otter-config-types
+
+Typed config struct definitions shared across all apps and `otter-settings`.
+
+Contains schemas for: bar, launcher, dock, notifications, wallpaper, OSD, transcribe, logout, polkit, lock, idle, and more.
+
+When adding a new configurable app, define structs here and register a settings tab in `otter-settings/src/tabs.zig`.
+
+---
+
+## otter-tools-core
+
+Pure-Zig bounded helpers for small CLI tools. No Wayland, D-Bus, or rendering dependencies.
+
+| Module | Used by |
+|--------|---------|
+| Calculator parsing | otter-calc, otter-launcher (`=EXPR`) |
+| Emoji search | otter-emoji, otter-launcher (`:QUERY`) |
+| Clipboard history | otter-clip, otter-launcher (`clip`) |
+| Calendar grids | otter-cal |
+| Duration parsing | otter-timer |
+| Weather URL construction | otter-weather |
+| Color conversion | otter-pick |
+| Recorder encoder selection | otter-rec |
+
+Config schemas for small apps live in `src/app_configs.zig` — shared with `otter-settings` for consistent defaults.
+
+---
+
+## otter-desktop
+
+Desktop integration: icons, applications, D-Bus, and system services.
+
+**Applications:**
+
+- XDG icon theme lookup with caching
+- `.desktop` file parsing with locale support
+- Application list with deduplication and hot-reload
+
+**D-Bus services** (via vendored sd-bus/basu):
+
+- UPower (battery), power-profiles-daemon, MPRIS (media), NetworkManager
+- System tray (StatusNotifierItem), polkit agent, fprintd
+- Notifications (`org.freedesktop.Notifications`)
+- Logind, ScreenSaver inhibit
+
+**System services:**
+
+- Brightness via `/sys/class/backlight/`
+- SysInfo: CPU, memory, disk, temperature via `/proc` and `/sys`
+- PipeWire: volume, mute, default device switching
+
+**Authentication:**
+
+- PAM password auth for lockscreen and polkit
+
+Compile-time flags: `-Denable_dbus=false`, `-Denable_pipewire=false`, `-Denable_pam=false`.
+
+<Note>
+  `sd_bus_process()` handles one message per call — loop until the queue is drained.
+</Note>
+
+---
+
+## otter-ui
+
+Widget framework and Surface Description frame API.
+
+**Surface Description** (preferred for new code):
+
+- Bounded `UiState(capacities)` owns frame arrays and `DefaultCommandList`
+- `UiFrame` handles layout, hit registration, overlay ordering
+- `UniformList` for scrollable fixed-row lists without heap allocation
+- `state.hitTest(point)` returns topmost hit region
+
+**Drawing primitives** (30+ helpers in `drawing.zig`):
+
+- `button`, `inputBox`, `toggle`, `checkbox`, `dropdown`, `tabBar`, `scrollbar`, `progressBar`, `colorSwatch`, and more
+
+**VTable widgets** (compatibility path):
+
+- Existing bar widgets implement `Widget.VTable` (draw, deinit, setArea, getWidth)
+- Prefer Surface Description for new app surfaces
+
+**Other modules:**
+
+- `input_buffer.zig` — Text input with cursor and selection
+- `icon_cache.zig` — Cached XDG icon rendering
+- `scroll_state.zig` — Vertical scroll tracking
+
+---
+
+## Optional compile-time flags (summary)
+
+| Flag | Libraries affected | Effect |
+|------|-------------------|--------|
+| `-Denable_dbus=false` | otter-desktop, otter-bar, otter-lock | Remove D-Bus services |
+| `-Denable_pipewire=false` | otter-desktop, otter-bar, otter-osd | Remove PipeWire audio |
+| `-Denable_pam=false` | otter-desktop, otter-lock, otter-greeter | Remove PAM auth |
+| `-Denable_text=false` | otter-render | No font/shaping |
+| `-Dc_allocator=jemalloc\|mimalloc` | All with C deps | Override C allocator |
+
+---
+
+## Source locations
+
+Each library lives in its own repository under [git.pika-os.com/otter-shell](https://git.pika-os.com/otter-shell). When checked out in the monorepo layout:
+
+```
+otter-shell/
+├── otter-conf/
+├── otter-geo/
+├── otter-utils/
+├── otter-render/
+├── otter-wayland/
+├── otter-vte/
+├── otter-theme/
+├── otter-config-types/
+├── otter-tools-core/
+├── otter-desktop/
+├── otter-ui/
+└── otter-bar/ … (applications)
+```
+
+Read each component's `README.md` for detailed API examples and build instructions.

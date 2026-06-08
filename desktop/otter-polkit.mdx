@@ -1,0 +1,56 @@
+---
+title: "otter-polkit"
+sidebarTitle: "Polkit agent"
+description: "Wayland polkit authentication agent with password dialog and fingerprint support."
+---
+
+`otter-polkit` registers as the polkit authentication agent for your session. When an application requests elevated privileges (package installs, disk operations, etc.), it displays a password dialog on a layer-shell overlay.
+
+## Usage
+
+```bash
+otter-polkit
+```
+
+Autostart at login — see [Session setup](/desktop/session-setup).
+
+Test with:
+
+```bash
+pkexec echo hello
+```
+
+A password dialog should appear on your focused output.
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-polkit.conf`
+
+```conf
+font_size = 14
+title_font_size = 16
+dialog_width = 420
+dialog_padding = 24
+border_width = 2
+border_radius = 8
+input_height = 36
+button_height = 36
+max_retries = 3
+enable_fingerprint = true
+```
+
+Colors inherit from [theme.conf](/configuration/themes) when not explicitly set.
+
+## Keybindings
+
+| Key | Action |
+|-----|--------|
+| Escape | Cancel authentication |
+| Enter | Submit password |
+| Ctrl+U | Clear password field |
+
+Fingerprint authentication works via fprintd when `enable_fingerprint = true` and fprintd is configured for the user.
+
+## Dependencies
+
+Requires D-Bus (fprintd integration). Build with `-Denable_dbus=false` disables fingerprint support.

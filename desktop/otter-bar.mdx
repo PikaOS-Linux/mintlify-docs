@@ -1,0 +1,82 @@
+---
+title: "otter-bar"
+sidebarTitle: "Status bar"
+description: "Wayland status bar with workspaces, system tray, volume, MPRIS, battery, and configurable widgets."
+---
+
+`otter-bar` is the Otter Shell status bar. It renders on the top or bottom of each output using `zwlr_layer_shell_v1` and hot-reloads both its own config and the shared theme.
+
+## Features
+
+- Workspace indicator and switcher (otter-tag, Mango/dwl IPC, ext-workspace)
+- Active window title with icon
+- Clock with timezone-aware formatting and date tooltip
+- Battery status via UPower (auto-hides when no battery)
+- Brightness control from `/sys/class/backlight/`
+- Power profiles (power-profiles-daemon / tuned-ppd)
+- CPU, temperature, memory, and network widgets
+- Volume control via PipeWire with scroll-to-adjust and device popup
+- MPRIS media player with album art
+- System tray (StatusNotifierItem) with context menus
+- Custom button widgets with icon and command support
+- HiDPI scaling per output
+
+## Usage
+
+```bash
+otter-bar
+```
+
+Add to compositor autostart — see [Session setup](/desktop/session-setup).
+
+The default menu button runs `otter-launcher`. Configure with `button_menu_command` in the bar config.
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-bar.conf`
+
+Fallback: `/etc/otter-shell/otter-bar.conf`. A default config is created on first run.
+
+Key settings:
+
+```conf
+general_height = 32
+general_position = top
+general_padding = 8
+
+# Comma-separated widget layout (left to right)
+layout_left = workspaces, title
+layout_center =
+layout_right = tray, mpris, volume, clock, battery, button_menu
+
+# Launcher button
+button_menu_command = otter-launcher
+```
+
+Widget color fields are optional — omit them to inherit from [theme.conf](/configuration/themes).
+
+### Weather widget
+
+Add `weather` to a layout section, then run the cache watcher:
+
+```bash
+otter-weather --watch 900 --write-cache &
+```
+
+Configure coordinates in `~/.config/otter-shell/otter-weather.conf`. See [otter-weather](/apps/otter-weather).
+
+### Calendar popover
+
+Set the clock widget's calendar command to invoke [otter-cal](/apps/otter-cal):
+
+```conf
+clock_calendar_command = otter-cal --layer
+```
+
+Use [otter-settings](/desktop/otter-settings) for drag-and-drop widget layout editing.
+
+## Dependencies
+
+- Wayland compositor with `zwlr_layer_shell_v1`
+- D-Bus (UPower, MPRIS, system tray) — disable with `-Denable_dbus=false` at build time
+- PipeWire (volume widget) — disable with `-Denable_pipewire=false` at build time
