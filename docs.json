@@ -3,6 +3,11 @@
   "name": "Otter Shell",
   "theme": "palm",
   "favicon": "/favicon.png",
+  "logo": {
+    "light": "/logo/otter-shell.png",
+    "dark": "/logo/otter-shell.png",
+    "href": "https://git.pika-os.com/otter-shell"
+  },
   "colors": {
     "primary": "#649c25",
     "light": "#accb8c",
