@@ -1,12 +1,40 @@
 ---
-title: "Configure Otter Shell apps"
+title: "Configure Otter Shell with otter-settings"
 sidebarTitle: "Overview"
-description: "Each Otter Shell app reads settings from a plain-text .conf file in ~/.config/otter-shell/. Edit files directly or use otter-settings."
+description: "Use otter-settings to configure every Otter Shell app graphically. Changes write to ~/.config/otter-shell/ and hot-reload automatically."
 ---
 
-Every Otter Shell application reads its settings from a plain-text config file in `~/.config/otter-shell/`. Files use `key = value` syntax and hot-reload via inotify for most daemons — no restart required.
+The recommended way to configure Otter Shell is **`otter-settings`** — a graphical editor with a tab for every app, a theme browser, and a drag-and-drop bar layout editor. It writes to the same `~/.config/otter-shell/*.conf` files as manual editing, so you can switch between GUI and text at any time.
 
-## Config file locations
+```bash
+otter-settings
+```
+
+Launch it from [otter-launcher](/desktop/otter-launcher), bind a compositor hotkey, or run the command above. See the full [otter-settings](/desktop/otter-settings) reference for tabs, features, and theme presets.
+
+<Note>
+  Most settings take effect immediately after you click **Apply** — running apps watch their config files via inotify and reload without a restart.
+</Note>
+
+## What you can configure in otter-settings
+
+| Tab | What you edit |
+|-----|---------------|
+| Bar | Widget layout, clock, volume, tray, custom buttons |
+| Launcher | Size, colors, placeholder text |
+| Notifications | Position, timeouts, margins |
+| Wallpaper | Path, rotation, scale mode |
+| OSD | Volume/brightness overlay appearance |
+| Terminal | Fonts, colors, padding, keybinds |
+| Theme | Colors, spacing, presets (12 built-in themes) |
+| Lock / Logout / Idle / Polkit / Jade | Session and overlay settings |
+| Recorder / Voice | `otter-rec` and `otter-vox` options |
+
+Global compositor hotkeys (screenshot, launcher, lock) are **not** configured in otter-settings — bind those in your compositor config. See [Keybinds](/configuration/keybinds).
+
+## Manual config files
+
+Every app also stores settings as a plain-text file in `~/.config/otter-shell/`. Use manual editing when you prefer the terminal, need to script changes, or want to preserve custom comments otter-settings might not expose in the UI.
 
 | App | Config file |
 |-----|-------------|
@@ -46,21 +74,9 @@ font_family = "IoskeleyMono Nerd Font"
 url_enabled = true
 ```
 
-<Note>
-  Quote string values with double quotes. Booleans are `true` or `false`. An empty string `""` falls back to the compiled default.
+Quote string values with double quotes. Booleans are `true` or `false`. An empty string `""` falls back to the compiled default.
 
-  On first launch, apps that use `otter-conf` normalize the config file — missing keys are added with defaults and unknown keys are removed.
-</Note>
-
-## otter-settings
-
-`otter-settings` provides a graphical editor with a tab for each app config. Changes write to the same `~/.config/otter-shell/*.conf` files, so manual edits and GUI edits are interchangeable.
-
-```bash
-otter-settings
-```
-
-Features include a theme browser with 12 built-in presets, drag-and-drop bar widget layout, and search across all config fields.
+On first launch, apps normalize their config file — missing keys are added with defaults and unknown keys are removed.
 
 ## Hot reload
 
@@ -69,6 +85,8 @@ Most daemons watch their config (and often `theme.conf`) with inotify:
 - **otter-bar**, **otter-notifications**, **otter-wallpaper**, **otter-osd**, **otter-idle** — reload on save without restart
 - **otter-term** — hot-reloads fonts, colors, padding, and scrollback
 - **otter-transcribe** — reloads settings and watches `theme.conf`
+
+Changes made in otter-settings trigger the same hot-reload path as saving the file by hand.
 
 ## System-wide defaults
 

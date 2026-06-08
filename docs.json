@@ -2,10 +2,11 @@
   "$schema": "https://mintlify.com/docs.json",
   "name": "Otter Shell",
   "theme": "palm",
-  "favicon": "https://git.pika-os.com/avatars/6602ffebe01fba6c2a6d596496b37ee4957c3d6bb248cfcd2c676625a640bbc6?size=200",
+  "favicon": "/favicon.png",
   "logo": {
-    "light": "https://git.pika-os.com/avatars/6602ffebe01fba6c2a6d596496b37ee4957c3d6bb248cfcd2c676625a640bbc6?size=200",
-    "dark": "https://git.pika-os.com/avatars/6602ffebe01fba6c2a6d596496b37ee4957c3d6bb248cfcd2c676625a640bbc6?size=200"
+    "light": "/logo/otter-shell-wordmark-light.png",
+    "dark": "/logo/otter-shell-wordmark-dark.png",
+    "href": "https://git.pika-os.com/otter-shell"
   },
   "colors": {
     "primary": "#2C6E7F",
@@ -75,6 +76,7 @@
           {
             "group": "Configuration",
             "pages": [
+              "desktop/otter-settings",
               "configuration/overview",
               "configuration/themes",
               "configuration/keybinds"

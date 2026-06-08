@@ -1,18 +1,28 @@
 ---
-title: "Configuring Otter Shell Themes: Colors and Terminal Fonts"
+title: "Themes and colors"
 sidebarTitle: "Themes"
-description: "Otter Shell uses a unified theme system via otter-theme. App colors inherit from theme.conf, and you can override per-app colors in each app's config file."
+description: "Customize Otter Shell appearance with otter-settings theme browser or theme.conf. Per-app color overrides inherit from the shared theme."
 ---
 
-Otter Shell apps share a unified color theme through `otter-theme`. By default, apps inherit their background, border, and text colors from the theme — but you can override any color directly in each app's individual config file.
+Otter Shell apps share a unified visual theme through `otter-theme`. The easiest way to change colors, spacing, and presets is the **Theme** tab in [otter-settings](/desktop/otter-settings) — it includes a live preview of all 12 built-in presets.
 
-## Theme Config File
+```bash
+otter-settings
+```
 
-The main theme is defined at `~/.config/otter-shell/theme.conf`. Apps such as otter-transcribe, otter-term, and otter-pick read this file at startup and re-apply it whenever it changes on disk. Editing `theme.conf` is the fastest way to restyle the entire desktop in one go.
+Select a preset in the theme browser and click **Apply**. Changes write to `~/.config/otter-shell/theme.conf` and propagate to running apps that watch the theme file.
 
-## Terminal Colors
+<Tip>
+  Prefer otter-settings over hand-editing `theme.conf` unless you need keys the UI does not expose. The settings app preserves comments and field order when saving.
+</Tip>
 
-otter-term configures its 16-color palette and all UI chrome colors through `colors_*` keys in `~/.config/otter-shell/otter-term.conf`. The defaults ship a complete Catppuccin-style palette; replace any value with a hex color string to override it.
+## Theme config file
+
+Advanced users can edit `~/.config/otter-shell/theme.conf` directly. Apps such as otter-bar, otter-transcribe, and otter-term read this file at startup and re-apply it when it changes on disk.
+
+## Terminal colors
+
+Configure otter-term's 16-color palette and UI chrome in otter-settings under the **Terminal** tab, or edit `~/.config/otter-shell/otter-term.conf`:
 
 ```conf
 colors_background = "#1e1e2e"
@@ -31,13 +41,11 @@ colors_cyan    = "#94e2d5"
 colors_white   = "#bac2de"
 ```
 
-<Note>
-  Terminal color changes are hot-reloaded as soon as you save `otter-term.conf`. Open terminals update immediately — no restart needed.
-</Note>
+Terminal color changes hot-reload as soon as you save — open terminals update immediately.
 
-## App-level Color Overrides
+## App-level color overrides
 
-Individual apps expose their own color keys that sit on top of the shared theme. For otter-transcribe's recording indicator, you can set any of the following in `~/.config/otter-shell/otter-transcribe.conf`:
+Individual apps expose color keys that override the shared theme. For example, in otter-transcribe's **Transcribe** tab (or `otter-transcribe.conf`):
 
 ```conf
 background_color  = ""
@@ -47,13 +55,13 @@ graph_peak_color  = ""
 text_color        = ""
 ```
 
-Leave a value as an empty string `""` and it inherits from `otter-theme`. Set a hex color to override it for that app only.
+Leave a value as an empty string `""` to inherit from the theme. Set a hex color to override for that app only.
 
 ## Font
 
-The default terminal font is `IoskeleyMono Nerd Font`, bundled as the `otter-shell` fallback font and installed to `/usr/share/fonts/otter-shell/`. Every Nerd Font glyph is available out of the box, so powerline prompts and icon-heavy shell frameworks work without extra font setup.
+The default terminal font is `IoskeleyMono Nerd Font`, bundled in `otter-shell-fonts` at `/usr/share/fonts/otter-shell/`.
 
-To switch to a different font in otter-term, edit `~/.config/otter-shell/otter-term.conf`:
+Change the font in otter-settings under **Terminal**, or in `otter-term.conf`:
 
 ```conf
 font_family    = "JetBrains Mono"
@@ -61,4 +69,10 @@ font_size      = 14
 font_dpi_aware = true
 ```
 
-`font_dpi_aware = true` scales the font and padding automatically on high-DPI displays. Set `font_scale_percent` for a manual percentage override, or adjust `font_cell_height` and `font_baseline_offset` for fine-grained metric tweaks. An empty `font_family = ""` falls back to `IoskeleyMono Nerd Font` automatically.
+`font_dpi_aware = true` scales the font and padding on high-DPI displays. An empty `font_family = ""` falls back to the bundled Nerd Font.
+
+## Built-in presets
+
+Available in the otter-settings theme browser:
+
+Otter Shell, Otter Shell Islands, Catppuccin (Mocha/Latte/Frappe/Macchiato), Nord, Gruvbox, Dracula, Tokyo Night, One Dark.
