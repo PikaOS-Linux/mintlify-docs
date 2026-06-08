@@ -1,0 +1,29 @@
+---
+title: "otter-ui"
+sidebarTitle: "otter-ui"
+description: "Widget framework and Surface Description frame API for Otter Shell UI apps."
+---
+
+Widget framework and Surface Description frame API.
+
+### Surface Description (use this for new code)
+
+- Bounded `UiState(capacities)` owns frame arrays and `DefaultCommandList`
+- `UiFrame` handles layout, hit registration, overlay ordering
+- `UniformList` for scrollable fixed-row lists without heap allocation
+- `state.hitTest(point)` returns topmost hit region
+
+### Drawing primitives (30+ helpers in `drawing.zig`)
+
+- `button`, `inputBox`, `toggle`, `checkbox`, `dropdown`, `tabBar`, `scrollbar`, `progressBar`, `colorSwatch`, and more
+
+### VTable widgets (compatibility path)
+
+- Existing bar widgets implement `Widget.VTable` (draw, deinit, setArea, getWidth)
+- Prefer Surface Description for new app surfaces
+
+### Other modules
+
+- `input_buffer.zig`: text input with cursor and selection
+- `icon_cache.zig`: cached XDG icon rendering
+- `scroll_state.zig`: vertical scroll tracking

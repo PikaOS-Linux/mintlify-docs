@@ -1,0 +1,26 @@
+---
+title: "otter-wayland"
+sidebarTitle: "otter-wayland"
+description: "Wayland client: layer shell, workspaces, keyboard, IME, clipboard, and damage tracking."
+---
+
+Wayland client library wrapping common protocols.
+
+### Protocols
+
+- `wl_compositor`, `wl_seat`, `wl_shm`, `wl_output`
+- `zwlr_layer_shell_v1`: panels and overlays
+- `ext_workspace_manager_v1`: workspace tracking
+- `zwlr_foreign_toplevel_manager_v1`: active window tracking
+- `zwp_text_input_v3`: IME for CJK input
+- `ext_session_lock_v1`: lockscreen
+- `wl_data_device`: clipboard and drag-and-drop
+- `wp_viewporter`: HiDPI buffer scaling
+
+### Key modules
+
+- `Connection`: event loop and dispatch
+- `Keyboard`: xkbcommon wrapper with key repeat
+- `TextInput`: IME integration (check `isComposing()` before handling keys)
+- `Clipboard`: paste and drag-and-drop
+- `DamageTracker`: dirty rect accumulation with overflow fallback to full redraw

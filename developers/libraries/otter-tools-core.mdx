@@ -1,0 +1,20 @@
+---
+title: "otter-tools-core"
+sidebarTitle: "otter-tools-core"
+description: "Pure-Zig helpers for small CLI tools: calc, emoji, clipboard, calendar, weather, and more."
+---
+
+Pure-Zig bounded helpers for small CLI tools. No Wayland, D-Bus, or rendering deps.
+
+| Module | Used by |
+|--------|---------|
+| Calculator parsing | otter-calc, otter-launcher (`=EXPR`) |
+| Emoji search | otter-emoji, otter-launcher (`:QUERY`) |
+| Clipboard history | otter-clip, otter-launcher (`clip`) |
+| Calendar grids | otter-cal |
+| Duration parsing | otter-timer |
+| Weather URL construction | otter-weather |
+| Color conversion | otter-pick |
+| Recorder encoder selection | otter-rec |
+
+Config schemas for small apps live in `src/app_configs.zig`, shared with `otter-settings` for consistent defaults.

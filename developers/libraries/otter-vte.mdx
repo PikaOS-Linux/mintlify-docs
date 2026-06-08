@@ -1,0 +1,14 @@
+---
+title: "otter-vte"
+sidebarTitle: "otter-vte"
+description: "Terminal cell rendering: DynamicCommandList, powerline glyphs, and CellRenderer."
+---
+
+Terminal rendering boundary for embeddable terminal views.
+
+- `DynamicCommandList`: terminal-specific draw commands
+- `PowerlineOps`, `BlockOps`: powerline and block glyph rendering
+- `CellRenderer`: generic cell renderer with comptime hooks
+- `cell_glyphs`: custom cell glyph support
+
+Used by `otter-term` and any app embedding terminal output.

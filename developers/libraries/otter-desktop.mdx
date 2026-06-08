@@ -1,0 +1,36 @@
+---
+title: "otter-desktop"
+sidebarTitle: "otter-desktop"
+description: "Desktop integration: XDG icons, D-Bus services, PipeWire, PAM, and sysinfo."
+---
+
+Desktop integration: icons, applications, D-Bus, system services.
+
+### Applications
+
+- XDG icon theme lookup with caching
+- `.desktop` file parsing with locale support
+- Application list with deduplication and hot-reload
+
+### D-Bus services (via vendored sd-bus/basu)
+
+- UPower (battery), power-profiles-daemon, MPRIS (media), NetworkManager
+- System tray (StatusNotifierItem), polkit agent, fprintd
+- Notifications (`org.freedesktop.Notifications`)
+- Logind, ScreenSaver inhibit
+
+### System services
+
+- Brightness via `/sys/class/backlight/`
+- SysInfo: CPU, memory, disk, temperature via `/proc` and `/sys`
+- PipeWire: volume, mute, default device switching
+
+### Authentication
+
+- PAM password auth for lockscreen and polkit
+
+Compile-time flags: `-Denable_dbus=false`, `-Denable_pipewire=false`, `-Denable_pam=false`.
+
+<Note>
+  `sd_bus_process()` handles one message per call. Loop until the queue is drained.
+</Note>

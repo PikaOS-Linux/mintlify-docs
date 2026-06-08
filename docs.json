@@ -98,7 +98,18 @@
           {
             "group": "Libraries",
             "pages": [
-              "developers/libraries"
+              "developers/libraries",
+              "developers/libraries/otter-utils",
+              "developers/libraries/otter-geo",
+              "developers/libraries/otter-conf",
+              "developers/libraries/otter-render",
+              "developers/libraries/otter-wayland",
+              "developers/libraries/otter-vte",
+              "developers/libraries/otter-theme",
+              "developers/libraries/otter-config-types",
+              "developers/libraries/otter-tools-core",
+              "developers/libraries/otter-desktop",
+              "developers/libraries/otter-ui"
             ]
           }
         ]

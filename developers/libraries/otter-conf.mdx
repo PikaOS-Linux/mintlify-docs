@@ -1,0 +1,32 @@
+---
+title: "otter-conf"
+sidebarTitle: "otter-conf"
+description: "Comptime-generic config parser with mmap I/O, serialization, and inotify hot-reload."
+---
+
+Comptime-generic config parser. Define a Zig struct and get a specialized parser at compile time.
+
+- Flat `key = value` format with `#` comments
+- Types: booleans, integers, floats, strings, enums, arrays, optionals, nested structs
+- Memory-mapped file I/O
+- Forward-compatible: unknown fields are silently skipped
+- Serialization back to disk
+- `Watcher`: inotify-based hot-reload
+
+```zig
+const otter_conf = @import("otter_conf");
+
+const Config = struct {
+    port: u16 = 8080,
+    debug: bool = false,
+};
+
+var config = try otter_conf.load(Config, allocator, "/path/to/config.conf", .{});
+defer otter_conf.freeConfig(Config, allocator, &config);
+```
+
+Add to your project:
+
+```bash
+zig fetch --save git+https://git.pika-os.com/otter-shell/otter-conf
+```

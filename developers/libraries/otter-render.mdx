@@ -1,0 +1,26 @@
+---
+title: "otter-render"
+sidebarTitle: "otter-render"
+description: "CPU rendering pipeline: fonts, images, CommandList, quad_renderer, and SDF rounded rects."
+---
+
+CPU rendering pipeline for all Otter UI.
+
+- ARGB color operations (Wayland argb8888 compatible)
+- FreeType font rendering with glyph caching
+- HarfBuzz shaping + itijah bidi via Text System boundary
+- Image loading (PNG, JPG, BMP, GIF via zigimg)
+- Sprite sheets and animation (integer-only ease-out quadratic)
+- `CommandList` deferred rendering + `quad_renderer` with scissor clipping and damage culling
+- SDF-based rounded rectangles
+
+```zig
+const render = @import("otter_render");
+
+const color = try render.parseColor("#FF5500");
+var surface = render.Surface.fromPixels(&pixels, width, height);
+surface.clear(render.Color.black);
+font.drawText(&surface, "Hello", .{ .x = 0, .y = 20 }, 16, render.Color.white);
+```
+
+Build flag `-Denable_text=false` drops font and shaping support.

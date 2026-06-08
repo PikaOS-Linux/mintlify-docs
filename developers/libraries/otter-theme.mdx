@@ -1,0 +1,14 @@
+---
+title: "otter-theme"
+sidebarTitle: "otter-theme"
+description: "Shared theme tokens, spacing, popup styles, and 12 bundled presets."
+---
+
+Shared visual theme: semantic color tokens, spacing, popup styles, bar chrome, font tokens.
+
+- 12 bundled presets: Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, One Dark
+- `loader.loadTheme(allocator)`: reads `~/.config/otter-shell/theme.conf`
+- Pure data structs: no I/O in the theme module itself
+- Apps watch `theme.conf` via inotify for hot-reload
+
+Widget configs use `?Color = null` fields resolved as: widget config, then theme token, then compiled default.
