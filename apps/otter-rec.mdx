@@ -22,7 +22,7 @@ otter-rec --portal --source screen --output out.mp4   # force xdg-desktop-portal
 otter-rec --dry-run --source screen --output out.mp4  # print resolved settings, do not record
 ```
 
-`--region select` opens the same frozen Wayland selection overlay used by otter-shot. Drag a rectangle interactively. `--region X,Y,W,H` records a fixed rectangle in global logical coordinates. `--window active` captures the focused window through `ext_foreign_toplevel_image_capture_source_manager_v1`.
+`--region select` opens the same drag-to-select UI as [otter-screenshot](/apps/otter-screenshot) and [otter-shot](/apps/otter-shot). Drag a rectangle, or pass `--region X,Y,W,H` for fixed global logical coordinates. `--window active` captures the focused window through `ext_foreign_toplevel_image_capture_source_manager_v1`.
 
 ## Hardware Encoding
 

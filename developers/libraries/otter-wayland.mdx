@@ -24,3 +24,20 @@ Wayland client library wrapping common protocols.
 - `TextInput`: IME integration (check `isComposing()` before handling keys)
 - `Clipboard`: paste and drag-and-drop
 - `DamageTracker`: dirty rect accumulation with overflow fallback to full redraw
+- `capture`: `ext_image_copy_capture_v1` output and toplevel capture helpers
+- `capture_overlay`: dimmed frozen-capture backdrop for interactive tools
+- `selection_overlay`: shared region selector for `otter-screenshot`, `otter-shot`, and `otter-rec`
+
+### Region selection overlay
+
+Drag-to-select for screenshots, product shots, and recordings. It composites pixels directly to SHM buffers with incremental damage. Surface Description is not used here.
+
+Each app passes a preset (namespace, pool names, visual mode):
+
+| Preset | Used by | Visual mode |
+|--------|---------|-------------|
+| `selection_overlay.preset.screenshot` | `otter-screenshot` | Frozen capture at full brightness; border-only selection chrome |
+| `selection_overlay.preset.shot` | `otter-shot` | Frozen capture dimmed outside the selection |
+| `selection_overlay.preset.rec` | `otter-rec` | Same as shot |
+
+Live mode skips the freeze and draws a shaded overlay instead. The selector can hide the cursor when the capture omits it.

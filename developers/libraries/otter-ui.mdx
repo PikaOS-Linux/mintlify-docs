@@ -17,13 +17,24 @@ Widget framework and Surface Description frame API.
 
 - `button`, `inputBox`, `toggle`, `checkbox`, `dropdown`, `tabBar`, `scrollbar`, `progressBar`, `colorSwatch`, and more
 
-### VTable widgets (compatibility path)
+### Widget registries (bar and daemon layouts)
 
-- Existing bar widgets implement `Widget.VTable` (draw, deinit, setArea, getWidth)
-- Prefer Surface Description for new app surfaces
+Bar-style apps store widgets as struct fields and route layout, input, damage, and draw through comptime registries:
+
+- `FieldRegistry(Owner, specs)`: lookup and dispatch for optional widget fields
+- `NamedWidgetList(Owner, spec)`: same for bounded dynamic lists like `button_menu`
+
+Registries cover lookup, width, area, hit testing, popups, lifecycle, damage, and frame dispatch. Layout code calls widget methods directly. The embedded `Widget` shell only tracks area and pointer motion.
+
+Use Surface Description for new app UI. Reach for registries when you need config-driven widget rows like `otter-bar`.
+
+### VTable widgets (bar compatibility path)
+
+Existing bar widgets still use a generated `Widget` vtable (draw, deinit, setArea, getWidth). New apps should use Surface Description instead.
 
 ### Other modules
 
 - `input_buffer.zig`: text input with cursor and selection
 - `icon_cache.zig`: cached XDG icon rendering
 - `scroll_state.zig`: vertical scroll tracking
+- `overlay_chrome.zig`: loupe panel and crosshair chrome for pixel-compositing overlays
