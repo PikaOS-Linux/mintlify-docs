@@ -1,0 +1,35 @@
+---
+title: "Find and Copy Emoji from the Terminal with otter-emoji"
+sidebarTitle: "Emoji Picker"
+description: "otter-emoji searches all Unicode 17.0 emoji by name. Print matching glyphs, display a compact grid, or copy the first match to clipboard."
+---
+
+otter-emoji lets you search the full Unicode 17.0 emoji set by name from the terminal or launcher. It prints matching glyph and name rows, or a compact grid, and can copy the first match directly to clipboard.
+
+## Usage
+
+Pass a keyword to search for matching emoji. Combine flags to control the output format, limit results, or copy directly to clipboard.
+
+```bash
+otter-emoji heart            # search by keyword
+otter-emoji --grid weather   # display results as a grid
+otter-emoji --limit 8 smile  # limit results count
+otter-emoji --copy rocket    # copy first match to clipboard
+```
+
+## Configuration
+
+otter-emoji reads its configuration from `~/.config/otter-shell/otter-emoji.conf`.
+
+```conf
+grid = false
+copy = false
+limit = 32
+```
+
+Set `grid = true` to always display results as a compact grid, `copy = true` to always copy the first match, and adjust `limit` to control the maximum number of results returned.
+
+<Note>
+  Emoji data covers Unicode 17.0.0 `emoji-test.txt` including all
+  fully-qualified emoji sequences.
+</Note>

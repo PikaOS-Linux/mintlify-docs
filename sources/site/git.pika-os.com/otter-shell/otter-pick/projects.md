@@ -1,0 +1,15 @@
+# Source: https://git.pika-os.com/otter-shell/otter-pick/projects
+
+[otter-shell](https://git.pika-os.com/otter-shell)/[otter-pick](https://git.pika-os.com/otter-shell/otter-pick)
+
+Watch [1](https://git.pika-os.com/otter-shell/otter-pick/watchers)
+
+Star [0](https://git.pika-os.com/otter-shell/otter-pick/stars)
+
+[Fork]() [0](https://git.pika-os.com/otter-shell/otter-pick/forks)
+
+You've already forked otter-pick
+
+Sort
+
+[Oldest](https://git.pika-os.com/?q=&sort=oldest&state=open) [Alphabetically](https://git.pika-os.com/?q=&sort=alphabetically&state=open) [Reverse alphabetically](https://git.pika-os.com/?q=&sort=reversealphabetically&state=open) [Most recently updated](https://git.pika-os.com/?q=&sort=recentupdate&state=open) [Least recently updated](https://git.pika-os.com/?q=&sort=leastupdate&state=open)

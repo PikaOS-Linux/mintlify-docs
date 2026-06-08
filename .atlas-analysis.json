@@ -1,0 +1,95 @@
+{
+  "projectType": "framework",
+  "projectName": "Otter Shell",
+  "projectDescription": "A lightweight, feature-rich Wayland Linux desktop environment built from a suite of native Zig applications for PikaOS.",
+  "theme": "palm",
+  "primaryColor": "#649c25",
+  "lightColor": "#accb8c",
+  "darkColor": "#d8e6ca",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Apps",
+            "pages": [
+              "apps/otter-term",
+              "apps/otter-screenshot",
+              "apps/otter-rec",
+              "apps/otter-clip",
+              "apps/otter-shot"
+            ]
+          },
+          {
+            "group": "Productivity",
+            "pages": [
+              "apps/otter-note",
+              "apps/otter-cal",
+              "apps/otter-timer",
+              "apps/otter-transcribe"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "apps/otter-calc",
+              "apps/otter-emoji",
+              "apps/otter-pick",
+              "apps/otter-vox",
+              "apps/otter-weather"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/overview",
+              "configuration/themes",
+              "configuration/keybinds"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Native Wayland terminal emulator with tabs, split panes, and shell integration",
+    "Region, window, and fullscreen screenshot capture via ext_image_copy_capture_v1",
+    "Hardware-accelerated screen recorder with NVENC, QSV, and VAAPI support",
+    "Clipboard manager with history, search, pinning, and image support",
+    "Product-shot composer with gradient backgrounds, padding, shadows, and corner radius",
+    "Sticky markdown notes with layer-shell surface",
+    "Calendar popover with agenda file support",
+    "Hotkey-controlled on-device speech transcription via Parakeet model",
+    "CPU Kokoro TTS text-to-speech with 50+ embedded voices",
+    "Wayland color picker with hex, RGB, and OKLCH output",
+    "Open-Meteo weather widget for bar and popup",
+    "Searchable emoji picker with Unicode 17.0 data"
+  ],
+  "publicApiSurface": [
+    "otter-term [--cwd PATH] [-e COMMAND] [-- ARGS]",
+    "otter-screenshot [--output PATH] [--fullscreen] [--active] [--freeze] [--cursor]",
+    "otter-rec [--source screen|window|region] [--output PATH] [--hevc] [--av1] [--region X,Y,W,H]",
+    "otter-clip daemon|popup|list|search|add|clear|pin|unpin|select",
+    "otter-copy [--type MIME] [TEXT]",
+    "otter-paste [-n]",
+    "otter-shot",
+    "otter-note add|new|list|clear [--pin POSITION] [--path PATH]",
+    "otter-cal [--month YYYY-MM] [--today DATE] [--agenda PATH] [--next N]",
+    "otter-timer DURATION [--message TEXT] [--command CMD] [--no-notify]",
+    "otter-transcribectl start|stop|toggle|status",
+    "otter-vox [--voice NAME] [--no-play] [-o PATH] [--list-voices]",
+    "otter-calc EXPRESSION [--copy]",
+    "otter-emoji QUERY [--grid] [--limit N] [--copy]",
+    "otter-pick [--x N] [--y N] [--loupe] [--no-copy] [--hex COLOR]",
+    "otter-weather [LAT LON] [--write-cache] [--watch SECONDS] [--layer]"
+  ]
+}

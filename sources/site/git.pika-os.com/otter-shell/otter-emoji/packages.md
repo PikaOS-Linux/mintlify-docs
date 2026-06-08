@@ -1,0 +1,15 @@
+# Source: https://git.pika-os.com/otter-shell/otter-emoji/packages
+
+[otter-shell](https://git.pika-os.com/otter-shell)/[otter-emoji](https://git.pika-os.com/otter-shell/otter-emoji)
+
+Watch [1](https://git.pika-os.com/otter-shell/otter-emoji/watchers)
+
+Star [0](https://git.pika-os.com/otter-shell/otter-emoji/stars)
+
+[Fork]() [0](https://git.pika-os.com/otter-shell/otter-emoji/forks)
+
+You've already forked otter-emoji
+
+## There are no packages yet.
+
+For more information on the package registry, see [the documentation](https://docs.gitea.com/usage/packages/overview/).

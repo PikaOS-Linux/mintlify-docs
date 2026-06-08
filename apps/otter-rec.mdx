@@ -1,0 +1,83 @@
+---
+title: "otter-rec: Hardware-Accelerated Wayland Screen Recorder"
+sidebarTitle: "Screen Recorder"
+description: "otter-rec records your Wayland screen with hardware acceleration. Toggle with a hotkey, capture regions or windows, and encode using NVENC, QSV, or VAAPI."
+---
+
+otter-rec is Otter Shell's screen recorder. When you run `otter-rec`, it starts recording; run it a second time and it stops, saving the file automatically. It probes your GPU at startup and selects the fastest available hardware encoder — NVENC for NVIDIA, Quick Sync for Intel, or VAAPI for AMD — falling back gracefully through software paths when needed. The default output file is `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`, though you can override that with `--output` or through the config file.
+
+## Basic Usage
+
+Use `otter-rec` as a simple toggle: one invocation starts a recording session and the next stops it.
+
+```bash
+otter-rec                                             # toggle recording (start/stop)
+otter-rec --output recording.mp4                      # specify output file
+otter-rec --region select --output region.mp4         # interactive region selection
+otter-rec --region X,Y,W,H                            # fixed region (global logical coordinates)
+otter-rec --window active --output window.mp4         # capture the active window
+otter-rec --hevc                                      # encode with HEVC instead of H.264
+otter-rec --av1                                       # encode with AV1
+otter-rec --portal --source screen --output out.mp4   # force xdg-desktop-portal source picker
+otter-rec --dry-run --source screen --output out.mp4  # print resolved settings, do not record
+```
+
+`--region select` opens the same frozen Wayland selection overlay used by otter-shot, letting you draw a rectangle interactively. `--region X,Y,W,H` records a fixed rectangle in global logical coordinates. `--window active` captures the focused window through `ext_foreign_toplevel_image_capture_source_manager_v1`.
+
+## Hardware Encoding
+
+otter-rec probes your GPU at startup and selects the best available hardware encoder for your vendor.
+
+| GPU vendor | Primary encoder family |
+|------------|----------------------|
+| NVIDIA     | NVENC (`h264_nvenc`, `hevc_nvenc`, `av1_nvenc`) |
+| Intel      | Quick Sync / QSV (`h264_qsv`, `hevc_qsv`, `av1_qsv`) |
+| AMD        | VAAPI (`h264_vaapi`, `hevc_vaapi`, `av1_vaapi`) |
+
+Within whichever family is selected, **H.264 is preferred by default**. Pass `--hevc` to switch to HEVC, or `--av1` to use AV1 — both flags work for any vendor.
+
+<Note>
+  Hardware encoders are sourced from your distribution's FFmpeg packages. Make sure `libavcodec`, `libavformat`, `libavutil`, and `libswscale` are installed and built with the encoder backends you need.
+</Note>
+
+## Configuration
+
+otter-rec reads `~/.config/otter-shell/otter-rec.conf` on startup. You can set any of these values to avoid repeating flags on every invocation.
+
+```conf
+output = ""
+source = ""
+mode = "region"
+codec = "h264"
+force_portal = false
+fps = 30
+seconds = 0
+bitrate = 12000000
+```
+
+- **`output`** — destination file path. Leave empty to write to `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`.
+- **`source`** — capture source hint, passed to the encoder path selection logic.
+- **`mode`** — capture mode: `fullscreen`, `region`, or `window`.
+- **`codec`** — encoder preference: `h264`, `hevc`, or `av1`.
+- **`force_portal`** — set to `true` to always use xdg-desktop-portal source selection, equivalent to always passing `--portal`.
+- **`fps`** — target frame rate (default `30`).
+- **`seconds`** — record for a fixed duration in seconds; `0` means record until stopped.
+- **`bitrate`** — target bitrate in bits per second (default `12000000`, i.e. 12 Mbps).
+
+## Hotkey Setup
+
+<Tip>
+  Bind `otter-rec` to a compositor keyboard shortcut to get a global recording toggle. Press the shortcut once to start recording and press it again to stop — no UI required. Most Wayland compositors expose a custom shortcuts section in their settings where you can assign any shell command to a key combination.
+</Tip>
+
+## Portal Mode
+
+Pass `--portal` to force otter-rec to open an xdg-desktop-portal ScreenCast session before recording. The portal presents its own source picker (screen, window, or region, depending on your compositor's portal implementation), and otter-rec then records through its own in-process capture and encoder path once the session is established.
+
+Portal detection checks for a live Wayland socket, PipeWire and session bus sockets in the runtime directory, and then verifies `org.freedesktop.portal.ScreenCast.version` before proceeding.
+
+You can also set `force_portal = true` in the config file to make portal mode the default for every invocation.
+
+<Note>
+  otter-rec uses only Wayland capture paths. X11 is not supported. If you are running under XWayland, make sure your compositor is exposing the required Wayland protocols.
+</Note>

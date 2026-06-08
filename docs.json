@@ -1,0 +1,71 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Otter Shell",
+  "theme": "palm",
+  "favicon": "https://media.brand.dev/9bc255b9-97a6-4b9c-a45b-a636863f7c62.svg",
+  "colors": {
+    "primary": "#649c25",
+    "light": "#accb8c",
+    "dark": "#d8e6ca"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Apps",
+            "pages": [
+              "apps/otter-term",
+              "apps/otter-screenshot",
+              "apps/otter-rec",
+              "apps/otter-clip",
+              "apps/otter-shot"
+            ]
+          },
+          {
+            "group": "Productivity",
+            "pages": [
+              "apps/otter-note",
+              "apps/otter-cal",
+              "apps/otter-timer",
+              "apps/otter-transcribe"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "apps/otter-calc",
+              "apps/otter-emoji",
+              "apps/otter-pick",
+              "apps/otter-vox",
+              "apps/otter-weather"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/overview",
+              "configuration/themes",
+              "configuration/keybinds"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://git.pika-os.com/otter-shell"
+    }
+  }
+}

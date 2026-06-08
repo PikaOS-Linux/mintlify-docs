@@ -1,0 +1,86 @@
+---
+title: "On-Device Speech Transcription with otter-transcribe"
+sidebarTitle: "Transcription"
+description: "otter-transcribe transcribes microphone audio on-device via PipeWire. Bind a hotkey to toggle recording and type the transcript into any focused input."
+---
+
+otter-transcribe is Otter Shell's on-device speech-to-text tool. It runs as a background daemon, records your microphone via PipeWire, and transcribes speech using a locally embedded Parakeet model — no network connection or cloud service required. Bind a hotkey to `otter-transcribectl toggle` in your compositor config and start dictating into any focused input.
+
+## Starting the Daemon
+
+```bash
+otter-transcribe    # start the transcription daemon
+```
+
+To use an alternate GGUF model file instead of the default embedded model, pass the `--model` flag:
+
+```bash
+otter-transcribe --model /path/to/model.gguf
+```
+
+<Note>
+The daemon hot-reloads config changes via inotify — you don't need to restart it after editing `otter-transcribe.conf`. Changes to theme colors and transcription settings take effect immediately.
+</Note>
+
+## Controlling with Hotkeys
+
+Use `otter-transcribectl` to send commands to the running daemon:
+
+```bash
+otter-transcribectl toggle  # start or stop recording
+otter-transcribectl start   # begin recording (hold-to-capture start)
+otter-transcribectl stop    # end recording (hold-to-capture stop)
+otter-transcribectl status  # check daemon status
+```
+
+<Tip>
+Bind `otter-transcribectl toggle` in your compositor config. Wayland clients cannot grab global hotkeys directly, so compositor-level binding is required for reliable capture from any focused window.
+</Tip>
+
+## Output Modes
+
+otter-transcribe supports three output modes that control where transcribed text goes after each utterance:
+
+| Mode | Behaviour |
+|---|---|
+| `focused` | Types the transcript into the currently focused input via Wayland virtual keyboard injection |
+| `clipboard` | Copies the transcript to the clipboard via `wl-copy` |
+| `stdout` | Prints the transcript from the daemon process |
+
+<Note>
+Use `clipboard` or `stdout` if virtual keyboard injection is blocked by your compositor or application. Chromium and Electron apps use physical evdev keycodes, which `focused` mode handles automatically for better compatibility.
+</Note>
+
+## Recording Indicator
+
+While recording is active, a bottom-center layer-shell indicator displays live PCM level bars so you always know when the microphone is open. Disable it by setting `show_indicator = false` in the config file.
+
+## Configuration
+
+Edit transcription settings in otter-settings under the **Transcribe** tab, or edit `~/.config/otter-shell/otter-transcribe.conf` directly:
+
+```conf
+output = focused
+stream = true
+show_indicator = true
+sample_rate = 16000
+target = "@DEFAULT_SOURCE@"
+max_seconds = 300
+width = 120
+height = 48
+margin_bottom = 36
+graph_height = 28
+graph_bars = 24
+```
+
+**Key settings explained:**
+
+- **`stream`** — When `true`, each finalized utterance chunk is emitted in real time as the model reaches an utterance boundary. Set to `false` to receive one final value for the entire recording instead of incremental chunks.
+
+- **`target`** — The PipeWire audio source to capture from. `@DEFAULT_SOURCE@` uses the system default microphone. Replace it with a specific PipeWire node name to target a different input device.
+
+- **`max_seconds`** — The maximum recording length in seconds. When this limit is reached, the daemon finalizes the current recording and emits any remaining transcript, but stays alive and ready for future `toggle` or `start` commands.
+
+- **`show_indicator`** — Controls the bottom-center PCM level indicator. Set to `false` to hide it while still receiving transcription output.
+
+The indicator's colors (`background_color`, `border_color`, `graph_color`, `graph_peak_color`, `text_color`) inherit automatically from `otter-theme` when left unset in the config file.

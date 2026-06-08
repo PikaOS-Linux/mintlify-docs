@@ -1,0 +1,101 @@
+---
+title: "Otter Terminal: Wayland Terminal with Tabs and Splits"
+sidebarTitle: "Terminal"
+description: "otter-term is a native Wayland terminal emulator for Otter Shell. Supports tabs, split panes, shell integration, URL handling, and IME."
+---
+
+`otter-term` is Otter Shell's built-in terminal emulator. It uses `libghostty-vt` for terminal emulation and the Otter libraries for everything else — Wayland windowing, PTY handling, input, rendering, configuration, and clipboard. Out of the box you get multiple tabs, horizontal and vertical split panes, deep shell integration via OSC sequences, and first-class IME support, all without an X11 dependency.
+
+## Launching
+
+Pass a directory path to open the terminal there, or use `-e` to run an arbitrary command instead of your default shell.
+
+```bash
+otter-term                                      # open with default shell
+otter-term /path/to/project                     # open in directory
+otter-term --cwd /path/to/project               # same, with explicit flag
+otter-term --working-directory /path/to/project # long form of --cwd
+otter-term -e htop                              # run a command
+otter-term -- nano file.txt                     # pass arguments to command
+```
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Tabs" icon="table-columns">
+    Open multiple terminal tabs in a single window. Close buttons appear per tab and are automatically hidden when only one tab remains.
+  </Card>
+  <Card title="Split Panes" icon="table-cells-large">
+    Divide any tab into horizontal or vertical panes. Each split has its own focus, can be independently resized, and closes without affecting other splits.
+  </Card>
+  <Card title="Shell Integration" icon="terminal">
+    OSC 7 keeps track of the current working directory so new tabs and splits open in the right place. OSC 133 captures command output for use in the context menu.
+  </Card>
+  <Card title="URL Handling" icon="link">
+    `http://`, `https://`, and `www.` URLs are automatically detected, underlined on hover, and opened with a configurable command (default: `xdg-open`).
+  </Card>
+  <Card title="IME Support" icon="language">
+    Full `zwp_text_input_v3` support with preedit text display and candidate-window positioning anchored to the terminal cursor.
+  </Card>
+  <Card title="Clipboard" icon="clipboard">
+    Copy with <kbd>Ctrl+Shift+C</kbd> and paste with <kbd>Ctrl+Shift+V</kbd>. Primary selection and a right-click context menu are also supported.
+  </Card>
+</CardGroup>
+
+## Configuration
+
+`otter-term` reads its configuration from `~/.config/otter-shell/otter-term.conf`. The file is loaded on startup and **hot-reloaded whenever you save it** — font, colors, padding, and grid size all update immediately without restarting the terminal.
+
+```conf
+general_shell = ""
+general_term = "xterm-256color"
+general_width = 900
+general_height = 560
+general_scrollback_rows = 10000
+
+font_family = "IoskeleyMono Nerd Font"
+font_size = 14
+font_dpi_aware = true
+font_scale_percent = 100
+
+padding_x = 4
+padding_y = 4
+
+keybinds_copy = "ctrl+shift+c"
+keybinds_paste = "ctrl+shift+v"
+
+url_enabled = true
+url_underline = true
+url_highlight_on_hover = true
+url_open_command = "xdg-open"
+
+scroll_fixed_per_row = 10
+scroll_rows_per_notch = 3
+
+shell_capture_output = false
+
+bell_enabled = true
+bell_command = "paplay /usr/share/sounds/freedesktop/stereo/bell.oga"
+bell_visual = false
+```
+
+<Note>
+  Setting `general_shell = ""` tells `otter-term` to use the value of `$SHELL`, falling back to `/bin/sh` if that variable is unset. For `general_term`, the default `xterm-256color` gives the best compatibility with remote hosts over SSH. Only set it to `xterm-ghostty` when you are sure the target host and its applications have that terminfo entry installed.
+</Note>
+
+<Tip>
+  Set `shell_capture_output = true` to enable OSC 133 command-output capture. Once active, the right-click context menu gains a **Copy Last Output** action that copies the full output of the most recent command to the clipboard. The feature is off by default to keep large command output off the hot PTY path.
+</Tip>
+
+## Color Palette
+
+The color palette is configured with `colors_*` keys in the same config file. The defaults supply a complete 16-color terminal palette plus foreground, background, cursor, selection, and URL accent colors. Like every other config value, palette changes are **hot-reloaded** — save the file and the new colors apply immediately to all open panes.
+
+## Keyboard Shortcuts
+
+| Action | Shortcut |
+|---|---|
+| Copy selection | <kbd>Ctrl+Shift+C</kbd> |
+| Paste | <kbd>Ctrl+Shift+V</kbd> |
+| New tab | Right-click → **New Tab** |
+| Split pane | Right-click → **Split Pane** |

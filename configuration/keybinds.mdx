@@ -1,0 +1,83 @@
+---
+title: "Keyboard Shortcuts and Hotkey Bindings in Otter Shell"
+sidebarTitle: "Keybinds"
+description: "Default keyboard shortcuts for Otter Shell apps, plus how to bind global hotkeys in the River compositor for screenshots, recording, and transcription."
+---
+
+Otter Shell apps define their own in-app keyboard shortcuts, configurable through each app's config file. For global hotkeys — like triggering a screenshot or starting transcription from anywhere on the desktop — you bind them in your Wayland compositor. Otter Shell ships the [River](https://isaacfreund.com/software/river/) compositor as its default, and all examples below target River's `riverctl` configuration.
+
+## In-App Shortcuts
+
+The table below lists the default shortcuts built into each app.
+
+| App | Action | Default Shortcut |
+|-----|--------|-----------------|
+| otter-term | Copy selection | `Ctrl+Shift+C` |
+| otter-term | Paste | `Ctrl+Shift+V` |
+| otter-term | Open context menu | Right-click |
+| otter-note | Save note | `Ctrl+S` |
+| otter-note | Toggle Markdown preview | `Ctrl+M` |
+| otter-screenshot | Cancel region selection | `Esc` or `Ctrl+C` |
+
+## Changing otter-term Keybinds
+
+Edit the following keys in `~/.config/otter-shell/otter-term.conf` to remap copy and paste:
+
+```conf
+keybinds_copy  = "ctrl+shift+c"
+keybinds_paste = "ctrl+shift+v"
+```
+
+Changes are picked up the next time you open a terminal window. Use lowercase key names and `+` as the separator — for example, `"ctrl+alt+c"`.
+
+## Global Compositor Hotkeys
+
+Wayland apps cannot grab global hotkeys on their own — the compositor must bind them. Add the following blocks to your River init script (typically `~/.config/river/init`) to wire up the most useful Otter Shell commands system-wide.
+
+```bash
+# Add to your River config (init script)
+
+# Screenshot: select a region
+riverctl map normal Super P spawn 'otter-screenshot'
+
+# Screenshot: fullscreen
+riverctl map normal Super+Shift P spawn 'otter-screenshot --fullscreen --output ~/Pictures/screenshot.png'
+
+# Screen recorder: toggle
+riverctl map normal Super R spawn 'otter-rec'
+
+# Sticky notes
+riverctl map normal Super N spawn 'otter-note new'
+
+# Transcription: toggle
+riverctl map normal Super T spawn 'otter-transcribectl toggle'
+
+# Clipboard popup
+riverctl map normal Super V spawn 'otter-clip popup'
+
+# Color picker
+riverctl map normal Super+Shift C spawn 'otter-pick'
+```
+
+<Tip>
+  Add `otter-clip daemon &` to your River init autostart so clipboard history is available from your very first login. Without the daemon running, `otter-clip popup` will show an empty history.
+</Tip>
+
+## Recommended Autostart
+
+Some Otter Shell services need to run in the background before you interact with them. Place the following autostart block near the top of your River init script so they launch automatically with your session:
+
+```bash
+# Autostart in River init
+otter-clip daemon &
+otter-weather --watch 900 --write-cache &
+otter-transcribe &
+```
+
+| Service | Purpose |
+|---------|---------|
+| `otter-clip daemon` | Monitors the Wayland clipboard and builds history for `otter-clip popup` |
+| `otter-weather --watch 900 --write-cache` | Polls weather every 15 minutes and caches results for status bar widgets |
+| `otter-transcribe` | Starts the transcription daemon in idle mode, ready for `otter-transcribectl toggle` |
+
+The `&` suffix sends each process to the background so River init continues without blocking.

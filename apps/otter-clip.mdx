@@ -1,0 +1,74 @@
+---
+title: "otter-clip: Wayland Clipboard Manager for Otter Shell"
+sidebarTitle: "Clipboard"
+description: "otter-clip is Otter Shell's clipboard manager. It stores a searchable history of copied items and surfaces them via Super+V popup or CLI commands."
+---
+
+otter-clip is Otter Shell's clipboard manager. It runs as a long-lived daemon that monitors the Wayland data-control protocol, stores a bounded history of text and image entries, and surfaces a Super+V launcher popup for quick access. Alongside the daemon, two native copy/paste utilities ship with the package — `otter-copy` and `otter-paste` — which interact with Wayland data-control directly. In packaged installs these also shadow the `wl-copy` and `wl-paste` names, so existing applications and scripts transparently route through Otter's implementation.
+
+## Starting the Daemon
+
+Run the daemon once per session to begin monitoring clipboard changes.
+
+```bash
+otter-clip daemon    # start monitoring clipboard selections
+```
+
+<Tip>
+  Add `otter-clip daemon` to your compositor's autostart list so the clipboard history is available as soon as you log in. Without the daemon running, `otter-clip list`, `search`, and the Super+V popup will show no history.
+</Tip>
+
+## CLI Commands
+
+All history management happens through `otter-clip` subcommands. You can search and copy entries entirely from the terminal without opening the popup.
+
+| Command | Description |
+|---|---|
+| `otter-clip popup` | Open the Super+V history popup |
+| `otter-clip popup query` | Open the popup with a search term pre-filled |
+| `otter-clip list` | Print all stored history entries |
+| `otter-clip search query` | Filter history and print matching entries |
+| `otter-clip add some text` | Manually append a text entry to history |
+| `otter-clip clear` | Delete all history entries |
+| `otter-clip pin 0` | Pin an entry by its index so it is not evicted |
+| `otter-clip unpin 0` | Remove the pin from an entry |
+| `otter-clip select 0` | Copy a history entry by index to the clipboard |
+
+The `popup` command opens `otter-launcher --query "clip ..."`. Selecting a row in the launcher calls `otter-clip select INDEX` to copy that item back to the clipboard, so pressing Enter in the popup is equivalent to running `otter-clip select` on the highlighted entry.
+
+## Copying and Pasting
+
+`otter-copy` and `otter-paste` are drop-in replacements for `wl-copy` and `wl-paste` that communicate with Wayland data-control directly.
+
+```bash
+otter-copy text                          # copy a text argument
+printf 'text' | otter-copy               # copy from stdin
+png-tool | otter-copy --type image/png   # copy an image with an explicit MIME type
+otter-paste                              # paste the current clipboard contents
+otter-paste -n                           # paste without a trailing newline
+wl-copy text    # resolved to otter-copy in packaged installs
+wl-paste        # resolved to otter-paste in packaged installs
+```
+
+You can also point `otter-copy` and `otter-paste` at a custom history file with `--file /path/to/store`, which is useful for scripting isolated clipboard stores.
+
+## Configuration
+
+otter-clip reads `~/.config/otter-shell/otter-clip.conf` at daemon startup.
+
+```conf
+# Optional; empty uses $XDG_CACHE_HOME/otter-shell/otter-clip-history
+history_path = ""
+```
+
+Leave `history_path` empty to use the default location at `$XDG_CACHE_HOME/otter-shell/otter-clip-history`. Set it to an absolute path to store history somewhere else, for example on a persistent volume that survives reboots.
+
+## Privacy and Password Managers
+
+<Note>
+  otter-clip automatically skips clipboard entries that carry password manager or secret MIME hints before reading their data. This prevents credentials copied from password managers from being stored in plain text in your history. Because the Wayland data-control protocol does not expose the source application ID for copied data, app-ID-based filtering is applied only when a source ID is available to the caller.
+</Note>
+
+## Image Support
+
+otter-clip accepts text offers and common image MIME types from the clipboard. Images are stored as bounded blob files with associated MIME type and path metadata rather than being decoded and re-encoded. This means the otter-launcher popup can render image thumbnails inline when you open clipboard history with Super+V — no extra conversion step is needed at display time.

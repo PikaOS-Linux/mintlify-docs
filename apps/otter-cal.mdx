@@ -1,0 +1,47 @@
+---
+title: "Bar Clock Calendar and Agenda Display with otter-cal"
+sidebarTitle: "Calendar"
+description: "otter-cal prints a month grid and agenda list to stdout, suitable for integration with bar clock popovers. Supports a plain-text agenda file."
+---
+
+otter-cal provides a calendar popover for Otter Shell's status bar clock. It prints a month grid and bounded agenda list to stdout, designed to appear as a popover when you click the clock widget. Because output goes to stdout, you can pipe it into any bar or launcher that can display text, or use it standalone from a terminal.
+
+## Usage
+
+```bash
+otter-cal                                              # current month
+otter-cal --month 2026-06                              # specific month
+otter-cal --today 2026-06-05 --agenda ~/.config/otter-shell/agenda  # with agenda file
+otter-cal --next 1                                     # next month
+```
+
+## Agenda File Format
+
+otter-cal reads events from a plain-text agenda file. Each line contains a date in `YYYY-MM-DD` format followed by a space and the event description. Place one event per line:
+
+```text
+2026-06-15 Team retrospective
+2026-06-20 Release day
+```
+
+Pass the file path with `--agenda`, or set `agenda_path` in the config file so it loads automatically every time otter-cal runs.
+
+## Bar Integration
+
+The Otter Shell status bar clock launches a command when you left-click it. That command defaults to `otter-cal`, which opens the calendar popover inline. To override it, set `clock_calendar_command` in your bar configuration:
+
+```conf
+clock_calendar_command = "otter-cal"
+```
+
+Replace the value with any command whose stdout the bar should display — for example a wrapper script that passes a custom `--agenda` path.
+
+## Configuration
+
+otter-cal reads its settings from `~/.config/otter-shell/otter-cal.conf`:
+
+```conf
+agenda_path = ""
+```
+
+When `agenda_path` is empty, otter-cal runs without agenda data. Set it to the absolute path of your agenda file to load events automatically without passing `--agenda` on every invocation.

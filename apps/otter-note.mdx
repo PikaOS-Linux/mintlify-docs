@@ -1,0 +1,53 @@
+---
+title: "Sticky Markdown Notes for Your Desktop with otter-note"
+sidebarTitle: "Notes"
+description: "otter-note pins markdown notes to a layer-shell surface. Toggle with Super+N, edit inline, preview rendered markdown, and save automatically on exit."
+---
+
+otter-note creates sticky markdown notes that float above your desktop using a Wayland layer-shell surface. You can pin notes to any corner, edit them directly, preview rendered markdown, and bind `Super+N` for instant access. Notes persist across sessions and are stored as plain markdown files, so you can read and edit them with any text editor outside Otter Shell.
+
+## Commands
+
+```bash
+otter-note add "ship release"     # append a quick note
+otter-note new                    # open the note editor
+otter-note --pin top-right new    # pin to a corner
+otter-note list                   # list all notes
+otter-note clear                  # delete all notes
+otter-note --path /tmp/notes.md add test note  # use a custom file
+```
+
+## Editing Notes
+
+In edit mode, the layer-shell surface edits your markdown file directly. Press **Ctrl+S** to save at any point, or simply close the surface — it saves automatically on exit. Press **Ctrl+M** to toggle rendered markdown preview so you can read formatted output without leaving the surface.
+
+In view mode, only the header buttons accept pointer and keyboard input. The note body is fully pass-through, so apps underneath continue to receive events normally and the note never blocks your workflow.
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+S | Save note |
+| Ctrl+M | Toggle markdown preview |
+
+## Pinning
+
+Use `--pin` to position the note surface in a specific corner of your display before opening it. For example, to pin to the top-right corner:
+
+```bash
+otter-note --pin top-right new
+```
+
+## Configuration
+
+otter-note reads its settings from `~/.config/otter-shell/otter-note.conf`:
+
+```conf
+notes_path = ""
+```
+
+When `notes_path` is empty, otter-note stores notes at `$XDG_DATA_HOME/otter-shell/notes.md`, falling back to `~/.local/share/otter-shell/notes.md` if `XDG_DATA_HOME` is unset. Set `notes_path` to an absolute path to redirect storage to a custom location, for example a synced folder.
+
+## Hotkey Setup
+
+<Tip>
+Bind `otter-note new` to `Super+N` in your compositor config for quick sticky note access from anywhere on the desktop.
+</Tip>

@@ -1,0 +1,72 @@
+---
+title: "On-Device Text-to-Speech with Kokoro TTS via otter-vox"
+sidebarTitle: "Text to Speech"
+description: "otter-vox converts text to speech on-device using an embedded Kokoro TTS model. Choose from 50+ voices, play back audio, or save to a WAV file."
+---
+
+otter-vox turns text into speech on your local machine using an embedded Kokoro TTS model — no internet connection required. Pipe in text, choose a voice from over 50 options, and play the result or save it as a WAV file.
+
+## Usage
+
+Pipe text into otter-vox or pass it as a positional argument. Use `--no-play` to write a WAV stream to stdout, or `-o` to save directly to a file.
+
+```bash
+printf 'Welcome to Otter Shell.' | otter-vox --no-play | pw-play -  # pipe to PipeWire
+printf 'Welcome to Otter Shell.' | otter-vox -o speech.wav           # save to file
+otter-vox --voice bm_lewis --play 'Welcome to Otter Shell.'          # speak with voice
+otter-vox --check-model                                               # verify model
+otter-vox --list-voices                                               # list all voices
+```
+
+## Voices
+
+otter-vox ships with a full set of Kokoro voice files embedded in the binary, covering several languages and accents.
+
+| Prefix | Language / Accent | Example voices |
+|--------|------------------|----------------|
+| `af_*` | American female | alloy, bella, jessica, nova, heart, kore, nicole, river, sarah, sky |
+| `am_*` | American male | adam, echo, michael, onyx, eric, fenrir, liam, puck |
+| `bf_*` | British female | alice, emma, isabella, lily |
+| `bm_*` | British male | daniel, george, lewis, fable |
+| `df_*` | German female | eva, victoria |
+| `dm_*` | German male | bernd, martin |
+| `ef_*` | Spanish female | dora |
+| `em_*` | Spanish male | alex, santa |
+| `ff_*` | French female | siwis |
+| `hf_*` | Hindi female | alpha, beta |
+| `hm_*` | Hindi male | omega, psi |
+| `if_*` | Italian female | sara |
+| `im_*` | Italian male | nicola |
+| `jf_*` | Japanese female | alpha, gongitsune, nezumi, tebukuro |
+| `jm_*` | Japanese male | kumo |
+| `pf_*` | Portuguese female | dora |
+| `pm_*` | Portuguese male | alex, santa |
+| `zf_*` | Chinese female | xiaobei, xiaoni, xiaoxiao, xiaoyi |
+| `zm_*` | Chinese male | yunjian, yunxi, yunxia, yunyang |
+
+<Tip>
+  Run `otter-vox --list-voices` to see all embedded voice names available in your install.
+</Tip>
+
+## Output Options
+
+otter-vox gives you full control over where the generated audio goes.
+
+- **Default** — plays audio immediately via your system audio output.
+- **`--no-play`** — writes a raw WAV stream to stdout so you can pipe it to another program.
+- **`-o PATH` / `--output PATH`** — saves audio to a file instead of (or alongside) playing it.
+- **`-o speech.wav` with playback enabled** — saves the file and plays it simultaneously.
+
+## Configuration
+
+otter-vox reads its configuration from `~/.config/otter-shell/otter-vox.conf`.
+
+```conf
+model_dir = ""
+output_path = "-"
+playback = true
+voice = "bm_george"
+cpu_threads = 4
+```
+
+Setting `model_dir = ""` uses the embedded model, which is extracted automatically at runtime. Set `model_dir` to a custom directory path to use your own Kokoro model and voice files instead.
