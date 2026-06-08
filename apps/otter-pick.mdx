@@ -1,17 +1,17 @@
 ---
-title: "Pick Screen Colors in Hex, RGB, and OKLCH with otter-pick"
+title: "otter-pick"
 sidebarTitle: "Color Picker"
 description: "Pick screen colors in hex, RGB, and OKLCH. Click to copy, or pass coordinates for scripted sampling."
 ---
 
-otter-pick is Otter Shell's screen color picker. It opens a frozen overlay with a magnifying loupe. Click a pixel to copy its hex, RGB, and OKLCH values. Pass `--x` and `--y` when you need non-interactive sampling in a script.
+otter-pick is Otter Shell's screen color picker. It opens a frozen overlay with a magnifying loupe. Click a pixel to copy its hex, RGB, and OKLCH values. Pass `--x` and `--y` for scripted sampling.
 
 ## Usage
 
-Run `otter-pick` without arguments to open the interactive overlay, or pass `--x` and `--y` to sample a specific screen coordinate directly.
+Run `otter-pick` without arguments for the interactive overlay, or pass `--x` and `--y` to sample a screen coordinate.
 
 ```bash
-otter-pick                       # frozen overlay, loupe — click to copy hex
+otter-pick                       # frozen overlay, loupe: click to copy hex
 otter-pick --x 120 --y 80        # sample global Wayland coordinate
 otter-pick --x -10 --y 80        # negative coords work for left-of-primary outputs
 otter-pick --loupe --x 1 --y 2   # print 5x5 ANSI loupe for scripted sampling
@@ -31,14 +31,15 @@ oklch(44.9% 0.083 249.1)
 
 ## Configuration
 
-otter-pick reads its configuration from `~/.config/otter-shell/otter-pick.conf`.
+otter-pick reads `~/.config/otter-shell/otter-pick.conf`.
 
 ```conf
 copy = true
 loupe = false
 ```
 
-Set `copy = false` to skip clipboard writes by default. Set `loupe = true` to always render the ANSI loupe instead of opening the overlay.
+- `copy`: set to `false` to skip clipboard writes by default
+- `loupe`: set to `true` to always render the ANSI loupe instead of opening the overlay
 
 <Note>
   Requires `ext-image-copy-capture-v1` from the compositor. The loupe uses the

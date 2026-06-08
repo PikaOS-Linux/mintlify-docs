@@ -1,5 +1,5 @@
 ---
-title: "Capture Screenshots on Wayland with otter-screenshot"
+title: "otter-screenshot"
 sidebarTitle: "Screenshot"
 description: "Capture regions, windows, or the full screen on Wayland. Drag to select, then copy to clipboard or save to a file."
 ---
@@ -23,12 +23,12 @@ otter-screenshot --freeze --output region.png          # freeze before selecting
 | Flag | Short | Description |
 |---|---|---|
 | `--output PATH` | `-o PATH` | Write the PNG to `PATH` instead of copying it to the clipboard. |
-| `--fullscreen` | — | Capture all outputs immediately, without opening the selection overlay. |
-| `--active` | — | Capture the compositor-reported active toplevel immediately. See [Compositor Requirements](#compositor-requirements) for the necessary protocol support. |
-| `--freeze` | — | Capture the screen first, then display that frozen image behind the selection overlay. Useful when the content you want to capture would disappear while you drag. |
-| `--cursor` | — | Include the cursor in the captured image. The cursor is hidden by default. |
-| `--border` | — | Keep the selection border in the final image. By default the border is only a visual selection aid and is cropped out. |
-| `--tonemap-hdr` | — | Apply a simple SDR tonemap before encoding. Use this as a best-effort fallback when capturing HDR outputs. It is not color-managed output. |
+| `--fullscreen` |: | Capture all outputs immediately, without opening the selection overlay. |
+| `--active` |: | Capture the compositor-reported active toplevel immediately. See [Compositor Requirements](#compositor-requirements) for the necessary protocol support. |
+| `--freeze` |: | Capture the screen first, then display that frozen image behind the selection overlay. Useful when the content you want to capture would disappear while you drag. |
+| `--cursor` |: | Include the cursor in the captured image. The cursor is hidden by default. |
+| `--border` |: | Keep the selection border in the final image. By default the border is only a visual selection aid and is cropped out. |
+| `--tonemap-hdr` |: | Apply a simple SDR tonemap before encoding. Use this as a best-effort fallback when capturing HDR outputs. It is not color-managed output. |
 | `--help` | `-h` | Print usage and exit. |
 
 ## Clipboard

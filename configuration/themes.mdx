@@ -4,25 +4,25 @@ sidebarTitle: "Themes"
 description: "Change Otter Shell colors and spacing in otter-settings or theme.conf. Per-app overrides inherit from the shared theme when left blank."
 ---
 
-Otter Shell apps share one visual theme through `otter-theme`. The **Theme** tab in [otter-settings](/desktop/otter-settings) is the fastest way to change colors, spacing, and presets. It shows a live preview of all 12 built-in presets.
+All Otter Shell apps share one theme via `otter-theme`. The **Theme** tab in [otter-settings](/desktop/otter-settings) previews all 12 built-in presets and writes changes on **Apply**.
 
 ```bash
 otter-settings
 ```
 
-Pick a preset in the theme browser and click **Apply**. Changes write to `~/.config/otter-shell/theme.conf` and reach running apps that watch the theme file.
+Changes land in `~/.config/otter-shell/theme.conf`. Running apps that watch the file pick them up.
 
 <Tip>
-  Use otter-settings unless you need keys the UI doesn't expose. The settings app keeps comments and field order when saving.
+  Stick with otter-settings unless you need keys the UI does not expose. It keeps comments and field order on save.
 </Tip>
 
 ## Theme config file
 
-You can also edit `~/.config/otter-shell/theme.conf` directly. Apps like otter-bar, otter-transcribe, and otter-term read this file at startup and re-apply it when it changes on disk.
+Edit `~/.config/otter-shell/theme.conf` directly if you prefer. otter-bar, otter-transcribe, and otter-term read it at startup and on change.
 
 ## Terminal colors
 
-Set otter-term's 16-color palette and UI chrome in otter-settings under the **Terminal** tab, or edit `~/.config/otter-shell/otter-term.conf`:
+Set otter-term's 16-color palette and UI chrome in otter-settings under **Terminal**, or in `~/.config/otter-shell/otter-term.conf`:
 
 ```conf
 colors_background = "#1e1e2e"
@@ -41,11 +41,11 @@ colors_cyan    = "#94e2d5"
 colors_white   = "#bac2de"
 ```
 
-Terminal color changes hot-reload on save. Open terminals update right away.
+Terminal colors hot-reload on save.
 
 ## App-level color overrides
 
-Individual apps can override the shared theme with their own color keys. In otter-transcribe's **Transcribe** tab (or `otter-transcribe.conf`):
+Apps can override the shared theme with their own color keys. In otter-transcribe's **Transcribe** tab (or `otter-transcribe.conf`):
 
 ```conf
 background_color  = ""
@@ -55,13 +55,13 @@ graph_peak_color  = ""
 text_color        = ""
 ```
 
-Leave a value as an empty string `""` to inherit from the theme. Set a hex color to override for that app only.
+Empty string `""` inherits from the theme. Set a hex color to override for that app only.
 
 ## Font
 
-The default terminal font is `IoskeleyMono Nerd Font`, bundled in `otter-shell-fonts` at `/usr/share/fonts/otter-shell/`.
+Default terminal font: `IoskeleyMono Nerd Font`, bundled in `otter-shell-fonts` at `/usr/share/fonts/otter-shell/`.
 
-Change the font in otter-settings under **Terminal**, or in `otter-term.conf`:
+Change it in otter-settings under **Terminal**, or in `otter-term.conf`:
 
 ```conf
 font_family    = "JetBrains Mono"
@@ -69,10 +69,10 @@ font_size      = 14
 font_dpi_aware = true
 ```
 
-`font_dpi_aware = true` scales the font and padding on high-DPI displays. An empty `font_family = ""` falls back to the bundled Nerd Font.
+`font_dpi_aware = true` scales font and padding on high-DPI displays. Empty `font_family = ""` falls back to the bundled Nerd Font.
 
 ## Built-in presets
 
-Available in the otter-settings theme browser:
+In the otter-settings theme browser:
 
 Otter Shell, Otter Shell Islands, Catppuccin (Mocha/Latte/Frappe/Macchiato), Nord, Gruvbox, Dracula, Tokyo Night, One Dark.

@@ -4,7 +4,7 @@ sidebarTitle: "On-screen display"
 description: "Short-lived overlays for volume, brightness, and lock-key state."
 ---
 
-`otter-osd` shows brief on-screen indicators for volume, brightness, and lock keys. Run it as a daemon; scripts, the bar, and compositor keybindings send commands over a UNIX socket.
+`otter-osd` shows brief overlays for volume, brightness, and lock keys. Run it as a daemon. Scripts, the bar, and compositor keybindings send commands over a UNIX socket.
 
 ## Usage
 
@@ -29,14 +29,14 @@ otter-osd scroll-lock
 
 The optional step value (default `5`) applies to volume and brightness commands.
 
-[otter-timer](/apps/otter-timer) and [otter-rec](/apps/otter-rec) also talk to `otter-osd` for completion notifications.
+[otter-timer](/apps/otter-timer) and [otter-rec](/apps/otter-rec) also use `otter-osd` for completion notifications.
 
 ## Architecture
 
 One binary, two roles:
 
-- **Daemon** (no args) — Connects to Wayland, creates a UNIX datagram socket, renders overlays on demand. Surfaces are created lazily and destroyed after timeout so idle RAM stays near zero.
-- **Client** (with args) — Sends a command to the daemon and exits.
+- **Daemon** (no args): Connects to Wayland, opens a UNIX datagram socket, renders overlays on demand. Surfaces are created lazily and destroyed after timeout so idle RAM stays near zero.
+- **Client** (with args): Sends a command to the daemon and exits.
 
 Socket path: `$XDG_RUNTIME_DIR/otter-shell/osd-{WAYLAND_DISPLAY}.sock`
 

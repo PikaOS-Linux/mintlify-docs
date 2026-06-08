@@ -1,10 +1,10 @@
 ---
-title: "Bar Clock Calendar and Agenda Display with otter-cal"
+title: "otter-cal"
 sidebarTitle: "Calendar"
 description: "Print a month grid and agenda list to stdout. Works with bar clock popovers and plain-text agenda files."
 ---
 
-otter-cal powers the calendar popover on Otter Shell's status bar clock. It prints a month grid and a bounded agenda list to stdout. Left-click the clock widget and that output shows up as a popover. You can also pipe it into any bar or launcher that displays text, or run it in a terminal.
+otter-cal powers the calendar popover on Otter Shell's status bar clock. It prints a month grid and a bounded agenda list to stdout. Left-click the clock widget and that output shows up as a popover. Pipe it into any bar or launcher that displays text, or run it in a terminal.
 
 ## Usage
 
@@ -17,14 +17,14 @@ otter-cal --next 1                                     # next month
 
 ## Agenda File Format
 
-otter-cal reads events from a plain-text agenda file. Each line has a date in `YYYY-MM-DD` format, a space, and the event description. One event per line:
+Each line has a date in `YYYY-MM-DD` format, a space, and the event description. One event per line:
 
 ```text
 2026-06-15 Team retrospective
 2026-06-20 Release day
 ```
 
-Pass the file path with `--agenda`, or set `agenda_path` in the config file to load it automatically.
+Pass the file path with `--agenda`, or set `agenda_path` in the config file.
 
 ## Bar Integration
 
@@ -38,10 +38,10 @@ Replace the value with any command whose stdout the bar should display. A wrappe
 
 ## Configuration
 
-otter-cal reads its settings from `~/.config/otter-shell/otter-cal.conf`:
+otter-cal reads `~/.config/otter-shell/otter-cal.conf`:
 
 ```conf
 agenda_path = ""
 ```
 
-When `agenda_path` is empty, otter-cal runs without agenda data. Set it to the absolute path of your agenda file to load events without passing `--agenda` every time.
+- `agenda_path`: absolute path to your agenda file. Empty runs without agenda data.

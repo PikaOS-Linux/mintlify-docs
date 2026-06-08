@@ -4,7 +4,7 @@ sidebarTitle: "Wallpaper"
 description: "Wallpaper daemon with per-monitor paths, rotation, and lock screen sync."
 ---
 
-`otter-wallpaper` draws backgrounds on the Wayland background layer using `zwlr_layer_shell_v1`. It decodes each image, draws to an SHM buffer, then frees the decoded data right away to keep memory use low.
+`otter-wallpaper` draws backgrounds on the Wayland background layer via `zwlr_layer_shell_v1`. Each image is decoded to an SHM buffer, then freed to keep memory use low.
 
 ## Usage
 
@@ -12,7 +12,7 @@ description: "Wallpaper daemon with per-monitor paths, rotation, and lock screen
 otter-wallpaper
 ```
 
-Autostart at login — see [Session setup](/desktop/session-setup).
+Autostart at login: see [Session setup](/desktop/session-setup).
 
 ## Configuration
 
@@ -42,17 +42,17 @@ Per-display overrides use `display_0_name`, `display_0_path`, through `display_7
 
 ## Lockscreen integration
 
-When the wallpaper changes, `otter-wallpaper` writes the current path for each output to:
+On wallpaper change, `otter-wallpaper` writes the current path per output to:
 
 ```
 $XDG_RUNTIME_DIR/otter-shell/wallpaper-state
 ```
 
-Format: one `output_name=path` line per output. [otter-lock](/desktop/otter-lock) reads this file to show the same wallpaper behind the lock screen.
+Format: one `output_name=path` line per output. [otter-lock](/desktop/otter-lock) reads this file for the lock screen background.
 
 ## Niri overview
 
-When `overview_enabled = true`, a blurred layer surface is created with namespace `otter-wallpaper-overview`. Add to your Niri config:
+With `overview_enabled = true`, a blurred layer surface is created with namespace `otter-wallpaper-overview`. Add to your Niri config:
 
 ```kdl
 layer-rule {

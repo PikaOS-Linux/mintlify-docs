@@ -1,14 +1,14 @@
 ---
-title: "Set up your Otter Shell session"
+title: "Session setup"
 sidebarTitle: "Session setup"
 description: "What to autostart at login, how to bind hotkeys, and where otter-greeter fits in."
 ---
 
-Otter Shell sits on your Wayland compositor. The metapackage installs the shell apps, but it does not set up your compositor for you. This page covers what to start at login and how to wire hotkeys.
+Otter Shell runs on your Wayland compositor. The metapackage installs apps; it does not configure your compositor. This page covers autostart and hotkeys.
 
 ## What runs at login
 
-For a working desktop, you usually autostart these daemons:
+Autostart these for a working desktop:
 
 | Daemon | Required | Purpose |
 |--------|----------|---------|
@@ -23,7 +23,7 @@ For a working desktop, you usually autostart these daemons:
 | `otter-jade` | Optional | Desktop pet |
 | `otter-transcribe` | Optional | Speech transcription (needs `otter-shell-extras`) |
 
-One-shot apps like `otter-launcher`, `otter-logout`, and `otter-screenshot` run from hotkeys or the shell. You do not autostart them.
+Do not autostart one-shot apps: `otter-launcher`, `otter-logout`, `otter-screenshot`. Bind hotkeys instead.
 
 ## Compositor autostart examples
 
@@ -74,29 +74,25 @@ spawn-at-startup "otter-weather" "--watch" "900" "--write-cache"
 
 ## Display manager
 
-`otter-greeter` is Otter Shell's Wayland display manager. Two parts:
+`otter-greeter` is Otter Shell's Wayland display manager:
 
-- `otter-greeterd` — root daemon for PAM, logind, and session launch
-- `otter-greeter-ui` — login UI on Hyprland (greeter only, not your user session)
+- `otter-greeterd`: root daemon for PAM, logind, and session launch
+- `otter-greeter-ui`: login UI on Hyprland (greeter only, not your user session)
 
-Enable after installation:
+Enable after install:
 
 ```bash
 sudo systemctl enable otter-greeter.service
 ```
 
-Configuration: `/etc/otter-shell/otter-greeter.conf`. See [otter-greeter](/desktop/otter-greeter) for details.
+Config: `/etc/otter-shell/otter-greeter.conf`. See [otter-greeter](/desktop/otter-greeter).
 
 ## Session security flow
 
-Lock and auth stack like this:
-
-1. **otter-idle** — Detects inactivity; runs `loginctl lock-session` or DPMS commands
-2. **otter-lock** — Session lockscreen via `ext-session-lock-v1`
-3. **otter-logout** — Power menu for lock, logout, suspend, reboot, shutdown
-4. **otter-polkit** — Password dialog when apps request elevated privileges
-
-Typical hotkey bindings:
+1. **otter-idle**: Detects inactivity; runs `loginctl lock-session` or DPMS
+2. **otter-lock**: Session lockscreen via `ext-session-lock-v1`
+3. **otter-logout**: Power menu for lock, logout, suspend, reboot, shutdown
+4. **otter-polkit**: Password dialog for elevated privileges
 
 | Action | Command |
 |--------|---------|
@@ -112,17 +108,14 @@ Typical hotkey bindings:
 | Screenshot, pick, shot | `ext_image_copy_capture_v1` |
 | Idle daemon | `ext-idle-notify-v1` (optional; compositor IPC fallbacks exist) |
 
-If something does not work, check that your compositor supports the protocol first.
+If something fails, check compositor protocol support first.
 
 ## Next steps
 
-## Configuration
-
 <Tip>
-  After autostarting shell daemons, open **`otter-settings`** to change bar layout, theme, terminal fonts, and the rest. Easier than hand-editing `.conf` files.
+  After autostart, open **`otter-settings`** for bar layout, theme, and terminal fonts.
 </Tip>
 
-- [otter-settings](/desktop/otter-settings) — graphical config editor (recommended)
-- [Keybinds](/configuration/keybinds) — compositor global hotkey reference
-- [otter-bar](/desktop/otter-bar) — Configure the status bar
-- [otter-settings](/desktop/otter-settings) — Graphical config editor
+- [otter-settings](/desktop/otter-settings): graphical config editor
+- [Keybinds](/configuration/keybinds): compositor hotkey reference
+- [otter-bar](/desktop/otter-bar): status bar setup

@@ -4,7 +4,7 @@ sidebarTitle: "Settings app"
 description: "Graphical editor for Otter Shell app configs, themes, and bar layout."
 ---
 
-**`otter-settings` is how most people configure Otter Shell.** Tabbed UI for every app config, a theme browser with live preview, and drag-and-drop bar layout. You can still edit `.conf` files in a terminal if you prefer that.
+**`otter-settings`** is the default way to configure Otter Shell. Tabs for every app, a theme browser, and drag-and-drop bar layout. Prefer `$EDITOR`? Same files either way.
 
 ## Usage
 
@@ -15,29 +15,18 @@ otter-settings
 Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotkey (for example `Super+Comma`).
 
 <Note>
-  Changes write directly to `~/.config/otter-shell/*.conf`. Running apps pick them up via inotify. Click **Apply** and most daemons reload without a restart.
+  Writes to `~/.config/otter-shell/*.conf`. Running apps reload via inotify after **Apply**.
 </Note>
 
 ## Why use otter-settings
 
 | Benefit | Detail |
 |---------|--------|
-| No syntax to learn | Toggles, dropdowns, color swatches, and number steppers instead of raw key-value files |
-| Search | Find any config field by key, label, value, or section |
-| Bar layout | Drag widget chips instead of editing `layout_left` strings by hand |
-| Themes | Browse and preview all 12 presets before applying |
-| Safe saves | Keeps comments, field order, and custom fields when writing configs |
-
-Text editors still work. otter-settings and `$EDITOR` read the same files.
-
-## Features
-
-- Tab-based UI for every Otter Shell app config
-- Theme browser with live preview of all 12 built-in presets
-- Drag-and-drop widget layout editor for [otter-bar](/desktop/otter-bar)
-- Custom button creation and deletion for the bar
-- Clipboard paste (Ctrl+V) in text fields via Wayland data device
-- Hot reload — saved changes are picked up by running apps via inotify
+| No syntax | Toggles, dropdowns, color swatches, and steppers instead of key-value files |
+| Search | Find fields by key, label, value, or section |
+| Bar layout | Drag widget chips instead of editing `layout_left` strings |
+| Themes | Preview all 12 presets before applying |
+| Safe saves | Keeps comments, field order, and custom fields |
 
 ## Config files managed
 
@@ -58,12 +47,14 @@ Text editors still work. otter-settings and `$EDITOR` read the same files.
 | Voice | `otter-vox.conf` |
 | Theme | `theme.conf` |
 
+Also includes drag-and-drop bar layout, custom bar buttons, and clipboard paste (Ctrl+V) in text fields via Wayland data device.
+
 ## What otter-settings does not configure
 
-Global compositor hotkeys (launcher, screenshot, lock) live in your Wayland compositor config. otter-settings only covers Otter Shell app settings. See [Keybinds](/configuration/keybinds).
+Compositor hotkeys (launcher, screenshot, lock) belong in your Wayland compositor config. See [Keybinds](/configuration/keybinds).
 
-`otter-screenshot` has no persistent config file. Use CLI flags only.
+`otter-screenshot` has no persistent config file. CLI flags only.
 
 ## Theme presets
 
-Built-in presets include Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, and One Dark. See [Themes](/configuration/themes) for color token details.
+Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, and One Dark. See [Themes](/configuration/themes) for color token details.

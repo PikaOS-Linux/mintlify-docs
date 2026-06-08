@@ -4,7 +4,7 @@ sidebarTitle: "Idle daemon"
 description: "Idle timeouts, DPMS control, and systemd-logind sleep hooks."
 ---
 
-`otter-idle` watches for inactivity and runs commands you configure, usually `loginctl lock-session` or turning displays off. It also hooks into systemd-logind for sleep events and screen saver inhibition.
+`otter-idle` watches for inactivity and runs configured commands, usually `loginctl lock-session` or display power-off. It hooks into systemd-logind for sleep and screen saver inhibition.
 
 ## Usage
 
@@ -12,7 +12,7 @@ description: "Idle timeouts, DPMS control, and systemd-logind sleep hooks."
 otter-idle
 ```
 
-Autostart at login — see [Session setup](/desktop/session-setup).
+Autostart at login: see [Session setup](/desktop/session-setup).
 
 ## Configuration
 
@@ -67,12 +67,12 @@ DPMS backend selection:
 
 Three layers can block idle actions:
 
-1. **Wayland-native** (`zwp_idle_inhibit_manager_v1`) — handled by compositor
-2. **D-Bus** (`org.freedesktop.ScreenSaver`) — tracked by otter-idle (video players, etc.)
-3. **systemd** (`loginctl inhibit`) — checked via logind ListInhibitors
+1. **Wayland-native** (`zwp_idle_inhibit_manager_v1`): handled by compositor
+2. **D-Bus** (`org.freedesktop.ScreenSaver`): tracked by otter-idle (video players, etc.)
+3. **systemd** (`loginctl inhibit`): checked via logind ListInhibitors
 
 Set `ignore_dbus_inhibit = true` or `ignore_systemd_inhibit = true` to skip those checks.
 
 ## Logind integration
 
-Responds to logind `Lock`, `Unlock`, and `PrepareForSleep` signals. Default `lock_cmd` ensures [otter-lock](/desktop/otter-lock) is available when a lock is requested.
+Responds to logind `Lock`, `Unlock`, and `PrepareForSleep` signals. Default `lock_cmd` keeps [otter-lock](/desktop/otter-lock) available when a lock is requested.

@@ -1,5 +1,5 @@
 ---
-title: "otter-clip: Wayland Clipboard Manager for Otter Shell"
+title: "otter-clip"
 sidebarTitle: "Clipboard"
 description: "Clipboard manager with searchable history. Access entries via Super+V popup or CLI commands."
 ---
@@ -8,7 +8,7 @@ otter-clip is Otter Shell's clipboard manager. A long-lived daemon watches the W
 
 ## Starting the Daemon
 
-Run the daemon once per session to start monitoring clipboard changes.
+Run the daemon once per session.
 
 ```bash
 otter-clip daemon    # start monitoring clipboard selections
@@ -19,8 +19,6 @@ otter-clip daemon    # start monitoring clipboard selections
 </Tip>
 
 ## CLI Commands
-
-History management goes through `otter-clip` subcommands. You can search and copy entries from the terminal without opening the popup.
 
 | Command | Description |
 |---|---|
@@ -61,7 +59,7 @@ otter-clip reads `~/.config/otter-shell/otter-clip.conf` at daemon startup.
 history_path = ""
 ```
 
-Leave `history_path` empty to use the default at `$XDG_CACHE_HOME/otter-shell/otter-clip-history`. Set an absolute path to store history somewhere else, like a volume that survives reboots.
+- `history_path`: absolute path for history storage. Empty uses `$XDG_CACHE_HOME/otter-shell/otter-clip-history`
 
 ## Privacy and Password Managers
 
@@ -71,4 +69,4 @@ Leave `history_path` empty to use the default at `$XDG_CACHE_HOME/otter-shell/ot
 
 ## Image Support
 
-otter-clip accepts text offers and common image MIME types from the clipboard. Images are stored as bounded blob files with MIME type and path metadata, not decoded and re-encoded. The otter-launcher popup can show image thumbnails inline when you open clipboard history with Super+V. No extra conversion step at display time.
+otter-clip accepts text offers and common image MIME types from the clipboard. Images are stored as bounded blob files with MIME type and path metadata, not decoded and re-encoded. The otter-launcher popup can show image thumbnails inline when you open clipboard history with Super+V.

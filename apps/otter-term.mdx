@@ -1,14 +1,14 @@
 ---
-title: "Otter Terminal: Wayland Terminal with Tabs and Splits"
+title: "otter-term"
 sidebarTitle: "Terminal"
 description: "Native Wayland terminal for Otter Shell. Tabs, split panes, shell integration, URL handling, and IME support."
 ---
 
-`otter-term` is Otter Shell's built-in terminal emulator. It uses `libghostty-vt` for terminal emulation and Otter libraries for Wayland windowing, PTY handling, input, rendering, configuration, and clipboard. You get tabs, horizontal and vertical splits, shell integration via OSC sequences, and IME support. No X11 dependency.
+`otter-term` is Otter Shell's built-in terminal emulator. It uses `libghostty-vt` for terminal emulation and Otter libraries for Wayland windowing, PTY handling, input, rendering, configuration, and clipboard. Tabs, horizontal and vertical splits, shell integration via OSC sequences, and IME support. No X11 dependency.
 
 ## Launching
 
-Pass a directory path to open the terminal there, or use `-e` to run a command instead of your default shell.
+Pass a directory path to open there, or use `-e` to run a command instead of your default shell.
 
 ```bash
 otter-term                                      # open with default shell
@@ -44,7 +44,7 @@ otter-term -- nano file.txt                     # pass arguments to command
 
 ## Configuration
 
-`otter-term` reads its configuration from `~/.config/otter-shell/otter-term.conf`. The file loads on startup and **hot-reloads whenever you save it**. Font, colors, padding, and grid size update without restarting the terminal.
+`otter-term` reads `~/.config/otter-shell/otter-term.conf`. The file loads on startup and **hot-reloads whenever you save it**. Font, colors, padding, and grid size update without restarting the terminal.
 
 ```conf
 general_shell = ""
@@ -80,7 +80,7 @@ bell_visual = false
 ```
 
 <Note>
-  Setting `general_shell = ""` tells `otter-term` to use `$SHELL`, falling back to `/bin/sh` if that variable is unset. The default `general_term` value `xterm-256color` works best for remote hosts over SSH. Only set it to `xterm-ghostty` when the target host has that terminfo entry installed.
+  `general_shell = ""` uses `$SHELL`, falling back to `/bin/sh` if unset. The default `general_term` value `xterm-256color` works best for remote hosts over SSH. Only set it to `xterm-ghostty` when the target host has that terminfo entry installed.
 </Note>
 
 <Tip>

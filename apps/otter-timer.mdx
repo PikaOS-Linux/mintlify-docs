@@ -1,10 +1,10 @@
 ---
-title: "Run Countdown Timers and Get Notified with otter-timer"
+title: "otter-timer"
 sidebarTitle: "Timer"
 description: "Count down a duration and get a desktop ping when it finishes. Flexible duration strings, custom messages, and completion commands."
 ---
 
-otter-timer counts down a duration and pings the desktop through `otter-osd` when available. It always prints `timer done` on completion. You can set a custom notification message or run a shell command when the timer ends.
+otter-timer counts down a duration and pings the desktop through `otter-osd` when available. It always prints `timer done` on completion. Set a custom notification message or run a shell command when the timer ends.
 
 ## Usage
 
@@ -28,7 +28,7 @@ otter-timer 2h45m30s
 
 ## Configuration
 
-otter-timer reads its settings from `~/.config/otter-shell/otter-timer.conf`:
+otter-timer reads `~/.config/otter-shell/otter-timer.conf`:
 
 ```conf
 default_duration = ""
@@ -37,12 +37,10 @@ command = ""
 notify = true
 ```
 
-| Key | Description |
-|---|---|
-| `default_duration` | Duration to use when none is provided on the command line |
-| `message` | Notification message shown when the timer finishes |
-| `command` | Shell command to run after the timer completes |
-| `notify` | Set to `false` to suppress the desktop notification |
+- `default_duration`: duration when none is provided on the command line
+- `message`: notification message when the timer finishes
+- `command`: shell command to run after completion
+- `notify`: set to `false` to suppress the desktop notification
 
 <Tip>
 Set `default_duration` to your usual timer length, like `25m` for Pomodoro, so you can run `otter-timer` with no arguments.

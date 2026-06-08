@@ -4,11 +4,11 @@ sidebarTitle: "Creating an app"
 description: "Start a Wayland app on the Otter stack: dependencies, UI patterns, and config."
 ---
 
-This guide covers how to build a new Wayland application on the Otter Shell stack.
+Build a new Wayland app on the Otter Shell stack.
 
 ## 1. Create the project
 
-Initialize a Zig project and add Otter library dependencies in `build.zig.zon`:
+Initialize a Zig project and add Otter dependencies in `build.zig.zon`:
 
 ```json
 {
@@ -27,7 +27,7 @@ Initialize a Zig project and add Otter library dependencies in `build.zig.zon`:
 }
 ```
 
-When building outside the monorepo, fetch libraries by URL:
+Outside the monorepo, fetch libraries by URL:
 
 ```bash
 zig fetch --save git+https://git.pika-os.com/otter-shell/otter-conf
@@ -53,20 +53,20 @@ exe.root_module.addImport("otter_render", otter_render.module("otter_render"));
 - Create a `zwlr_layer_shell_v1` surface
 - Describe UI with **Surface Description** (`otter-ui` `UiFrame`)
 - One-shot: use `ArenaAllocator`, exit after user action
-- Example references: `otter-launcher`, `otter-logout`
+- Examples: `otter-launcher`, `otter-logout`
 
 ### Persistent daemon (bar, notifications, wallpaper style)
 
 - Long-running event loop polling Wayland + D-Bus/inotify FDs
 - Use `GeneralPurposeAllocator`
 - Hot-reload config via `otter-conf.Watcher`
-- Example references: `otter-bar`, `otter-notifications`
+- Examples: `otter-bar`, `otter-notifications`
 
 ### CLI tool (calc, weather, emoji style)
 
-- Minimal dependencies: `otter-tools-core` + `otter-conf`
-- No Wayland window unless adding a `--layer` popup mode
-- Example references: `otter-calc`, `otter-weather`
+- Minimal deps: `otter-tools-core` + `otter-conf`
+- No Wayland window unless you add a `--layer` popup mode
+- Examples: `otter-calc`, `otter-weather`
 
 ## 4. Build the UI with Surface Description
 
@@ -98,11 +98,11 @@ try frame.finish();
 render.quad_renderer.rasterize(ui.render.DefaultCommandList, &state.commands, surface, null, null, true);
 ```
 
-Use `state.hitTest(point)` for pointer input. You do not need parallel hit arrays.
+Use `state.hitTest(point)` for pointer input. No parallel hit arrays needed.
 
 ## 5. Add configuration
 
-Define a config struct and use `otter-conf` to parse it:
+Define a config struct and parse it with `otter-conf`:
 
 ```zig
 const otter_conf = @import("otter_conf");
@@ -117,9 +117,9 @@ var config = try otter_conf.load(Config, allocator, config_path, .{});
 defer otter_conf.freeConfig(Config, allocator, &config);
 ```
 
-Store the config at `~/.config/otter-shell/my-app.conf`. On first run, normalize the file (add missing defaults, strip unknown keys).
+Store config at `~/.config/otter-shell/my-app.conf`. On first run, normalize the file (add missing defaults, strip unknown keys).
 
-For typed configs shared with `otter-settings`, add struct definitions to `otter-config-types` and register a tab in `otter-settings/src/tabs.zig`.
+For typed configs shared with `otter-settings`, add structs to `otter-config-types` and register a tab in `otter-settings/src/tabs.zig`.
 
 ## 6. Apply theming
 
@@ -130,7 +130,7 @@ const theme = try otter_theme.loader.loadTheme(allocator);
 defer theme.deinit(allocator);
 ```
 
-Widget config fields should use `?Color = null` and resolve via `config.field orelse theme.token`. Precedence: widget config → `theme.conf` → compiled defaults.
+Widget config fields should use `?Color = null` and resolve via `config.field orelse theme.token`. Precedence: widget config, then `theme.conf`, then compiled defaults.
 
 ## 7. Install a .desktop file
 

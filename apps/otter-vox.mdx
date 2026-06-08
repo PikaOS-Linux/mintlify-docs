@@ -1,5 +1,5 @@
 ---
-title: "On-Device Text-to-Speech with Kokoro TTS via otter-vox"
+title: "otter-vox"
 sidebarTitle: "Text to Speech"
 description: "Convert text to speech on-device with an embedded Kokoro TTS model. Requires the otter-shell-extras metapackage."
 ---
@@ -54,14 +54,14 @@ otter-vox ships with Kokoro voice files embedded in the binary, covering several
 
 ## Output Options
 
-- **Default** plays audio through your system audio output.
-- **`--no-play`** writes a raw WAV stream to stdout for piping to another program.
-- **`-o PATH` / `--output PATH`** saves audio to a file instead of (or alongside) playing it.
-- **`-o speech.wav` with playback enabled** saves the file and plays it at the same time.
+- **Default**: plays audio through your system audio output
+- **`--no-play`**: writes a raw WAV stream to stdout for piping to another program
+- **`-o PATH` / `--output PATH`**: saves audio to a file instead of (or alongside) playing it
+- **`-o speech.wav` with playback enabled**: saves the file and plays it at the same time
 
 ## Configuration
 
-otter-vox reads its configuration from `~/.config/otter-shell/otter-vox.conf`.
+otter-vox reads `~/.config/otter-shell/otter-vox.conf`.
 
 ```conf
 model_dir = ""
@@ -71,4 +71,8 @@ voice = "bm_george"
 cpu_threads = 4
 ```
 
-Setting `model_dir = ""` uses the embedded model, extracted automatically at runtime. Set `model_dir` to a directory path to use your own Kokoro model and voice files.
+- `model_dir`: empty uses the embedded model, extracted at runtime. Set a directory path to use your own Kokoro model and voice files
+- `output_path`: output destination (`-` for stdout)
+- `playback`: play audio after synthesis
+- `voice`: default voice name
+- `cpu_threads`: thread count for inference

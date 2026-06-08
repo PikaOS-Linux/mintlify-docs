@@ -4,18 +4,18 @@ sidebarTitle: "Status bar"
 description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other widgets."
 ---
 
-`otter-bar` is the Otter Shell status bar. It anchors to the top or bottom of each output via `zwlr_layer_shell_v1` and reloads its own config and the shared theme without restarting.
+`otter-bar` is the Otter Shell status bar. Anchors to the top or bottom of each output via `zwlr_layer_shell_v1`. Reloads config and theme without a restart.
 
 ## Features
 
 - Workspace indicator and switcher (otter-tag, Mango/dwl IPC, ext-workspace)
 - Active window title with icon
 - Clock with timezone-aware formatting and date tooltip
-- Battery status via UPower (auto-hides when no battery)
-- Brightness control from `/sys/class/backlight/`
+- Battery via UPower (auto-hides when no battery)
+- Brightness from `/sys/class/backlight/`
 - Power profiles (power-profiles-daemon / tuned-ppd)
 - CPU, temperature, memory, and network widgets
-- Volume control via PipeWire with scroll-to-adjust and device popup
+- Volume via PipeWire with scroll-to-adjust and device popup
 - MPRIS media player with album art
 - System tray (StatusNotifierItem) with context menus
 - Custom button widgets with icon and command support
@@ -27,16 +27,16 @@ description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other
 otter-bar
 ```
 
-Add to compositor autostart — see [Session setup](/desktop/session-setup).
+Add to compositor autostart: see [Session setup](/desktop/session-setup).
 
-The default menu button runs `otter-launcher`. Set `button_menu_command` in the bar config to change that.
+The menu button runs `otter-launcher` by default. Change it with `button_menu_command`.
 
 ## Configuration
 
-Config file: `~/.config/otter-shell/otter-bar.conf` (fallback: `/etc/otter-shell/otter-bar.conf`). A default config is created on first run.
+Config: `~/.config/otter-shell/otter-bar.conf` (fallback: `/etc/otter-shell/otter-bar.conf`). Created on first run.
 
 <Tip>
-  Use [otter-settings](/desktop/otter-settings) to drag widgets around instead of editing layout strings in a file.
+  Drag widgets in [otter-settings](/desktop/otter-settings) instead of editing layout strings.
 </Tip>
 
 Key settings:
@@ -65,20 +65,18 @@ Add `weather` to a layout section, then run the cache watcher:
 otter-weather --watch 900 --write-cache &
 ```
 
-Configure coordinates in `~/.config/otter-shell/otter-weather.conf`. See [otter-weather](/apps/otter-weather).
+Set coordinates in `~/.config/otter-shell/otter-weather.conf`. See [otter-weather](/apps/otter-weather).
 
 ### Calendar popover
 
-Set the clock widget's calendar command to invoke [otter-cal](/apps/otter-cal):
+Point the clock widget at [otter-cal](/apps/otter-cal):
 
 ```conf
 clock_calendar_command = otter-cal --layer
 ```
 
-Use [otter-settings](/desktop/otter-settings) for drag-and-drop widget layout editing.
-
 ## Dependencies
 
 - Wayland compositor with `zwlr_layer_shell_v1`
-- D-Bus (UPower, MPRIS, system tray) — disable with `-Denable_dbus=false` at build time
-- PipeWire (volume widget) — disable with `-Denable_pipewire=false` at build time
+- D-Bus (UPower, MPRIS, system tray): disable with `-Denable_dbus=false` at build time
+- PipeWire (volume widget): disable with `-Denable_pipewire=false` at build time

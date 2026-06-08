@@ -4,7 +4,7 @@ sidebarTitle: "Polkit agent"
 description: "Session polkit agent with a password dialog and optional fingerprint auth."
 ---
 
-`otter-polkit` is the polkit authentication agent for your session. When an app needs elevated privileges (package installs, disk operations, and the like), you get a password dialog on a layer-shell overlay.
+`otter-polkit` is the session polkit agent. Elevated-privilege prompts (package installs, disk operations) show as a password dialog on a layer-shell overlay.
 
 ## Usage
 
@@ -12,7 +12,7 @@ description: "Session polkit agent with a password dialog and optional fingerpri
 otter-polkit
 ```
 
-Autostart at login — see [Session setup](/desktop/session-setup).
+Autostart at login: see [Session setup](/desktop/session-setup).
 
 Test with:
 
@@ -39,7 +39,7 @@ max_retries = 3
 enable_fingerprint = true
 ```
 
-Colors inherit from [theme.conf](/configuration/themes) when not explicitly set.
+Colors inherit from [theme.conf](/configuration/themes) when not set.
 
 ## Keybindings
 
@@ -49,7 +49,7 @@ Colors inherit from [theme.conf](/configuration/themes) when not explicitly set.
 | Enter | Submit password |
 | Ctrl+U | Clear password field |
 
-Fingerprint authentication works via fprintd when `enable_fingerprint = true` and fprintd is configured for the user.
+Fingerprint auth works via fprintd when `enable_fingerprint = true` and fprintd is configured for the user.
 
 ## Dependencies
 

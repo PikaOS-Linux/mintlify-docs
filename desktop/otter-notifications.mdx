@@ -4,7 +4,7 @@ sidebarTitle: "Notifications"
 description: "Wayland notification daemon for anything that uses freedesktop Notifications over D-Bus."
 ---
 
-`otter-notifications` implements the `org.freedesktop.Notifications` D-Bus service. Apps that call `notify-send` or the standard notification API work without changes.
+`otter-notifications` implements `org.freedesktop.Notifications` on D-Bus. Apps using `notify-send` or the standard notification API work without changes.
 
 ## Usage
 
@@ -12,7 +12,7 @@ description: "Wayland notification daemon for anything that uses freedesktop Not
 otter-notifications
 ```
 
-Autostart at login — see [Session setup](/desktop/session-setup).
+Autostart at login: see [Session setup](/desktop/session-setup).
 
 ## Sending notifications
 
@@ -47,11 +47,11 @@ Fallback: `/etc/otter-shell/notifications.conf`
 | `gap` | `8` | Vertical gap between notifications |
 | `icon_size` | `48` | Icon size in pixels |
 
-Colors inherit from [theme.conf](/configuration/themes) when not set explicitly.
+Colors inherit from [theme.conf](/configuration/themes) when not set.
 
 ## Interaction
 
-- **Left click** — Dismiss and activate the source application
-- **Right click** — Dismiss without activating
+- **Left click**: Dismiss and activate the source application
+- **Right click**: Dismiss without activating
 
 Config and theme hot-reload via inotify.

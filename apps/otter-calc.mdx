@@ -1,5 +1,5 @@
 ---
-title: "Quick Calculations at the Command Line with otter-calc"
+title: "otter-calc"
 sidebarTitle: "Calculator"
 description: "Evaluate math expressions from the terminal or launcher. Pass --copy to send the result to clipboard via otter-copy."
 ---
@@ -18,13 +18,13 @@ otter-calc --copy '(2 + 3) * 4' # evaluate and copy result
 
 ## Configuration
 
-otter-calc reads its configuration from `~/.config/otter-shell/otter-calc.conf`.
+otter-calc reads `~/.config/otter-shell/otter-calc.conf`.
 
 ```conf
 copy_result = false
 ```
 
-Set `copy_result = true` to always copy the result without passing `--copy` each time.
+- `copy_result`: `true` always copies the result without passing `--copy`
 
 <Note>
   `--copy` uses the shared Otter clipboard helper (`otter-copy`). In packaged

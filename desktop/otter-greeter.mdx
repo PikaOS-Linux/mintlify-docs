@@ -4,16 +4,16 @@ sidebarTitle: "Display manager"
 description: "Wayland display manager with PAM login, fingerprint auth, and AccountsService user list."
 ---
 
-`otter-greeter` handles login before your user compositor session starts.
+`otter-greeter` runs before your user compositor session starts.
 
 ## Components
 
 | Binary | Role |
 |--------|------|
-| `otter-greeterd` | Root daemon — PAM, logind seats, AccountsService, IPC, session launch |
+| `otter-greeterd` | Root daemon: PAM, logind seats, AccountsService, IPC, session launch |
 | `otter-greeter-ui` | Unprivileged Wayland login UI |
 
-The greeter UI runs on **Hyprland** for the login screen only. Your session compositor is separate. The greeter does not pick one for you.
+The greeter UI runs on **Hyprland** for the login screen only. Your session compositor is separate.
 
 ## Installation
 
@@ -50,7 +50,7 @@ Wayland sessions are discovered from configured `.desktop` directories. X11 sess
 
 - PAM handles password authentication
 - Fingerprint auth is PAM-controlled (via fprintd when configured)
-- Autologin is attempted once per daemon process per seat; failure falls back to interactive login
+- Autologin runs once per daemon process per seat; failure falls back to interactive login
 - Expired-password flows use PAM conversation prompts on the auth surface
 - User listing prefers AccountsService; falls back to `/etc/passwd` for normal login users
 

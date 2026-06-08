@@ -1,5 +1,5 @@
 ---
-title: "Weather Forecasts and Bar Widget with otter-weather"
+title: "otter-weather"
 sidebarTitle: "Weather"
 description: "Fetch current conditions and a 7-day forecast from Open-Meteo. Feed the bar widget, open a popup, or print to stdout."
 ---
@@ -36,7 +36,7 @@ The `--layer` flag opens the cached forecast in a small layer-shell popup that c
 
 ## Configuration
 
-otter-weather reads its configuration from `~/.config/otter-shell/otter-weather.conf`.
+otter-weather reads `~/.config/otter-shell/otter-weather.conf`.
 
 ```conf
 latitude = 51.5072
@@ -47,7 +47,10 @@ write_cache = false
 watch_seconds = 0
 ```
 
-The default location is London. Set `latitude` and `longitude` to your city's coordinates. Leave `cache_path` empty for the default XDG cache location. In `--watch` mode the config file reloads between refreshes, so you can change location without restarting the daemon.
+- `latitude` / `longitude`: your location (default is London)
+- `cache_path`: cache file location. Empty uses the default XDG cache location
+- `write_cache`: write cache after fetch
+- `watch_seconds`: refresh interval in watch mode. Config reloads between refreshes, so you can change location without restarting the daemon
 
 <Tip>
   Find your coordinates at [Open-Meteo's geocoding API](https://open-meteo.com/en/docs/geocoding-api) or use a site like [latlong.net](https://www.latlong.net).

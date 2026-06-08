@@ -1,10 +1,10 @@
 ---
-title: "Quick start with Otter Shell"
+title: "Quick start"
 sidebarTitle: "Quick Start"
-description: "Launch your terminal, autostart shell daemons, and try screenshot, clipboard, and notes in under five minutes."
+description: "Launch the terminal, autostart shell daemons, and try screenshot, clipboard, and notes after install."
 ---
 
-A short walkthrough right after install. You need a Wayland compositor running first. No compositor, no windows.
+Right after install. You need a Wayland compositor running. No compositor, no windows.
 
 <Steps>
   <Step title="Launch the terminal">
@@ -12,11 +12,11 @@ A short walkthrough right after install. You need a Wayland compositor running f
     otter-term
     ```
 
-    Otter Terminal renders on the CPU through the shared Otter render stack. The terminal grid itself doesn't need a GPU.
+    Renders on the CPU through the shared Otter render stack. The terminal grid does not need a GPU.
   </Step>
 
   <Step title="Start background daemons">
-    Several pieces run as daemons. Start these for now:
+    Start these for now:
 
     ```bash
     otter-bar &
@@ -28,17 +28,17 @@ A short walkthrough right after install. You need a Wayland compositor running f
     otter-polkit &
     ```
 
-    For a permanent setup, add these to your compositor autostart. See [Session setup](/desktop/session-setup) for a full autostart block and compositor-specific examples.
+    For a permanent setup, add them to compositor autostart. See [Session setup](/desktop/session-setup).
   </Step>
 
   <Step title="Open the launcher">
-    Run the application launcher. Bind this to a compositor hotkey for daily use:
+    Bind this to a compositor hotkey for daily use:
 
     ```bash
     otter-launcher
     ```
 
-    Type to search applications. Try extensions: `=2+3*4` for calculator results, `:heart` for emoji, or `clip` for clipboard history.
+    Type to search apps. Try `=2+3*4` (calculator), `:heart` (emoji), or `clip` (clipboard history).
   </Step>
 
   <Step title="Take a screenshot">
@@ -46,7 +46,7 @@ A short walkthrough right after install. You need a Wayland compositor running f
     otter-screenshot
     ```
 
-    Click and drag to select a region. The image copies to your clipboard automatically.
+    Click and drag a region. The image copies to your clipboard.
   </Step>
 
   <Step title="Create a sticky note">
@@ -54,28 +54,28 @@ A short walkthrough right after install. You need a Wayland compositor running f
     otter-note new
     ```
 
-    Bind a compositor hotkey to this command for quick access, for example `Super+N`.
+    Bind a hotkey, for example `Super+N`.
   </Step>
 
   <Step title="Check the weather">
-    Print current conditions to stdout:
+    Print current conditions:
 
     ```bash
     otter-weather
     ```
 
-    To show weather on the status bar, configure `otter-bar` with a weather widget and run the cache watcher:
+    For the status bar, add a weather widget in `otter-bar` and run:
 
     ```bash
     otter-weather --watch 900 --write-cache &
     ```
 
-    See [otter-weather](/apps/otter-weather) and [otter-bar](/desktop/otter-bar) for widget setup.
+    See [otter-weather](/apps/otter-weather) and [otter-bar](/desktop/otter-bar).
   </Step>
 </Steps>
 
 <Tip>
-  **Bind global hotkeys in your compositor.** Wayland apps can't grab system-wide shortcuts on their own. Examples:
+  **Bind global hotkeys in your compositor.** Wayland apps cannot grab system-wide shortcuts. Examples:
 
   **Hyprland** (`~/.config/hypr/hyprland.conf`):
 
@@ -96,7 +96,7 @@ A short walkthrough right after install. You need a Wayland compositor running f
   bindsym $mod+v exec otter-clip popup
   ```
 
-  See [Keybinds](/configuration/keybinds) for a full reference.
+  See [Keybinds](/configuration/keybinds) for the full reference.
 </Tip>
 
 ## What's next

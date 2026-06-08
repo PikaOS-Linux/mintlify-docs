@@ -1,14 +1,14 @@
 ---
-title: "otter-rec: Hardware-Accelerated Wayland Screen Recorder"
+title: "otter-rec"
 sidebarTitle: "Screen Recorder"
 description: "Record your Wayland screen with hardware acceleration. Toggle with a hotkey, capture regions or windows, encode with NVENC, QSV, or VAAPI."
 ---
 
-otter-rec is Otter Shell's screen recorder. Run `otter-rec` to start recording. Run it again to stop and save the file. At startup it probes your GPU and picks the fastest hardware encoder available: NVENC on NVIDIA, Quick Sync on Intel, VAAPI on AMD. It falls back through software paths when needed. The default output file is `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`. Override with `--output` or the config file.
+otter-rec is Otter Shell's screen recorder. Run it once to start, run it again to stop and save. At startup it probes your GPU and picks the fastest hardware encoder: NVENC on NVIDIA, Quick Sync on Intel, VAAPI on AMD. It falls back to software when needed. Default output is `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`. Override with `--output` or the config file.
 
 ## Basic Usage
 
-Use `otter-rec` as a toggle. One invocation starts recording, the next stops it.
+`otter-rec` is a toggle. One invocation starts recording, the next stops it.
 
 ```bash
 otter-rec                                             # toggle recording (start/stop)
@@ -26,7 +26,7 @@ otter-rec --dry-run --source screen --output out.mp4  # print resolved settings,
 
 ## Hardware Encoding
 
-otter-rec probes your GPU at startup and selects the best available hardware encoder for your vendor.
+otter-rec probes your GPU at startup and selects the best available hardware encoder.
 
 | GPU vendor | Primary encoder family |
 |------------|----------------------|
@@ -42,7 +42,7 @@ Within whichever family is selected, **H.264 is preferred by default**. Pass `--
 
 ## Configuration
 
-otter-rec reads `~/.config/otter-shell/otter-rec.conf` on startup. Set these values to avoid repeating flags on every invocation.
+otter-rec reads `~/.config/otter-shell/otter-rec.conf` on startup.
 
 ```conf
 output = ""
@@ -55,14 +55,14 @@ seconds = 0
 bitrate = 12000000
 ```
 
-- **`output`** — destination file path. Leave empty to write to `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`.
-- **`source`** — capture source hint, passed to the encoder path selection logic.
-- **`mode`** — capture mode: `fullscreen`, `region`, or `window`.
-- **`codec`** — encoder preference: `h264`, `hevc`, or `av1`.
-- **`force_portal`** — set to `true` to always use xdg-desktop-portal source selection, equivalent to always passing `--portal`.
-- **`fps`** — target frame rate (default `30`).
-- **`seconds`** — record for a fixed duration in seconds; `0` means record until stopped.
-- **`bitrate`** — target bitrate in bits per second (default `12000000`, i.e. 12 Mbps).
+- `output`: destination file path. Empty writes to `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`
+- `source`: capture source hint for encoder path selection
+- `mode`: `fullscreen`, `region`, or `window`
+- `codec`: `h264`, `hevc`, or `av1`
+- `force_portal`: `true` always uses xdg-desktop-portal source selection (same as `--portal`)
+- `fps`: target frame rate (default `30`)
+- `seconds`: fixed duration in seconds; `0` records until stopped
+- `bitrate`: target bitrate in bits per second (default `12000000`, 12 Mbps)
 
 ## Hotkey Setup
 
@@ -72,7 +72,7 @@ bitrate = 12000000
 
 ## Portal Mode
 
-Pass `--portal` to force otter-rec to open an xdg-desktop-portal ScreenCast session before recording. The portal presents its own source picker (screen, window, or region, depending on your compositor's portal implementation). otter-rec then records through its own in-process capture and encoder path once the session is established.
+Pass `--portal` to force an xdg-desktop-portal ScreenCast session before recording. The portal presents its own source picker (screen, window, or region, depending on your compositor). otter-rec records through its own in-process capture and encoder path once the session is established.
 
 Portal detection checks for a live Wayland socket, PipeWire and session bus sockets in the runtime directory, then verifies `org.freedesktop.portal.ScreenCast.version` before proceeding.
 

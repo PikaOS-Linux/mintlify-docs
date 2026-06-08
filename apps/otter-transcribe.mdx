@@ -1,5 +1,5 @@
 ---
-title: "On-Device Speech Transcription with otter-transcribe"
+title: "otter-transcribe"
 sidebarTitle: "Transcription"
 description: "Transcribe microphone audio on-device via PipeWire. Requires the otter-shell-extras metapackage."
 ---
@@ -77,14 +77,9 @@ graph_height = 28
 graph_bars = 24
 ```
 
-**Key settings:**
-
-- **`stream`** — When `true`, each finalized utterance chunk is emitted in real time as the model reaches an utterance boundary. Set to `false` to get one final value for the entire recording instead of incremental chunks.
-
-- **`target`** — The PipeWire audio source to capture from. `@DEFAULT_SOURCE@` uses the system default microphone. Replace it with a specific PipeWire node name to target a different input device.
-
-- **`max_seconds`** — Maximum recording length in seconds. When the limit is reached, the daemon finalizes the current recording and emits any remaining transcript, but stays alive for future `toggle` or `start` commands.
-
-- **`show_indicator`** — Controls the bottom-center PCM level indicator. Set to `false` to hide it while still receiving transcription output.
+- `stream`: `true` emits each finalized utterance chunk in real time. `false` returns one final value for the entire recording
+- `target`: PipeWire audio source. `@DEFAULT_SOURCE@` uses the system default microphone
+- `max_seconds`: maximum recording length in seconds. When reached, the daemon finalizes and stays alive for future commands
+- `show_indicator`: controls the bottom-center PCM level indicator
 
 The indicator's colors (`background_color`, `border_color`, `graph_color`, `graph_peak_color`, `text_color`) inherit from `otter-theme` when left unset in the config file.

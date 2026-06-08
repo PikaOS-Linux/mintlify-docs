@@ -4,14 +4,14 @@ sidebarTitle: "Libraries"
 description: "Shared Otter Shell Zig libraries: what each one does and how apps use them."
 ---
 
-Otter Shell apps share eleven libraries. They link into application binaries at build time. There are no separate library packages for end users.
+Eleven shared libraries. They link into app binaries at build time. End users do not install them separately.
 
 ## Library stack
 
 | Library | Purpose | Depends on |
 |---------|---------|------------|
-| [otter-utils](#otter-utils) | Bounded arrays, logging, file paths, inotify | — |
-| [otter-geo](#otter-geo) | Geometry types (Point, Rect, Padding, Transform) | — |
+| [otter-utils](#otter-utils) | Bounded arrays, logging, file paths, inotify |: |
+| [otter-geo](#otter-geo) | Geometry types (Point, Rect, Padding, Transform) |: |
 | [otter-conf](#otter-conf) | Comptime config parser and hot-reload watcher | otter-utils |
 | [otter-render](#otter-render) | CPU renderer, fonts, images, CommandList | otter-geo, otter-utils |
 | [otter-wayland](#otter-wayland) | Wayland client, layer shell, input, clipboard | otter-geo, otter-render, otter-utils |
@@ -22,13 +22,13 @@ Otter Shell apps share eleven libraries. They link into application binaries at 
 | [otter-desktop](#otter-desktop) | XDG icons, D-Bus, PipeWire, PAM, sysinfo | otter-utils |
 | [otter-ui](#otter-ui) | Surface Description frame API and widgets | otter-geo, otter-render, otter-vte, otter-theme, otter-wayland, otter-utils, otter-desktop, otter-tools-core |
 
-Typical app dependency chain: **otter-ui → otter-wayland + otter-render + otter-theme + otter-conf + otter-desktop**
+Typical app chain: **otter-ui**, then **otter-wayland**, **otter-render**, **otter-theme**, **otter-conf**, **otter-desktop**.
 
 ---
 
 ## otter-utils
 
-Pure Zig utilities with no external dependencies.
+Pure Zig utilities. No external dependencies.
 
 - `BoundedArray`: fixed-capacity arrays without heap allocation
 - Logging helpers
@@ -51,9 +51,7 @@ Pure geometry types:
 
 ## otter-conf
 
-Comptime-generic configuration parser. Define a Zig struct and you get a specialized parser at compile time.
-
-**Features:**
+Comptime-generic config parser. Define a Zig struct and get a specialized parser at compile time.
 
 - Flat `key = value` format with `#` comments
 - Types: booleans, integers, floats, strings, enums, arrays, optionals, nested structs
@@ -86,8 +84,6 @@ zig fetch --save git+https://git.pika-os.com/otter-shell/otter-conf
 
 CPU rendering pipeline for all Otter UI.
 
-**Features:**
-
 - ARGB color operations (Wayland argb8888 compatible)
 - FreeType font rendering with glyph caching
 - HarfBuzz shaping + itijah bidi via Text System boundary
@@ -105,7 +101,7 @@ surface.clear(render.Color.black);
 font.drawText(&surface, "Hello", .{ .x = 0, .y = 20 }, 16, render.Color.white);
 ```
 
-Build flag `-Denable_text=false` produces a lean build without font/shaping support.
+Build flag `-Denable_text=false` drops font and shaping support.
 
 ---
 
@@ -143,36 +139,36 @@ Terminal rendering boundary for embeddable terminal views.
 - `CellRenderer`: generic cell renderer with comptime hooks
 - `cell_glyphs`: custom cell glyph support
 
-Used by `otter-term` and available for any app embedding terminal output.
+Used by `otter-term` and any app embedding terminal output.
 
 ---
 
 ## otter-theme
 
-Shared visual theme with semantic color tokens, spacing, popup styles, bar chrome, and font tokens.
+Shared visual theme: semantic color tokens, spacing, popup styles, bar chrome, font tokens.
 
 - 12 bundled presets: Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, One Dark
 - `loader.loadTheme(allocator)`: reads `~/.config/otter-shell/theme.conf`
 - Pure data structs: no I/O in the theme module itself
 - Apps watch `theme.conf` via inotify for hot-reload
 
-Widget configs use `?Color = null` fields resolved as: widget config → theme token → compiled default.
+Widget configs use `?Color = null` fields resolved as: widget config, then theme token, then compiled default.
 
 ---
 
 ## otter-config-types
 
-Typed config struct definitions shared across all apps and `otter-settings`.
+Typed config structs shared across apps and `otter-settings`.
 
-Contains schemas for: bar, launcher, dock, notifications, wallpaper, OSD, transcribe, logout, polkit, lock, idle, and more.
+Schemas for bar, launcher, dock, notifications, wallpaper, OSD, transcribe, logout, polkit, lock, idle, and more.
 
-When adding a new configurable app, define structs here and register a settings tab in `otter-settings/src/tabs.zig`.
+When you add a configurable app, define structs here and register a settings tab in `otter-settings/src/tabs.zig`.
 
 ---
 
 ## otter-tools-core
 
-Pure-Zig bounded helpers for small CLI tools. No Wayland, D-Bus, or rendering dependencies.
+Pure-Zig bounded helpers for small CLI tools. No Wayland, D-Bus, or rendering deps.
 
 | Module | Used by |
 |--------|---------|
@@ -191,7 +187,7 @@ Config schemas for small apps live in `src/app_configs.zig`, shared with `otter-
 
 ## otter-desktop
 
-Desktop integration: icons, applications, D-Bus, and system services.
+Desktop integration: icons, applications, D-Bus, system services.
 
 **Applications:**
 
@@ -228,7 +224,7 @@ Compile-time flags: `-Denable_dbus=false`, `-Denable_pipewire=false`, `-Denable_
 
 Widget framework and Surface Description frame API.
 
-**Surface Description** (preferred for new code):
+**Surface Description** (use this for new code):
 
 - Bounded `UiState(capacities)` owns frame arrays and `DefaultCommandList`
 - `UiFrame` handles layout, hit registration, overlay ordering
@@ -266,7 +262,7 @@ Widget framework and Surface Description frame API.
 
 ## Source locations
 
-Each library lives in its own repository under [git.pika-os.com/otter-shell](https://git.pika-os.com/otter-shell). When checked out in the monorepo layout:
+Each library has its own repo under [git.pika-os.com/otter-shell](https://git.pika-os.com/otter-shell). Monorepo checkout layout:
 
 ```
 otter-shell/
