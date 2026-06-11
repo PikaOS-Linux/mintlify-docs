@@ -28,9 +28,9 @@ Registries cover lookup, width, area, hit testing, popups, lifecycle, damage, an
 
 Use Surface Description for new app UI. Reach for registries when you need config-driven widget rows like `otter-bar`.
 
-### VTable widgets (bar compatibility path)
+### Bar widget specs
 
-Existing bar widgets still use a generated `Widget` vtable (draw, deinit, setArea, getWidth). New apps should use Surface Description instead.
+Bar widgets no longer use vtable polymorphism. Each widget type has a draw spec under `widgets/specs/` (for example `widgets/specs/clock.zig`). Registries call those specs and widget struct hooks for input, popups, and damage.
 
 ### Other modules
 

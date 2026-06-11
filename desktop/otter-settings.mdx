@@ -43,11 +43,26 @@ Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotke
 | Lock | `otter-lock.conf` |
 | Idle | `otter-idle.conf` |
 | Terminal | `otter-term.conf` |
+| Theme Gen | `otter-theme-gen.conf` |
 | Recorder | `otter-rec.conf` |
 | Voice | `otter-vox.conf` |
 | Theme | `theme.conf` |
 
 Also includes drag-and-drop bar layout, custom bar buttons, and clipboard paste (Ctrl+V) in text fields via Wayland data device.
+
+## Theme Gen tab
+
+The **Theme Gen** tab edits `otter-theme-gen.conf`. Use it when you run the `otter-theme-gen` daemon (built from source; not in the default `otter-shell` metapackage). The daemon reads your wallpaper from `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` and writes palette tokens to `theme.conf`.
+
+Controls on the tab:
+
+- **Enabled**: turn wallpaper-reactive theming on or off
+- **Mode**: dark or light palette
+- **Strategy**: palette extraction style (`material_you`, `analogous`, `vibrant`, `monochromatic`, `direct`, `temperature`)
+- **Contrast** and **Vibrancy**: sliders for palette tuning
+- **Templates**: toggle which third-party configs the daemon rewrites (terminals, GTK, Hyprland Lua at `~/.config/hypr/otter-theme.lua`, `bottom`, btop, and others)
+
+Enable only the template outputs you want overwritten. Click **Apply** to save `otter-theme-gen.conf`. See [Themes](/configuration/themes) for static preset themes.
 
 ## What otter-settings does not configure
 
