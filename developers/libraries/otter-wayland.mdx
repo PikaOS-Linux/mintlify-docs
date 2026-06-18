@@ -30,7 +30,7 @@ Wayland client library wrapping common protocols.
 
 ### Region selection overlay
 
-Drag-to-select for screenshots, product shots, and recordings. It composites pixels directly to SHM buffers with incremental damage. Surface Description is not used here.
+Drag-to-select for screenshots, product shots, and recordings. Pixels go straight to SHM buffers with incremental damage. This path does not use Surface Description.
 
 Each app passes a preset (namespace, pool names, visual mode):
 

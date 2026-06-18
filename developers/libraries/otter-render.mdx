@@ -16,14 +16,14 @@ CPU rendering pipeline for all Otter UI.
 
 ### TextSystem
 
-`TextSystem` wraps HarfBuzz and itijah bidi around an existing `Font`. Use it for RTL paragraphs, mixed-direction labels, and CJK. Simple ASCII can stay on the FreeType fast path when no `TextSystem` is attached.
+`TextSystem` wraps HarfBuzz and itijah bidi around a `Font`. Use it for RTL text, mixed-direction labels, and CJK. Plain ASCII can stay on the FreeType fast path when you omit `TextSystem`.
 
 - `TextSystem.init(allocator, font)` / `deinit`
-- `ShapeScratch` holds per-frame shaped glyphs and bidi state (caller-owned, reusable)
-- `hasStrongRtlUtf8` / `hasStrongRtlCodepoints` for cheap preflight
-- Preserves HarfBuzz RTL glyph order during rasterization
+- `ShapeScratch`: caller-owned buffer for shaped glyphs and bidi state, reused each frame
+- `hasStrongRtlUtf8` / `hasStrongRtlCodepoints`: quick checks before shaping
+- RTL glyph order matches HarfBuzz during rasterization
 
-Wire `TextSystem` into `otter-ui` frames via `FrameOptions.text_system` and `FrameOptions.text_scratch`, or pass both into `CommandList` for direct rasterization.
+Pass `text_system` and `text_scratch` through `otter-ui` `FrameOptions`, or attach both to `CommandList` for direct rasterization.
 
 ```zig
 const render = @import("otter_render");

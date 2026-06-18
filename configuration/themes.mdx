@@ -79,6 +79,6 @@ Otter Shell, Otter Shell Islands, Catppuccin (Mocha/Latte/Frappe/Macchiato), Nor
 
 ## Wallpaper-reactive themes (Theme Gen)
 
-For themes that follow your wallpaper, use the **Theme Gen** tab in [otter-settings](/desktop/otter-settings). It edits `otter-theme-gen.conf` for the `otter-theme-gen` daemon. The daemon is not in the default `otter-shell` package; build it from the [otter-theme-gen](https://git.pika-os.com/otter-shell/otter-theme-gen) repo and add it to session autostart.
+Want colors that follow your wallpaper? Use the **Theme Gen** tab in [otter-settings](/desktop/otter-settings). It edits `otter-theme-gen.conf` for the `otter-theme-gen` daemon. That daemon is not in the default `otter-shell` package. Build it from the [otter-theme-gen](https://git.pika-os.com/otter-shell/otter-theme-gen) repo and add it to session autostart.
 
-When enabled, `otter-theme-gen` watches `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` (written by [otter-wallpaper](/desktop/otter-wallpaper)) and updates `theme.conf`. Optional template outputs can sync colors to other apps: terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), `bottom`, btop, and more. Toggle each template in the Theme Gen tab before clicking **Apply**.
+When enabled, `otter-theme-gen` watches `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` (written by [otter-wallpaper](/desktop/otter-wallpaper)) and updates `theme.conf`. You can also sync colors to other apps through template outputs: terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), `bottom`, btop, and more. Toggle each template in the Theme Gen tab, then click **Apply**.

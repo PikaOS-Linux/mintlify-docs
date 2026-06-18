@@ -16,17 +16,17 @@
 - Use **Otter Shell** for the desktop environment (not "Otter" alone in headings)
 - Use **pikman** for end-user installation (`pikman install otter-shell`), not `apt install`
 - **`otter-shell`** is the base metapackage; **`otter-shell-extras`** adds `otter-transcribe` and `otter-vox` only
-- Otter Shell does **not** ship a compositor — do not document River or any compositor as the default
-- The greeter (`otter-greeter`) uses Hyprland for the login screen only — user sessions use their own compositor
+- Otter Shell does **not** ship a compositor. Do not document River or any compositor as the default.
+- The greeter (`otter-greeter`) uses Hyprland for the login screen only. User sessions use their own compositor.
 
 ## Style preferences
 
 - Use active voice and second person ("you")
-- Keep sentences concise — one idea per sentence
+- Keep sentences concise. One idea per sentence.
 - Use sentence case for headings
 - Bold for UI elements: Click **Settings**
 - Code formatting for file names, commands, paths, and code references
-- Base documentation on component READMEs in the otter-shell source — do not invent features or package contents
+- Base documentation on component READMEs in the otter-shell source. Do not invent features or package contents.
 
 ## Content boundaries
 

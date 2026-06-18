@@ -47,7 +47,7 @@ exe.root_module.addImport("otter_render", otter_render.module("otter_render"));
 
 ## 3. Choose your app pattern
 
-Otter apps differ in two ways: **what Wayland surface you create**, and **how long the process runs**. A long-running daemon can use layer shell, XDG toplevel, or no window at all. Do not assume "daemon" means layer shell.
+Otter apps differ in two ways: **which Wayland surface you create**, and **how long the process runs**. A daemon might use layer shell, an XDG toplevel, or no window at all. Do not treat "daemon" as a synonym for layer shell.
 
 ### Layer-shell surfaces (`zwlr_layer_shell_v1`)
 
@@ -157,7 +157,7 @@ render.quad_renderer.rasterize(ui.render.DefaultCommandList, &state.commands, su
 
 Use `state.hitTest(point)` for pointer input. No parallel hit arrays needed.
 
-For ASCII-only chrome you can omit `text_system` and `text_scratch`. Any UI that may show RTL, CJK, or user-provided strings should pass both (see `otter-lock/src/lock_render_loop.zig`).
+Skip `text_system` and `text_scratch` for ASCII-only labels. Pass both when the UI might show RTL, CJK, or other user-typed text (see `otter-lock/src/lock_render_loop.zig`).
 
 ## 5. Add configuration
 
