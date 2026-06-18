@@ -91,6 +91,10 @@ bell_visual = false
 
 The color palette uses `colors_*` keys in the same config file. Defaults include a full 16-color terminal palette plus foreground, background, cursor, selection, and URL accent colors. Palette changes are **hot-reloaded**. Save the file and new colors apply to all open panes.
 
+## Compositor compatibility
+
+`otter-term` is a regular `xdg_toplevel` window. It runs on Hyprland, Sway, Niri, and other wlroots-based compositors. Niri scroll damage is tracked explicitly so scrollback redraws stay in sync with the viewport.
+
 ## Keyboard Shortcuts
 
 | Action | Shortcut |

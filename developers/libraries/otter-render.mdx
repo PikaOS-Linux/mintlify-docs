@@ -8,11 +8,22 @@ CPU rendering pipeline for all Otter UI.
 
 - ARGB color operations (Wayland argb8888 compatible)
 - FreeType font rendering with glyph caching
-- HarfBuzz shaping + itijah bidi via Text System boundary
+- HarfBuzz shaping + itijah bidi via `TextSystem` / `ShapeScratch`
 - Image loading (PNG, JPG, BMP, GIF via zigimg)
 - Sprite sheets and animation (integer-only ease-out quadratic)
 - `CommandList` deferred rendering + `quad_renderer` with scissor clipping and damage culling
 - SDF-based rounded rectangles
+
+### TextSystem
+
+`TextSystem` wraps HarfBuzz and itijah bidi around an existing `Font`. Use it for RTL paragraphs, mixed-direction labels, and CJK. Simple ASCII can stay on the FreeType fast path when no `TextSystem` is attached.
+
+- `TextSystem.init(allocator, font)` / `deinit`
+- `ShapeScratch` holds per-frame shaped glyphs and bidi state (caller-owned, reusable)
+- `hasStrongRtlUtf8` / `hasStrongRtlCodepoints` for cheap preflight
+- Preserves HarfBuzz RTL glyph order during rasterization
+
+Wire `TextSystem` into `otter-ui` frames via `FrameOptions.text_system` and `FrameOptions.text_scratch`, or pass both into `CommandList` for direct rasterization.
 
 ```zig
 const render = @import("otter_render");

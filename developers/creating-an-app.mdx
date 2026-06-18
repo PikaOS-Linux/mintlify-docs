@@ -124,14 +124,21 @@ New app UI should use the bounded `UiState` frame API:
 
 ```zig
 const ui = @import("otter_ui");
+const render = @import("otter_render");
 
 const caps = ui.ui_frame.Capacities{ .elements = 64, .hit_regions = 64, .overlays = 8 };
 var state: ui.UiState(caps) = .{};
+
+var text_system = try render.text.TextSystem.init(allocator, font);
+defer text_system.deinit();
+var text_scratch: render.text.ShapeScratch = .{};
 
 var frame = state.begin(.{
     .viewport = .{ .x = 0, .y = 0, .width = width, .height = height },
     .scale = surface.scale,
     .font = font,
+    .text_system = &text_system,
+    .text_scratch = &text_scratch,
 });
 
 const root = ui.SurfaceNode{
@@ -144,11 +151,13 @@ const root = ui.SurfaceNode{
 _ = try frame.render(&root, frame.viewport);
 try frame.finish();
 
-// Rasterize via otter-render
+// Rasterize via otter-render (commands inherit text_system from the frame)
 render.quad_renderer.rasterize(ui.render.DefaultCommandList, &state.commands, surface, null, null, true);
 ```
 
 Use `state.hitTest(point)` for pointer input. No parallel hit arrays needed.
+
+For ASCII-only chrome you can omit `text_system` and `text_scratch`. Any UI that may show RTL, CJK, or user-provided strings should pass both (see `otter-lock/src/lock_render_loop.zig`).
 
 ## 5. Add configuration
 
