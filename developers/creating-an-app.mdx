@@ -47,26 +47,76 @@ exe.root_module.addImport("otter_render", otter_render.module("otter_render"));
 
 ## 3. Choose your app pattern
 
-### Layer-shell overlay (launcher, logout, settings style)
+Otter apps differ in two ways: **what Wayland surface you create**, and **how long the process runs**. A long-running daemon can use layer shell, XDG toplevel, or no window at all. Do not assume "daemon" means layer shell.
 
-- Connect to Wayland via `otter-wayland`
-- Create a `zwlr_layer_shell_v1` surface
-- Describe UI with **Surface Description** (`otter-ui` `UiFrame`)
-- One-shot: use `ArenaAllocator`, exit after user action
-- Examples: `otter-launcher`, `otter-logout`
+### Layer-shell surfaces (`zwlr_layer_shell_v1`)
 
-### Persistent daemon (bar, notifications, wallpaper style)
+Use `otter-wayland` layer shell when the compositor should anchor your surface to an output edge or layer, not as a normal floating window.
 
-- Long-running event loop polling Wayland + D-Bus/inotify FDs
-- Use `GeneralPurposeAllocator`
-- Hot-reload config via `otter-conf.Watcher`
-- Examples: `otter-bar`, `otter-notifications`
+| Layer | Lifecycle | Examples |
+|-------|-----------|----------|
+| `.top` / `.bottom` bar | Daemon | `otter-bar` |
+| `.background` | Daemon | `otter-wallpaper` |
+| `.overlay` (persistent) | Daemon | `otter-notifications`, `otter-osd`, `otter-transcribe` indicator |
+| `.overlay` (on demand) | Overlay session, exits on dismiss | `otter-launcher`, `otter-logout` |
+| `.overlay` (on demand) | Daemon shows dialog when needed | `otter-polkit` |
+| `.overlay` (fullscreen) | Daemon while greeter runs | `otter-greeter-ui` |
+| `.top` popup | Optional CLI flag | `otter-weather --layer`, `otter-note popup` |
 
-### CLI tool (calc, weather, emoji style)
+Common overlay pattern: `DimOverlay` (fullscreen dim on `.overlay`) plus a second layer surface for the panel. See `otter-launcher` and `otter-logout`. Overlay sessions that exit after one action often use `ArenaAllocator`.
 
-- Minimal deps: `otter-tools-core` + `otter-conf`
-- No Wayland window unless you add a `--layer` popup mode
-- Examples: `otter-calc`, `otter-weather`
+Layer-shell daemons typically poll Wayland plus D-Bus, inotify config watchers, and timer FDs. Use `GeneralPurposeAllocator` and `otter-conf.Watcher` for hot reload.
+
+### XDG toplevel windows (`xdg_toplevel`)
+
+Use `otter-wayland` `XdgToplevel` for regular desktop windows with a title bar and workspace placement.
+
+| Lifecycle | Examples |
+|-----------|----------|
+| Singleton window (second launch focuses existing) | `otter-settings` |
+| Long-running while open | `otter-term` |
+| Runs until export or quit | `otter-shot` composer |
+
+Describe UI with **Surface Description** (`otter-ui` `UiFrame`). Poll Wayland plus app-specific FDs (PTY for `otter-term`, config inotify, keyboard repeat).
+
+### Session lock (`ext_session_lock_v1`)
+
+`otter-lock` draws on lock surfaces from `ext_session_lock_v1`, not layer shell. The process stays up while the session is locked.
+
+### Capture and selection overlays
+
+Region pickers and frozen-capture UIs use shared `otter-wayland` helpers (`selection_overlay`, `capture_overlay`, `dim_overlay`). They attach layer `.overlay` surfaces but are not full apps.
+
+| Lifecycle | Examples |
+|-----------|----------|
+| One-shot CLI | `otter-screenshot` (region mode), `otter-pick` |
+| Toggle CLI | `otter-rec` (`--region select`) |
+| Transient step inside a toplevel app | `otter-shot` dragged selection |
+
+### No Wayland UI
+
+| Lifecycle | Examples |
+|-----------|----------|
+| Daemon (protocols or IPC only) | `otter-idle`, `otter-clip daemon`, `otter-greeterd` |
+| One-shot CLI | `otter-calc`, `otter-emoji`, `otter-cal`, `otter-vox`, `otter-timer` |
+| CLI with optional layer popup | `otter-weather` (default prints to stdout; `--layer` opens a layer popup) |
+
+CLI tools can use minimal deps (`otter-tools-core` + `otter-conf`) with no Wayland connection unless you add a popup mode.
+
+### Quick reference
+
+| You want… | Surface | Study |
+|-----------|---------|-------|
+| Status bar | Layer `.top` / `.bottom` | `otter-bar` |
+| Wallpaper | Layer `.background` | `otter-wallpaper` |
+| Toast notifications | Layer `.overlay` per notification | `otter-notifications` |
+| Launcher / power menu | Layer `.overlay` + dim, exit on action | `otter-launcher`, `otter-logout` |
+| Settings GUI | `xdg_toplevel` singleton | `otter-settings` |
+| Terminal | `xdg_toplevel` | `otter-term` |
+| Lock screen | `ext_session_lock_v1` | `otter-lock` |
+| Region screenshot | `selection_overlay` | `otter-screenshot`, `otter-wayland/src/selection_overlay.zig` |
+| Expression in a pipe | No surface | `otter-calc` |
+| Idle / DPMS only | No surface | `otter-idle` |
 
 ## 4. Build the UI with Surface Description
 
@@ -151,11 +201,15 @@ Place in `data/applications/` and install icons under `data/icons/hicolor/`.
 
 | Pattern | Study these sources |
 |---------|-------------------|
-| Status bar daemon | `otter-bar/src/main.zig`, `otter-bar/src/config.zig` |
-| One-shot overlay | `otter-launcher/src/main.zig`, `otter-launcher/src/draw.zig` |
+| Layer bar daemon | `otter-bar/src/main.zig`, `otter-bar/src/config.zig` |
+| Layer background daemon | `otter-wallpaper/src/main.zig`, `otter-wallpaper/src/output.zig` |
+| Layer overlay session | `otter-launcher/src/main.zig`, `otter-logout/src/main.zig` |
+| Layer overlay daemon | `otter-notifications/src/main.zig`, `otter-osd/src/main.zig` |
+| XDG toplevel window | `otter-settings/src/app.zig`, `otter-term/src/main.zig` |
+| Session lock | `otter-lock/src/main.zig` |
 | Region capture / selection | `otter-screenshot/src/main.zig`, `otter-wayland/src/selection_overlay.zig` |
-| Settings GUI | `otter-settings/src/app.zig`, `otter-settings/src/draw_form.zig` |
+| Toplevel + selection step | `otter-shot/src/main.zig`, `otter-shot/src/capture/workflow.zig` |
 | CLI helper | `otter-calc/src/main.zig`, `otter-tools-core/src/calc.zig` |
-| Config-only daemon | `otter-idle/src/main.zig` |
+| No-surface daemon | `otter-idle/src/main.zig`, `otter-clip/src/main.zig` |
 
 See the [Libraries overview](/developers/libraries) and per-library pages in the sidebar for API details.
