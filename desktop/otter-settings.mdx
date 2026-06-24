@@ -52,17 +52,18 @@ Also includes drag-and-drop bar layout, custom bar buttons, and clipboard paste 
 
 ## Theme Gen tab
 
-The **Theme Gen** tab edits `otter-theme-gen.conf`. You need this when you run the `otter-theme-gen` daemon yourself. It is not in the default `otter-shell` package, so build it from source first. The daemon reads `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` and writes palette tokens to `theme.conf`.
+The **Theme Gen** tab edits `otter-theme-gen.conf`. The `otter-theme-gen` daemon ships with `otter-shell`. Autostart it with [otter-wallpaper](/desktop/otter-wallpaper) so it can read `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` and update `theme.conf`.
 
 On the tab:
 
 - **Enabled**: turn wallpaper-reactive theming on or off
 - **Mode**: dark or light palette
+- **Islands mode**: Otter Shell Islands surface styling
 - **Strategy**: how colors are pulled from the wallpaper (`material_you`, `analogous`, `vibrant`, `monochromatic`, `direct`, `temperature`)
-- **Contrast** and **Vibrancy**: tune the generated palette
+- **Contrast**, **Vibrancy**, and **Opacity**: tune the generated palette
 - **Templates**: pick which third-party configs get rewritten (terminals, GTK, Hyprland Lua at `~/.config/hypr/otter-theme.lua`, `bottom`, btop, and others)
 
-Turn on only the templates you want overwritten. Click **Apply** to save. For fixed presets instead, see [Themes](/configuration/themes).
+Turn on only the templates you want overwritten. Click **Apply** to save. For fixed presets instead, see [Themes](/configuration/themes). See [otter-theme-gen](/desktop/otter-theme-gen) for daemon details.
 
 ## What otter-settings does not configure
 

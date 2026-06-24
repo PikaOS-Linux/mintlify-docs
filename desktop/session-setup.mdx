@@ -14,6 +14,7 @@ Autostart these for a working desktop:
 |--------|----------|---------|
 | `otter-bar` | Recommended | Status bar, system tray, workspace indicator |
 | `otter-wallpaper` | Recommended | Desktop background |
+| `otter-theme-gen` | Optional | Wallpaper-reactive `theme.conf` (use with `otter-wallpaper`) |
 | `otter-notifications` | Recommended | `notify-send` and app notifications |
 | `otter-osd` | Recommended | Volume/brightness/lock-key overlays |
 | `otter-idle` | Recommended | Screen lock and DPMS on idle |
@@ -34,6 +35,7 @@ Add to `~/.config/hypr/hyprland.conf`:
 ```ini
 exec-once = otter-bar
 exec-once = otter-wallpaper
+exec-once = otter-theme-gen
 exec-once = otter-notifications
 exec-once = otter-osd
 exec-once = otter-idle
@@ -49,6 +51,7 @@ Add to `~/.config/sway/config`:
 ```
 exec otter-bar
 exec otter-wallpaper
+exec otter-theme-gen
 exec otter-notifications
 exec otter-osd
 exec otter-idle
@@ -64,6 +67,7 @@ Add to `~/.config/niri/config.kdl`:
 ```kdl
 spawn-at-startup "otter-bar"
 spawn-at-startup "otter-wallpaper"
+spawn-at-startup "otter-theme-gen"
 spawn-at-startup "otter-notifications"
 spawn-at-startup "otter-osd"
 spawn-at-startup "otter-idle"

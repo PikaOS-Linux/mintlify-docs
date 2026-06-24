@@ -30,6 +30,6 @@
 
 ## Content boundaries
 
-- Document packaged components only unless marked as workspace-only (`otter-dock`, `otter-hypr`, `otter-theme-gen`)
+- Document packaged components only unless marked as workspace-only (`otter-dock`, `otter-hypr`)
 - Do not claim packages are in metapackages when debian/control says otherwise
 - Developer docs belong in the Developer Guide tab

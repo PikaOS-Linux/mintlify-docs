@@ -44,7 +44,9 @@ otter-term -- nano file.txt                     # pass arguments to command
 
 ## Configuration
 
-`otter-term` reads `~/.config/otter-shell/otter-term.conf`. The file loads on startup and **hot-reloads whenever you save it**. Font, colors, padding, and grid size update without restarting the terminal.
+`otter-term` reads `~/.config/otter-shell/otter-term.conf`. The file loads on startup and **hot-reloads whenever you save it**. Font, padding, and grid size update without restarting the terminal.
+
+Shared colors in `theme.conf` hot-reload too. [otter-theme-gen](/desktop/otter-theme-gen) and otter-settings write that file; saving it updates open terminal panes.
 
 ```conf
 general_shell = ""
@@ -89,7 +91,7 @@ bell_visual = false
 
 ## Color Palette
 
-The color palette uses `colors_*` keys in the same config file. Defaults include a full 16-color terminal palette plus foreground, background, cursor, selection, and URL accent colors. Palette changes are **hot-reloaded**. Save the file and new colors apply to all open panes.
+The color palette uses `colors_*` keys in `otter-term.conf`, or inherits from `theme.conf` when those keys are unset. Palette changes hot-reload on save. Per-app keys in `otter-term.conf` override the shared theme.
 
 ## Compositor compatibility
 

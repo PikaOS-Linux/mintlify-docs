@@ -10,7 +10,7 @@ All Otter Shell apps share one theme via `otter-theme`. The **Theme** tab in [ot
 otter-settings
 ```
 
-Changes land in `~/.config/otter-shell/theme.conf`. Running apps that watch the file pick them up.
+Changes land in `~/.config/otter-shell/theme.conf`. Running apps that watch the file pick them up. [otter-term](/apps/otter-term) hot-reloads `theme.conf` without a restart.
 
 <Tip>
   Stick with otter-settings unless you need keys the UI does not expose. It keeps comments and field order on save.
@@ -79,6 +79,8 @@ Otter Shell, Otter Shell Islands, Catppuccin (Mocha/Latte/Frappe/Macchiato), Nor
 
 ## Wallpaper-reactive themes (Theme Gen)
 
-Want colors that follow your wallpaper? Use the **Theme Gen** tab in [otter-settings](/desktop/otter-settings). It edits `otter-theme-gen.conf` for the `otter-theme-gen` daemon. That daemon is not in the default `otter-shell` package. Build it from the [otter-theme-gen](https://git.pika-os.com/otter-shell/otter-theme-gen) repo and add it to session autostart.
+Want colors that follow your wallpaper? Run [otter-theme-gen](/desktop/otter-theme-gen) with [otter-wallpaper](/desktop/otter-wallpaper), then use the **Theme Gen** tab in [otter-settings](/desktop/otter-settings). It edits `otter-theme-gen.conf`. The daemon ships in `otter-shell`.
 
-When enabled, `otter-theme-gen` watches `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` (written by [otter-wallpaper](/desktop/otter-wallpaper)) and updates `theme.conf`. You can also sync colors to other apps through template outputs: terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), `bottom`, btop, and more. Toggle each template in the Theme Gen tab, then click **Apply**.
+When enabled, `otter-theme-gen` watches `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` and updates `theme.conf`. You can sync colors to other apps through template outputs: terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), `bottom`, btop, and more. Toggle each template in the Theme Gen tab, then click **Apply**.
+
+Key options include **Islands mode** for Otter Shell Islands styling and an **Opacity** slider for panel transparency.

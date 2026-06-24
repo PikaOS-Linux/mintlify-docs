@@ -1,0 +1,75 @@
+---
+title: "otter-theme-gen"
+sidebarTitle: "Theme generator"
+description: "Wallpaper-reactive themes for Otter Shell. Extracts palette colors from your wallpaper and writes theme.conf."
+---
+
+`otter-theme-gen` watches your wallpaper and rebuilds `theme.conf` to match. It ships in the `otter-shell` metapackage. Configure it from the **Theme Gen** tab in [otter-settings](/desktop/otter-settings), or edit `otter-theme-gen.conf` by hand.
+
+## Usage
+
+```bash
+otter-theme-gen
+```
+
+Autostart it with [otter-wallpaper](/desktop/otter-wallpaper). Theme generation needs wallpaper state from `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state`.
+
+```bash
+otter-wallpaper &
+otter-theme-gen &
+```
+
+See [Session setup](/desktop/session-setup).
+
+## How it works
+
+1. [otter-wallpaper](/desktop/otter-wallpaper) writes the current image path per output to `wallpaper-state`.
+2. `otter-theme-gen` reads that file, extracts a palette, and updates `~/.config/otter-shell/theme.conf`.
+3. Running apps that watch `theme.conf` pick up the new colors. [otter-term](/apps/otter-term) hot-reloads shared theme changes without a restart.
+
+The daemon skips work when the wallpaper hash has not changed.
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-theme-gen.conf`
+
+```conf
+enabled = true
+mode = dark
+islands_mode = false
+strategy = material_you
+contrast = 0.7
+vibrancy = 0.6
+global_opacity = 96
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Turn wallpaper-reactive theming on or off |
+| `mode` | `dark` | `dark` or `light` palette |
+| `islands_mode` | `false` | Use Otter Shell Islands surface styling |
+| `strategy` | `material_you` | Palette extraction style |
+| `contrast` | `0.7` | Palette contrast (0.0 to 1.0) |
+| `vibrancy` | `0.6` | Palette vibrancy (0.0 to 1.0) |
+| `global_opacity` | `96` | Panel and surface opacity (0 to 100) |
+
+`strategy` options: `material_you`, `analogous`, `vibrant`, `monochromatic`, `direct`, `temperature`.
+
+## Template outputs
+
+Optional template keys rewrite third-party config files when colors change. All templates start disabled. Enable only the apps you want synced.
+
+```conf
+template_gtk3_enabled = true
+template_hyprland_enabled = true
+```
+
+Shipped templates cover terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), `bottom`, btop, and more. Toggle them in the **Theme Gen** tab in otter-settings.
+
+<Tip>
+  Only `otter-theme-gen` and otter-settings should normalize `theme.conf` on disk. Other apps load it read-only.
+</Tip>
+
+## Templates on disk
+
+Installed templates live under `/usr/share/otter-shell/theme-gen/templates/`.
