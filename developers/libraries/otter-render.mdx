@@ -9,7 +9,7 @@ CPU rendering pipeline for all Otter UI.
 - ARGB color operations (Wayland argb8888 compatible)
 - FreeType font rendering with glyph caching
 - HarfBuzz shaping + itijah bidi via `TextSystem` / `ShapeScratch`
-- Image loading (PNG, JPG, BMP, GIF via zigimg)
+- Image loading (PNG, JPG, BMP, GIF via zigimg). Decoded RGBA size is capped separately from compressed file size (up to 256 MiB decoded).
 - Sprite sheets and animation (integer-only ease-out quadratic)
 - `CommandList` deferred rendering + `quad_renderer` with scissor clipping and damage culling
 - SDF-based rounded rectangles

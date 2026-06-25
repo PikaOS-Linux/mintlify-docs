@@ -84,8 +84,9 @@ On first launch, apps normalize their config: missing keys get defaults, unknown
 
 Most daemons watch their config (and often `theme.conf`) with inotify:
 
-- **otter-bar**, **otter-notifications**, **otter-wallpaper**, **otter-osd**, **otter-idle**: reload on save
-- **otter-term**: hot-reloads fonts, colors, padding, and scrollback
+- **otter-bar**: reloads `otter-bar.conf` on save; `theme.conf` changes refresh widget colors without a full bar config reload
+- **otter-notifications**, **otter-wallpaper**, **otter-osd**, **otter-idle**: reload on save
+- **otter-term**: hot-reloads `otter-term.conf` and shared `theme.conf`
 - **otter-transcribe**: reloads settings and watches `theme.conf`
 
 otter-settings and manual saves hit the same reload path.
