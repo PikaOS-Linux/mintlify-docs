@@ -49,6 +49,7 @@
             "group": "Core Apps",
             "pages": [
               "apps/otter-term",
+              "apps/otter-monitor",
               "apps/otter-screenshot",
               "apps/otter-rec",
               "apps/otter-clip",

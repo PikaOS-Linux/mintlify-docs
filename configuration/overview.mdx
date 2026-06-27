@@ -28,6 +28,8 @@ Launch from [otter-launcher](/desktop/otter-launcher), bind a compositor hotkey,
 | Terminal | Fonts, colors, padding, keybinds |
 | Theme | Colors, spacing, presets (12 built-in themes) |
 | Theme Gen | Wallpaper-reactive themes, opacity, template outputs |
+| Monitor | System monitor refresh interval |
+| Assist | Local assist app backend (workspace-only) |
 | Lock / Logout / Idle / Polkit / Jade | Session and overlay settings |
 | Recorder / Voice | `otter-rec` and `otter-vox` options |
 
@@ -52,6 +54,8 @@ Each app has a plain-text file in `~/.config/otter-shell/`. Edit by hand to scri
 | otter-idle | `~/.config/otter-shell/otter-idle.conf` |
 | otter-jade | `~/.config/otter-shell/otter-jade.conf` |
 | otter-term | `~/.config/otter-shell/otter-term.conf` |
+| otter-monitor | `~/.config/otter-shell/otter-monitor.conf` |
+| otter-assist | `~/.config/otter-shell/otter-assist.conf` *(workspace-only app)* |
 | otter-rec | `~/.config/otter-shell/otter-rec.conf` |
 | otter-clip | `~/.config/otter-shell/otter-clip.conf` |
 | otter-note | `~/.config/otter-shell/otter-note.conf` |
@@ -87,7 +91,8 @@ Most daemons watch their config (and often `theme.conf`) with inotify:
 - **otter-bar**: reloads `otter-bar.conf` on save; `theme.conf` changes refresh widget colors without a full bar config reload
 - **otter-notifications**, **otter-wallpaper**, **otter-osd**, **otter-idle**: reload on save
 - **otter-term**: hot-reloads `otter-term.conf` and shared `theme.conf`
-- **otter-transcribe**: reloads settings and watches `theme.conf`
+- **otter-monitor**: hot-reloads `theme.conf` only; restart to pick up `otter-monitor.conf` changes
+- **otter-transcribe**: reloads settings and watches `theme.conf`; restarts automatically after a model unload when idle
 
 otter-settings and manual saves hit the same reload path.
 

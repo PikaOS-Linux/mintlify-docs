@@ -6,6 +6,28 @@ description: "Typed config structs shared across Otter Shell apps and otter-sett
 
 Typed config structs shared across apps and `otter-settings`.
 
-Schemas for bar, launcher, dock, notifications, wallpaper, OSD, transcribe, logout, polkit, lock, idle, and more.
+Schemas for bar, launcher, dock, notifications, wallpaper, OSD, transcribe, logout, polkit, lock, idle, monitor, assist, and more.
+
+### Monitor (`monitor.Config`)
+
+```zig
+pub const Config = struct {
+    refresh_interval_seconds: u16 = 3, // clamped to 1..3600 at runtime
+};
+```
+
+### Assist (`assist.Config`)
+
+Workspace-only `otter-assist` schema. The settings **Assist** tab ships ahead of the packaged app:
+
+```zig
+pub const Backend = enum { cpu, vulkan };
+
+pub const Config = struct {
+    backend: Backend = .vulkan,
+    vulkan_device: i32 = -1,
+    idle_seconds: u32 = 120,
+};
+```
 
 When you add a configurable app, define structs here and register a settings tab in `otter-settings/src/tabs.zig`.

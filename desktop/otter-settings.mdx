@@ -47,6 +47,8 @@ Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotke
 | Recorder | `otter-rec.conf` |
 | Voice | `otter-vox.conf` |
 | Theme | `theme.conf` |
+| Monitor | `otter-monitor.conf` |
+| Assist | `otter-assist.conf` |
 
 Also includes drag-and-drop bar layout, custom bar buttons, and clipboard paste (Ctrl+V) in text fields via Wayland data device.
 
@@ -64,6 +66,22 @@ On the tab:
 - **Templates**: pick which third-party configs get rewritten (terminals, GTK, Hyprland Lua at `~/.config/hypr/otter-theme.lua`, `bottom`, btop, and others)
 
 Turn on only the templates you want overwritten. Click **Apply** to save. For fixed presets instead, see [Themes](/configuration/themes). See [otter-theme-gen](/desktop/otter-theme-gen) for daemon details.
+
+## Monitor tab
+
+The **Monitor** tab edits `otter-monitor.conf` for [otter-monitor](/apps/otter-monitor):
+
+- **Refresh interval seconds**: how often the collector polls `/proc` and sysfs (1 to 3600)
+
+Restart `otter-monitor` after you change the refresh interval. Theme colors still hot-reload from `theme.conf`.
+
+## Assist tab
+
+The **Assist** tab edits `otter-assist.conf`. That app is workspace-only today (not in the `otter-shell` metapackage). Fields:
+
+- **Backend**: `cpu` or `vulkan`
+- **Vulkan device**: GPU index, or `-1` for the default device
+- **Idle seconds**: how long the assist UI waits before going idle (default `120`)
 
 ## What otter-settings does not configure
 

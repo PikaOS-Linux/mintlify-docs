@@ -1,0 +1,51 @@
+---
+title: "otter-monitor"
+sidebarTitle: "System monitor"
+description: "Desktop system monitor with CPU, memory, GPU, disk, and network views. Sortable process tables and live graphs."
+---
+
+`otter-monitor` is the Otter Shell system monitor. It runs as a normal Wayland window with live CPU, memory, GPU, disk, and network stats. Sort and search processes, group desktop apps, and end tasks from the table.
+
+## Usage
+
+```bash
+otter-monitor
+```
+
+Launch from [otter-launcher](/desktop/otter-launcher) or pin the **Otter Monitor** desktop entry. The sidebar lists eight views:
+
+| View | What it shows |
+|------|----------------|
+| Dashboard | Summary cards and top resource consumers |
+| Applications | Desktop apps grouped from `.desktop` entries |
+| Processes | Full process list with sortable columns |
+| CPU | Per-core usage and a 60-second history graph |
+| Memory | RAM and swap usage with history |
+| GPU | Device stats and per-process GPU or VRAM when NVML is available |
+| Disk | Mount points, throughput, and I/O |
+| Network | Interfaces, throughput, and packet rates |
+
+Click a column header to sort. Filter by name in the search box. On Applications and Processes, the user filter shows only processes owned by your login.
+
+## Ending processes
+
+Select a row and open the action menu. **Quit** sends `SIGTERM`. **Force Quit** sends `SIGKILL`. Either way, you confirm before the signal goes out.
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-monitor.conf`
+
+```conf
+refresh_interval_seconds = 3
+```
+
+- `refresh_interval_seconds`: how often counters refresh (1 to 3600 seconds, default `3`)
+
+Edit the file in [otter-settings](/desktop/otter-settings) on the **Monitor** tab, or by hand. Restart `otter-monitor` after changing the refresh interval.
+
+Colors come from [theme.conf](/configuration/themes). `otter-monitor` watches that file and updates colors without a restart.
+
+## Dependencies
+
+- Wayland compositor with `xdg_shell`
+- Optional: NVIDIA driver with NVML for GPU process stats and VRAM columns

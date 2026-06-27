@@ -74,7 +74,7 @@ Use `otter-wayland` `XdgToplevel` for regular desktop windows with a title bar a
 | Lifecycle | Examples |
 |-----------|----------|
 | Singleton window (second launch focuses existing) | `otter-settings` |
-| Long-running while open | `otter-term` |
+| Long-running while open | `otter-term`, `otter-monitor` |
 | Runs until export or quit | `otter-shot` composer |
 
 Describe UI with **Surface Description** (`otter-ui` `UiFrame`). Poll Wayland plus app-specific FDs (PTY for `otter-term`, config inotify, keyboard repeat).

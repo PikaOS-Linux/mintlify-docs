@@ -23,7 +23,7 @@ otter-transcribe --model /path/to/model.gguf
 ```
 
 <Note>
-The daemon hot-reloads config changes via inotify. You do not need to restart it after editing `otter-transcribe.conf`. Theme colors and transcription settings apply immediately.
+The daemon hot-reloads config changes via inotify. You do not need to restart it after editing `otter-transcribe.conf`. Theme colors and transcription settings apply immediately. After a model unload, the daemon restarts itself once recording is idle.
 </Note>
 
 ## Controlling with Hotkeys
