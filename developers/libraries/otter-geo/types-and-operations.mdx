@@ -1,0 +1,61 @@
+---
+title: "Types and operations"
+sidebarTitle: "Types"
+description: "Point, Rect, Circle, Padding, Align, and Transform in otter-geo."
+---
+
+All types live in `otter-geo`'s root module.
+
+## Point
+
+```zig
+const geo = @import("otter_geo");
+
+const p1 = geo.Point{ .x = 10, .y = 20 };
+const p2 = geo.Point{ .x = 5, .y = 10 };
+const sum = p1.add(p2);
+const bounds = p1.spanningRect(p2);
+```
+
+## Rect
+
+```zig
+const rect = geo.Rect{ .x = 0, .y = 0, .width = 100, .height = 100 };
+const centered = rect.center(geo.Point{ .x = 20, .y = 20 });
+
+if (rect.intersection(other)) |inter| {
+    _ = inter;
+}
+
+if (rect.removePadding(geo.Padding.uniform(10))) |inner| {
+    _ = inner;
+}
+```
+
+Common helpers: `containsPoint`, `containsRect`, `inset`, `offset`, `clipTo`.
+
+## Circle
+
+```zig
+const circle = geo.Circle.largestCircle(rect);
+if (circle.containsPoint(p1)) { }
+```
+
+## Padding
+
+Four-sided inset: north, south, east, west. `Padding.uniform(n)` sets all sides.
+
+## Align
+
+`Align` enum: `start`, `center`, `end`. Used by `otter-ui` `LayoutSpec` for child alignment in flex containers.
+
+## Transform
+
+2D rotation and composition with i32 fixed-point matrix math.
+
+```zig
+const rotated = geo.Transform.rotate_cw;
+const combined = geo.Transform.identity.compose(rotated);
+```
+
+Use for icon rotation and surface transforms where floats would complicate damage tracking.

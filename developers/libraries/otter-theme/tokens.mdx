@@ -1,0 +1,48 @@
+---
+title: "Tokens"
+sidebarTitle: "Tokens"
+description: "Theme color, bar, popup, spacing, and surface tokens in otter-theme."
+---
+
+`Theme` is a nested struct of token groups. All values have defaults (Otter Shell matte preset).
+
+## Colors
+
+| Token | Role |
+|-------|------|
+| `background` | App view background |
+| `background_alt` | Recessed controls |
+| `foreground` | Primary text |
+| `muted` | Secondary text |
+| `accent` | Focus, links, progress |
+| `active` | Selected background |
+| `success` / `warning` / `critical` | Status semantics |
+| `charging` | Positive action accent |
+
+## Bar
+
+`bar.height`, `bar.padding`, `bar.background`, `bar.item_background`, `bar.item_hover`, `bar.item_active`, `bar.separator`, and related chrome tokens.
+
+## Popup
+
+Shared menu and tooltip styling: `popup.background`, `popup.border`, `popup.highlight`, `popup.selected`, `popup.padding`, `popup.item_height`.
+
+## Spacing and fonts
+
+`spacing.widget_padding`, `spacing.icon_size`, `spacing.item_spacing`, `fonts.font_family`, `fonts.tooltip_size`.
+
+## Surfaces and density
+
+`surfaces.view`, `surfaces.surface`, `surfaces.surface_alt`, `surfaces.focus_ring`, plus `density.control_height`, `density.control_radius`, `density.panel_radius`.
+
+## Decorations
+
+`decorations.server_side` requests compositor-side XDG decorations when supported.
+
+## Transparency
+
+`transparency.global_alpha` scales surface opacity (percentage 0..100).
+
+## Config keys
+
+`theme.conf` flattens nested structs: `colors_accent`, `bar_height`, `popup_padding`, `spacing_icon_size`, etc. See [Presets and loading](/developers/libraries/otter-theme/presets-and-loading).

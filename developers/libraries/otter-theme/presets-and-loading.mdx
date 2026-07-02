@@ -1,0 +1,64 @@
+---
+title: "Presets and loading"
+sidebarTitle: "Presets"
+description: "Bundled theme presets and theme.conf loading in otter-theme."
+---
+
+## Bundled presets
+
+12 comptime presets in `presets.zig`:
+
+| Preset | Style |
+|--------|-------|
+| Otter Shell | Default matte continuous bar |
+| Otter Shell Islands | Grouped floating bar |
+| Catppuccin Mocha / Latte / Frappe / Macchiato | Catppuccin family |
+| Nord | Arctic blue dark |
+| Gruvbox Dark / Light | Retro |
+| Dracula | Purple dark |
+| Tokyo Night | Cool blue dark |
+| One Dark | Atom-inspired dark |
+
+```zig
+const presets = @import("otter_theme").presets;
+
+if (presets.findPreset("Nord")) |preset| {
+    const theme = preset.theme;
+}
+```
+
+`otter-theme-gen` and settings UI write preset selections into `theme.conf`.
+
+## Loading
+
+Fallback chain:
+
+1. `~/.config/otter-shell/theme.conf`
+2. `/etc/otter-shell/theme.conf`
+3. Compiled defaults
+
+```zig
+const theme = otter_theme.loadTheme(allocator);
+
+var buf: [std.fs.max_path_bytes]u8 = undefined;
+if (otter_theme.getThemeConfigPath(&buf)) |path| {
+    // watch with inotify for hot-reload
+}
+```
+
+`loadThemeFromPath` parses a specific file without the fallback chain.
+
+## Example theme.conf
+
+```conf
+colors_background = "#18182566"
+colors_foreground = "#ffffffff"
+colors_accent = "#89b4faff"
+bar_height = 32
+spacing_icon_size = 18
+fonts_font_family = "Inter"
+transparency_global_alpha = 95
+decorations_server_side = true
+```
+
+Apps reload on `IN_CLOSE_WRITE` and re-pass `Theme` to the next UI frame.

@@ -1,0 +1,64 @@
+---
+title: "Connection and surfaces"
+sidebarTitle: "Connection"
+description: "Connection, layer shell, XdgToplevel, LayerPopup, and workspace tracking."
+---
+
+## Connection
+
+```zig
+var conn: otter_wayland.Connection = .{};
+conn.callbacks = .{
+    .on_output_added = onOutput,
+    .on_seat_added = onSeat,
+    .context = &app,
+};
+try conn.init();
+```
+
+Register globals before `init` completes. Dispatch until `running` is false.
+
+## Layer shell
+
+Bar panels and overlays use `zwlr_layer_shell_v1`. Anchor presets live on `Anchor`:
+
+- `top_bar`, `bottom_bar`, `left_panel`, `right_panel`, `fullscreen`
+
+Set `Layer` (`background`, `bottom`, `top`, `overlay`) per surface role.
+
+## XDG toplevel
+
+```zig
+var toplevel = otter_wayland.XdgToplevel.init(&conn, .{
+    .on_configure = onConfigure,
+    .on_close = onClose,
+    .context = &state,
+});
+toplevel.bindListeners();
+toplevel.setTitle("My window");
+toplevel.setAppId("com.example.app");
+```
+
+`on_configure` receives logical size; `0` means client picks dimensions.
+
+## LayerPopup
+
+Transient menus and tooltips:
+
+```zig
+var popup = otter_wayland.LayerPopup.init(.{ .wl_shm = wl_shm, ... });
+try popup.showWithScale(.menu, x, y, w, h, scale, drawCb, ctx);
+popup.hide();
+popup.processPendingHide();
+```
+
+## Workspaces and toplevels
+
+| Type | Role |
+|------|------|
+| `ExtWorkspaceManager` | `ext_workspace_manager_v1` state |
+| `ForeignToplevelManager` | Active window title and `app_id` |
+| `WorkspaceProvider` | Unified snapshot across compositor backends |
+| `HyprlandManager` | Hyprland IPC fallback |
+
+Subscribe with `.subscribe(callback, context)` and read snapshots after protocol events.

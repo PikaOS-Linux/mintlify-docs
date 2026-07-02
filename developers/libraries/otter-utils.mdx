@@ -1,17 +1,54 @@
 ---
 title: "otter-utils"
 sidebarTitle: "otter-utils"
-description: "Pure Zig utilities: BoundedArray, logging, FilePath, inotify, and config path helpers."
+description: "Pure Zig utilities: BoundedArray, FilePath, logging, inotify, and Otter config paths."
 ---
 
-Pure Zig utilities. No external dependencies.
+`otter-utils` is the bottom of the Otter Shell stack. Pure Zig, no external deps. Every library and app links it for bounded containers, path helpers, logging, file watching, and shared XDG paths under `~/.config/otter-shell/`.
 
-- `BoundedArray`: fixed-capacity arrays without heap allocation
-- Logging helpers
-- `FilePath`: path manipulation
-- Inotify wrappers
-- Config and runtime path helpers (`~/.config/otter-shell/`)
-- `runtime_state`: runtime files under `$XDG_RUNTIME_DIR/otter-shell/` (including `wallpaper-state` for lock screen sync)
-- `assist`: chat-turn prompt formatting helpers for the workspace `otter-assist` app
+## Quick example
 
-Used by every other library and application.
+```zig
+const utils = @import("otter_utils");
+
+var arr = utils.BoundedArray(u8, 256){};
+try arr.appendSlice("hello");
+
+const mylog = utils.log.Scoped("my-app");
+mylog.info("starting", .{});
+
+var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+const config_path = utils.config_paths.otterConfigPath(&path_buf, "myapp.conf") orelse return error.NoHome;
+```
+
+## Documentation map
+
+<CardGroup cols={2}>
+  <Card title="Arrays and paths" icon="layer-group" href="/developers/libraries/otter-utils/arrays-and-paths">
+    `BoundedArray`, `FilePath`, `FixedString`, and stack buffers.
+  </Card>
+  <Card title="Logging" icon="terminal" href="/developers/libraries/otter-utils/logging">
+    Scoped loggers, counters, timers, and periodic reporters.
+  </Card>
+  <Card title="Inotify" icon="eye" href="/developers/libraries/otter-utils/inotify">
+    Generic file and directory watcher for event loops.
+  </Card>
+  <Card title="Config and runtime paths" icon="folder" href="/developers/libraries/otter-utils/config-and-runtime-paths">
+    XDG config, data, cache, runtime dirs, and `runtime_state`.
+  </Card>
+</CardGroup>
+
+## Other exports
+
+| Module | Purpose |
+|--------|---------|
+| `process` / `command` | Spawn subprocesses with bounded argv |
+| `SubscriberList` | Lightweight pub/sub for state changes |
+| `unix_socket` | Bounded Unix socket paths and FD hardening |
+| `app_id_match` | Match Wayland `app_id` strings |
+| `assist` | ChatML prompt helpers for workspace `otter-assist` |
+| `cli` | Shared CLI flag parsing for small tools |
+
+## Dependencies
+
+None.

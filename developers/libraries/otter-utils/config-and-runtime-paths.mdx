@@ -1,0 +1,45 @@
+---
+title: "Config and runtime paths"
+sidebarTitle: "Paths"
+description: "XDG config, data, cache, runtime paths, and runtime_state in otter-utils."
+---
+
+`config_paths` centralizes Otter Shell XDG locations. Apps should not hardcode `~/.config/otter-shell/` strings.
+
+## Config and data
+
+```zig
+const paths = @import("otter_utils").config_paths;
+
+var buf: [std.fs.max_path_bytes]u8 = undefined;
+
+// ~/.config/otter-shell/myapp.conf
+const conf = paths.otterConfigPath(&buf, "myapp.conf") orelse return error.NoHome;
+
+// ~/.config/otter-shell/ (trailing slash)
+const dir = paths.otterConfigDir(&buf) orelse return error.NoHome;
+
+// ~/.local/share/otter-shell/...
+const data = paths.otterDataPath(&buf, "clip-history.json") orelse return error.NoHome;
+```
+
+Helpers exist for cache dirs, paths from an explicit home directory (tests), and ensuring cache directories exist.
+
+## Runtime directory
+
+State under `$XDG_RUNTIME_DIR/otter-shell/`:
+
+```zig
+const runtime = paths.otterRuntimePath(&buf, "wallpaper-state") orelse return error.NoRuntime;
+try paths.ensureOtterRuntimeDir(allocator);
+```
+
+`runtime_state` reads and writes small JSON-ish state files here (for example lock screen wallpaper sync). `runtime_socket` builds bounded socket paths and can restrict socket FD permissions.
+
+## Legacy migration
+
+`legacy_paths` migrates old `/tmp/otter-*` clip and weather cache files into XDG data dirs on first access. Call the `resolve*` helpers rather than opening legacy paths directly.
+
+## Assist helpers
+
+`assist` parses JSON chat requests and formats ChatML prompts. Workspace-only; used by `otter-assist`, not packaged in `otter-shell` metapackages.

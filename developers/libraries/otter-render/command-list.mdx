@@ -1,0 +1,51 @@
+---
+title: "Command list"
+sidebarTitle: "Command list"
+description: "DefaultCommandList, scissor, damage culling, and quad_renderer."
+---
+
+Deferred rendering records draw ops into a bounded buffer, then plays them back once per frame.
+
+## Recording
+
+```zig
+var cmds: render.DefaultCommandList = .{};
+cmds.scale = surface.scale;
+cmds.font = &font;
+cmds.clear(render.Color.black);
+cmds.solidRect(rect, bg);
+cmds.text(.{ .x = 15, .y = 35 }, "Hello", 16, render.Color.white);
+cmds.scissorPush(clip_rect);
+// clipped content
+cmds.scissorPop();
+cmds.reset(); // reuse next frame
+```
+
+`DefaultCommandList` is `CommandList(2048, 32 * 1024)`. Strings intern inside the list buffer.
+
+Command families: `solidRect`, `blendRect`, `rectOutline`, `circle`, `text`, `image`, `imageFill`, `sprite`, `clear`, scissor stack (depth 8).
+
+## Rasterize
+
+```zig
+render.quad_renderer.rasterize(
+    render.DefaultCommandList,
+    &cmds,
+    &surface,
+    null,
+    damage_rects,
+    full_damage,
+);
+```
+
+- Scissor stack clips shapes and images.
+- When `full_damage` is false, commands outside `damage_rects` are skipped.
+- Font resolution: `font_instance` param, then `list.font`.
+
+## SDF rounded rects
+
+Rounded corners use an SDF path inside `quad_renderer`. Surface Description panel nodes emit these commands automatically.
+
+## Ownership
+
+New app UI should use `otter-ui` `UiState`, which owns the command list. Direct recording remains for bar widgets, monitor chrome, and renderer internals.

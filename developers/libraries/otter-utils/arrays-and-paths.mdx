@@ -1,0 +1,52 @@
+---
+title: "Arrays and paths"
+sidebarTitle: "Arrays & paths"
+description: "BoundedArray, FilePath, and FixedString in otter-utils."
+---
+
+Otter Shell avoids heap allocation on hot paths. `otter-utils` supplies fixed-capacity containers and stack path builders.
+
+## BoundedArray
+
+Drop-in for removed `std.BoundedArray` in Zig 0.15+. Fixed capacity, dynamic length, no heap.
+
+```zig
+const utils = @import("otter_utils");
+
+var arr = utils.BoundedArray(u8, 256){};
+try arr.append(42);
+try arr.appendSlice("hello");
+
+const slice = arr.constSlice();
+```
+
+Use for hit region lists, workspace IDs, damage rects, and any bounded collection in daemons.
+
+## FilePath
+
+Stack buffer sized to `fs.max_path_bytes`. Build paths from segments without allocating.
+
+```zig
+const FilePath = @import("otter_utils").FilePath;
+
+const path = try FilePath.from("/home/user/docs");
+const path2 = try FilePath.fromMany(&.{ "home", "user", "docs" });
+
+var builder = try FilePath.from("/home");
+try builder.appendSegment("user");
+const s = builder.slice(); // [:0]const u8
+
+_ = builder.pop(); // returns removed segment
+```
+
+## FixedString
+
+Small inline string buffer for titles, labels, and protocol names that must stay on the stack. See `fixed_string.zig` for capacity and append APIs.
+
+## When to use what
+
+| Type | Capacity | Best for |
+|------|----------|----------|
+| `BoundedArray(T, N)` | Comptime `N` | Homogeneous lists (IDs, rects, events) |
+| `FilePath` | `max_path_bytes` | Config paths, icon paths, socket paths |
+| `FixedString(N)` | Comptime `N` | Short names and cached strings |

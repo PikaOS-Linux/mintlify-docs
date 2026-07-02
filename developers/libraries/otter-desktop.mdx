@@ -1,38 +1,54 @@
 ---
 title: "otter-desktop"
 sidebarTitle: "otter-desktop"
-description: "Desktop integration: XDG icons, D-Bus services, PipeWire, PAM, and sysinfo."
+description: "Desktop integration: icons, .desktop files, D-Bus, PipeWire, PAM, and sysinfo."
 ---
 
-Desktop integration: icons, applications, D-Bus, system services.
+`otter-desktop` connects Otter Shell to the host OS: icon themes, application entries, session services, audio, brightness, and system metrics.
 
-### Applications
+Bar widgets, settings, greeter, lock, and monitor import subsets of this library.
 
-- XDG icon theme lookup with caching
-- `.desktop` file parsing with locale support
-- Application list with deduplication and hot-reload
+## Quick example
 
-### D-Bus services (via vendored sd-bus/basu)
+```zig
+const desktop = @import("otter_desktop");
 
-- UPower (battery), power-profiles-daemon, MPRIS (media), NetworkManager
-- System tray (StatusNotifierItem), polkit agent, fprintd
-- Notifications (`org.freedesktop.Notifications`)
-- Logind, ScreenSaver inhibit
+var cache = desktop.IconCache.init(allocator);
+defer cache.deinit();
+const icon = cache.lookup("firefox");
+```
 
-### System services
+## Documentation map
 
-- Brightness via `/sys/class/backlight/`
-- SysInfo: CPU, memory, disk, temperature via `/proc` and `/sys`
-- PipeWire: volume, mute, default device switching
-- SCX loader: scheduler monitoring and switching (includes `scx_flow`, used by the bar `falcond` widget)
-- `Monitor` collector: bounded procfs/sysfs polling for `otter-monitor` (processes, applications, CPU, memory, GPU via sysfs or NVML, disk, network, 60-sample history)
+<CardGroup cols={2}>
+  <Card title="Applications" icon="grid" href="/developers/libraries/otter-desktop/applications">
+    Icon lookup, `.desktop` parsing, app list, launcher.
+  </Card>
+  <Card title="D-Bus clients" icon="bus" href="/developers/libraries/otter-desktop/dbus-clients">
+    UPower, MPRIS, NetworkManager, notifications, tray, polkit.
+  </Card>
+  <Card title="System services" icon="gauge" href="/developers/libraries/otter-desktop/system-services">
+    Brightness, SysInfo, PipeWire, SCX, Falcond, Monitor collector.
+  </Card>
+  <Card title="Greeter and auth" icon="lock" href="/developers/libraries/otter-desktop/greeter-and-auth">
+    PAM, session catalog, logind, power actions.
+  </Card>
+</CardGroup>
 
-### Authentication
+## Build flags
 
-- PAM password auth for lockscreen and polkit
+| Flag | Effect |
+|------|--------|
+| `-Denable_dbus=false` | Drop D-Bus clients and dependents |
+| `-Denable_pipewire=false` | Drop PipeWire audio |
+| `-Denable_pam=false` | Drop PAM auth |
 
-Compile-time flags: `-Denable_dbus=false`, `-Denable_pipewire=false`, `-Denable_pam=false`.
+Check `desktop.has_dbus`, `has_pipewire`, `has_pam` at comptime when optional.
 
 <Note>
   `sd_bus_process()` handles one message per call. Loop until the queue is drained.
 </Note>
+
+## Dependencies
+
+`otter-utils`. Vendored basu (sd-bus) and PipeWire when enabled.

@@ -1,0 +1,35 @@
+---
+title: "Inotify"
+sidebarTitle: "Inotify"
+description: "File and directory watching with otter-utils inotify.Watcher."
+---
+
+`inotify.Watcher` wraps Linux inotify for config hot-reload and application list updates. Poll `getFd()` alongside Wayland and timer FDs.
+
+```zig
+const inotify = @import("otter_utils").inotify;
+
+var watcher = try inotify.Watcher.init(allocator);
+defer watcher.deinit();
+
+_ = try watcher.addWatch("/path/to/file", inotify.Watcher.Mask.file_changes);
+_ = try watcher.addWatch("/path/to/dir", inotify.Watcher.Mask.dir_changes);
+
+// After poll reports readability:
+while (watcher.nextEvent()) |event| {
+    if (event.isModified()) { /* reload */ }
+    if (event.isCreated()) { /* rescan dir */ }
+}
+```
+
+## Event helpers
+
+| Method | Meaning |
+|--------|---------|
+| `isModified()` | File written and closed |
+| `isDeleted()` | File removed |
+| `isCreated()` | New file in watched directory |
+| `isMoved()` | Rename or move |
+| `isIgnored()` | Watch removed (file deleted or unmount) |
+
+`otter-conf` and `otter-desktop` both use this wrapper. Prefer importing from `otter_utils` in app code unless you need `otter-conf`'s path-indexed watcher.

@@ -1,14 +1,36 @@
 ---
 title: "otter-theme"
 sidebarTitle: "otter-theme"
-description: "Shared theme tokens, spacing, popup styles, and 12 bundled presets."
+description: "Semantic theme tokens, spacing, presets, and theme.conf loading."
 ---
 
-Shared visual theme: semantic color tokens, spacing, popup styles, bar chrome, font tokens.
+`otter-theme` defines how Otter Shell looks. Semantic colors, bar chrome, popup styles, spacing, fonts, and surface roles live as plain data structs. No I/O inside the theme module itself.
 
-- 12 bundled presets: Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, One Dark
-- `loader.loadTheme(allocator)`: reads `~/.config/otter-shell/theme.conf`
-- Pure data structs: no I/O in the theme module itself
-- Apps watch `theme.conf` via inotify for hot-reload
+Apps load `~/.config/otter-shell/theme.conf` through `loader.loadTheme` and pass `Theme` into `otter-ui` `FrameOptions`.
 
-Widget configs use `?Color = null` fields resolved as: widget config, then theme token, then compiled default.
+## Quick example
+
+```zig
+const otter_theme = @import("otter_theme");
+
+const theme = otter_theme.loadTheme(allocator);
+const accent = theme.colors.accent;
+const bar_h = theme.bar.height;
+```
+
+Widget configs resolve colors as: widget field, then theme token, then compiled default (`?Color = null` pattern).
+
+## Documentation map
+
+<CardGroup cols={2}>
+  <Card title="Tokens" icon="palette" href="/developers/libraries/otter-theme/tokens">
+    Colors, bar, popup, spacing, fonts, surfaces, density.
+  </Card>
+  <Card title="Presets and loading" icon="swatchbook" href="/developers/libraries/otter-theme/presets-and-loading">
+    12 bundled presets, `theme.conf`, hot-reload paths.
+  </Card>
+</CardGroup>
+
+## Dependencies
+
+`otter-geo`, `otter-render`, `otter-conf`, `otter-utils`.

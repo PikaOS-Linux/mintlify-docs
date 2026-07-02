@@ -1,0 +1,27 @@
+---
+title: "Theme helpers"
+sidebarTitle: "Theme helpers"
+description: "SplatHash, theme_palette, and app_configs in otter-tools-core."
+---
+
+## SplatHash
+
+`splathash` samples dominant colors from image regions. `otter-theme-gen` and `otter-shot` gradient backgrounds use it to build palettes from screenshots or wallpapers.
+
+## Semantic palettes (`theme_palette`)
+
+Generates coordinated color sets from a seed accent. Feeds `otter-theme-gen` output and shot gradient modes without pulling in `otter-theme` at runtime in every tool.
+
+## App config sync
+
+`app_configs.zig` structs follow the same rules as `otter-config-types`:
+
+- Defaults on every field
+- `?Color = null` for theme-mapped colors
+- Loaded with `otter-conf` in the app, edited in `otter-settings`
+
+Keeping schemas here (not in `otter-config-types`) marks them as small-tool configs separate from desktop daemons.
+
+## Boundaries
+
+Do not add Wayland or render imports to this crate. If a helper needs pixels, keep decode in the app and pass RGBA slices into `splathash` / `theme_palette`.

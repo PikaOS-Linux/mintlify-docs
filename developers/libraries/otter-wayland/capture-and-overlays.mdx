@@ -1,0 +1,35 @@
+---
+title: "Capture and overlays"
+sidebarTitle: "Capture"
+description: "Screen capture, selection overlay, and dim overlay in otter-wayland."
+---
+
+## Screen capture
+
+`capture` module wraps `ext_image_copy_capture_v1`:
+
+- `Capturer`: session lifecycle
+- `OutputList` / `OutputInfo`: monitor enumeration
+- Toplevel capture for window shots
+
+Used by screenshot, recording, and wallpaper tools.
+
+## Capture overlay
+
+`capture_overlay` draws a dimmed frozen backdrop for interactive capture UIs. Pairs with live capture frames from `capture`.
+
+## Selection overlay
+
+Drag-to-select for `otter-screenshot`, `otter-shot`, and `otter-rec`. Draws directly to SHM buffers with incremental damage. Does not use Surface Description.
+
+| Preset | App | Visual |
+|--------|-----|--------|
+| `selection_overlay.preset.screenshot` | `otter-screenshot` | Full-brightness freeze, border-only chrome |
+| `selection_overlay.preset.shot` | `otter-shot` | Dimmed outside selection |
+| `selection_overlay.preset.rec` | `otter-rec` | Same as shot |
+
+Live mode skips the freeze and draws a shaded overlay. The selector can hide the cursor when the capture omits it.
+
+## Dim overlay
+
+`DimOverlay` is a fullscreen layer surface for modal dimming (logout menu, lock transitions).

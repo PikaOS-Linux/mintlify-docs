@@ -1,20 +1,39 @@
 ---
 title: "otter-tools-core"
 sidebarTitle: "otter-tools-core"
-description: "Pure-Zig helpers for small CLI tools: calc, emoji, clipboard, calendar, weather, and more."
+description: "Pure-Zig helpers for small CLI tools: calc, emoji, clipboard, calendar, and more."
 ---
 
-Pure-Zig bounded helpers for small CLI tools. No Wayland, D-Bus, or rendering deps.
+`otter-tools-core` holds shared logic for Otter Shell utility apps. No Wayland, D-Bus, PipeWire, or rendering deps. State stays bounded; each app keeps UI thin.
+
+Config schemas for small apps live in `app_configs.zig` and sync with `otter-settings` defaults.
+
+## Documentation map
+
+<CardGroup cols={2}>
+  <Card title="Tool modules" icon="wrench" href="/developers/libraries/otter-tools-core/tool-modules">
+    Calculator, emoji, clipboard, calendar, weather, color, record.
+  </Card>
+  <Card title="Theme helpers" icon="palette" href="/developers/libraries/otter-tools-core/theme-helpers">
+    SplatHash, semantic palettes, and shared app configs.
+  </Card>
+</CardGroup>
+
+## Module overview
 
 | Module | Used by |
 |--------|---------|
-| Calculator parsing | otter-calc, otter-launcher (`=EXPR`) |
-| Emoji search | otter-emoji, otter-launcher (`:QUERY`) |
-| Clipboard history | otter-clip, otter-launcher (`clip`) |
-| Calendar grids | otter-cal |
-| Duration parsing | otter-timer |
-| Weather URL construction | otter-weather |
-| Color conversion | otter-pick |
-| Recorder encoder selection | otter-rec |
+| `calc` | `otter-calc`, `otter-launcher` (`=EXPR`) |
+| `emoji` | `otter-emoji`, `otter-launcher` (`:QUERY`) |
+| `clipboard` / `clip_history` | `otter-clip`, `otter-launcher` |
+| `calendar` | `otter-cal` |
+| `duration` | `otter-timer` |
+| `weather` | `otter-weather` |
+| `color` | `otter-pick` |
+| `record` | `otter-rec` encoder selection |
 
-Config schemas for small apps live in `src/app_configs.zig`, shared with `otter-settings` for consistent defaults.
+Clipboard helpers invoke `wl-copy` by name. Packaged installs shadow that binary with `otter-copy`.
+
+## Dependencies
+
+`otter-conf`, `otter-utils`.

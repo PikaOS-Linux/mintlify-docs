@@ -1,0 +1,29 @@
+---
+title: "Command list"
+sidebarTitle: "Command list"
+description: "DynamicCommandList for terminal draw commands in otter-vte."
+---
+
+`DynamicCommandList` extends the render command model for terminal cells: background fills, glyph runs, powerline segments, and underline styles.
+
+```zig
+const vte = @import("otter_vte");
+
+var cmds = vte.DynamicCommandList.init(allocator);
+defer cmds.deinit();
+
+// Record cell draws for the visible grid
+// Attach TextSystem + ShapeScratch for RTL/CJK through otter-render
+cmds.text_system = &text_system;
+cmds.text_scratch = &scratch;
+```
+
+Reset or reuse the list each frame like `DefaultCommandList`. Terminal views often damage row bands instead of the full grid.
+
+## Text shaping
+
+When `text_system` and `text_scratch` are set, text commands use HarfBuzz shaping and font fallbacks from `otter-render`. Plain ASCII can omit them for the FreeType fast path.
+
+## Playback
+
+Rasterize with `otter-render` `quad_renderer`, passing terminal damage rects for row-level culling.

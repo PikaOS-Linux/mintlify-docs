@@ -1,0 +1,51 @@
+---
+title: "System services"
+sidebarTitle: "System"
+description: "Brightness, SysInfo, PipeWire, SCX, Falcond, and Monitor in otter-desktop."
+---
+
+## Brightness
+
+Sysfs backlight control with connector-to-device matching for internal panels (eDP, LVDS, DSI).
+
+```zig
+var brightness = otter_desktop.Brightness.init();
+try brightness.openForConnector("eDP-1");
+brightness.setBrightness(50);
+brightness.adjustBrightness(-10);
+```
+
+## SysInfo
+
+CPU percent, memory, disk, load averages, uptime, and CPU temperature from `/proc` and `/sys`. Intel coretemp and AMD k10temp/zenpower sensors only (ignores GPU/network thermal nodes).
+
+```zig
+var sysinfo = otter_desktop.SysInfo.init();
+sysinfo.subscribe(onChange, &ctx);
+if (sysinfo.poll()) { /* subscribers notified */ }
+```
+
+## PipeWire
+
+Per-device volume, mute, default sink/source switching, and hot-plug via native libpipewire. Volume steps use `roundToStep()` to avoid float drift.
+
+Requires `-Denable_pipewire=true` (default).
+
+## SCX Loader
+
+Monitor and switch schedulers (`bpfland`, `scx_lavd`, etc.) through `scx_loader` D-Bus service.
+
+## Falcond
+
+Reads Falcond daemon status file via inotify. Surfaces performance mode and active SCX profile to the bar `falcond` widget.
+
+## Monitor collector
+
+`desktop.Monitor` provides bounded procfs/sysfs polling for `otter-monitor`:
+
+- Processes and applications
+- CPU, memory, GPU (sysfs or NVML)
+- Disk and network
+- 60-sample history rings
+
+Keeps collection logic out of the monitor app's UI code.

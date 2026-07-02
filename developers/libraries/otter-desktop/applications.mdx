@@ -1,0 +1,53 @@
+---
+title: "Applications"
+sidebarTitle: "Applications"
+description: "Icon lookup, desktop entries, AppList, and launcher in otter-desktop."
+---
+
+## Icon lookup
+
+```zig
+if (otter_desktop.findIcon(allocator, "firefox")) |path| {
+    defer allocator.free(path);
+}
+
+var cache = otter_desktop.IconCache.init(allocator);
+const path = cache.lookup("firefox");
+```
+
+Search order:
+
+1. Preferred themes (Papirus, Breeze, Adwaita, hicolor, etc.) with SVG preferred over PNG
+2. Remaining themes on disk
+3. Pixmaps directories
+4. `.desktop` `Icon=` fallback (exact filename, then directory scan for AppImages)
+
+Base paths include XDG data home, `/usr/share/icons`, and Flatpak export trees.
+
+## Desktop entries
+
+```zig
+var entry = try otter_desktop.applications.desktop_entry.parse(allocator, path, .{});
+defer entry.deinit();
+// entry.name, entry.exec, entry.icon, Terminal flag, etc.
+```
+
+Locale-aware `Name` and `Comment` resolution follows XDG rules.
+
+## Application list
+
+```zig
+var apps = try otter_desktop.applications.AppList.initWithWatcher(allocator);
+try apps.scan();
+apps.subscribe(onAppsChanged, &ctx);
+```
+
+`AppDirWatcher` uses `otter-utils` inotify on XDG applications directories.
+
+## Launcher
+
+```zig
+try otter_desktop.applications.launcher.launch(allocator, &entry);
+```
+
+Expands `%f`, `%u`, `%i` exec fields. `Terminal=true` entries spawn through detected terminal (`$TERMINAL`, then foot, otter-term, kitty, etc.).

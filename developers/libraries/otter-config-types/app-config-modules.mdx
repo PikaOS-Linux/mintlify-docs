@@ -1,0 +1,49 @@
+---
+title: "App config modules"
+sidebarTitle: "Modules"
+description: "Per-app config structs in otter-config-types."
+---
+
+Each `src/*.zig` file exports a `Config` struct (and nested widget configs) for one app or daemon.
+
+| Module | Application | Notes |
+|--------|-------------|-------|
+| `bar` | `otter-bar` | `LayoutConfig`, `ClockConfig`, `WorkspacesConfig`, `BatteryConfig`, widgets |
+| `launcher` | `otter-launcher` | Appearance, sort order, keybinds |
+| `dock` | `otter-dock` | Workspace-only, not in metapackage |
+| `notifications` | `otter-notifications` | Timeout, position, styling |
+| `wallpaper` | `otter-wallpaper` | Mode, paths, transitions |
+| `osd` | `otter-osd` | Volume/brightness overlay |
+| `jade` | `otter-jade` | Layer-shell pet |
+| `logout` | `otter-logout` | Power menu overlay |
+| `polkit` | `otter-polkit` | Auth dialog chrome |
+| `lock` | `otter-lock` | Colors, layout, PAM, focus output |
+| `greeter` | `otter-greeter` | Login UI tokens |
+| `idle` | `otter-idle` | Idle timeouts and dim |
+| `monitor` | `otter-monitor` | `refresh_interval_seconds` (1..3600) |
+| `transcribe` | `otter-transcribe` | Model and device prefs |
+| `term` | `otter-term` | Font, scrollback, palette |
+| `theme_gen` | `otter-theme-gen` | Generation options |
+| `assist` | `otter-assist` | Workspace-only backend settings |
+
+### Monitor example
+
+```zig
+pub const Config = struct {
+    refresh_interval_seconds: u16 = 3, // clamped 1..3600 at runtime
+};
+```
+
+### Assist example (workspace-only)
+
+```zig
+pub const Backend = enum { cpu, vulkan };
+
+pub const Config = struct {
+    backend: Backend = .vulkan,
+    vulkan_device: i32 = -1,
+    idle_seconds: u32 = 120,
+};
+```
+
+Small tool configs (`calc`, `emoji`, `clip`, etc.) live in `otter-tools-core` `app_configs.zig`, not here.

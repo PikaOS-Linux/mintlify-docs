@@ -4,14 +4,11 @@ sidebarTitle: "otter-conf"
 description: "Comptime-generic config parser with mmap I/O, serialization, and inotify hot-reload."
 ---
 
-Comptime-generic config parser. Define a Zig struct and get a specialized parser at compile time.
+`otter-conf` parses flat `key = value` files into Zig structs. The parser is generated at comptime from your struct shape. Files load through memory-mapped I/O.
 
-- Flat `key = value` format with `#` comments
-- Types: booleans, integers, floats, strings, enums, arrays, optionals, nested structs
-- Memory-mapped file I/O
-- Forward-compatible: unknown fields are silently skipped
-- Serialization back to disk
-- `Watcher`: inotify-based hot-reload
+Otter Shell apps define schemas in `otter-config-types` and load them with `otter-conf`.
+
+## Quick start
 
 ```zig
 const otter_conf = @import("otter_conf");
@@ -25,8 +22,38 @@ var config = try otter_conf.load(Config, allocator, "/path/to/config.conf", .{})
 defer otter_conf.freeConfig(Config, allocator, &config);
 ```
 
-Add to your project:
+Example file:
 
-```bash
-zig fetch --save git+https://git.pika-os.com/otter-shell/otter-conf
+```conf
+# Application configuration
+port = 443
+debug = false
 ```
+
+## Documentation map
+
+<CardGroup cols={2}>
+  <Card title="Format and types" icon="file-lines" href="/developers/libraries/otter-conf/format-and-types">
+    Syntax, supported field types, strings, enums, arrays.
+  </Card>
+  <Card title="Loading API" icon="download" href="/developers/libraries/otter-conf/loading-api">
+    `load`, `loadFromSlice`, directories, serialization, `save`.
+  </Card>
+  <Card title="Hot reload" icon="rotate" href="/developers/libraries/otter-conf/hot-reload">
+    `hasChanged`, `Watcher`, and poll-loop integration.
+  </Card>
+  <Card title="Advanced features" icon="code" href="/developers/libraries/otter-conf/advanced-features">
+    Nested structs, custom types, `Dynamic`, and `import`.
+  </Card>
+</CardGroup>
+
+## Conventions
+
+- Every struct field needs a default value.
+- Unknown keys are skipped (forward compatible).
+- Nested structs flatten to `prefix_field` keys (`clock_enabled`, `clock_text_color`).
+- Call `freeConfig` when the struct owns heap strings or slices.
+
+## Dependencies
+
+`otter-utils` (inotify wrapper for `Watcher`).

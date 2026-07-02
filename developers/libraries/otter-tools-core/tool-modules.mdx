@@ -1,0 +1,47 @@
+---
+title: "Tool modules"
+sidebarTitle: "Modules"
+description: "Per-tool pure-Zig modules in otter-tools-core."
+---
+
+Each module exposes parse, search, or format functions without UI. Apps wire results into Surface Description or stdout.
+
+## Calculator (`calc`)
+
+Expression parsing and evaluation for `otter-calc` and launcher `=EXPR` mode. Integer and float paths with bounded token buffers.
+
+## Emoji (`emoji`)
+
+Emoji name search and `:query` completion data shared by `otter-emoji` and launcher.
+
+## Clipboard (`clipboard`, `clip_history`)
+
+History store bounds and `wl-copy`/`wl-paste` compatible invocation. `clip_history` persists entries under XDG data paths via `otter-utils` helpers.
+
+## Calendar (`calendar`)
+
+Month grid generation and weekday headers for `otter-cal`.
+
+## Duration (`duration`)
+
+Human-readable duration parsing (`5m`, `1h30s`) for `otter-timer`.
+
+## Weather (`weather`)
+
+URL construction and response field extraction for `otter-weather`. No HTTP client here; apps fetch.
+
+## Color (`color`)
+
+RGB/HSL/hex conversion for `otter-pick` and launcher color preview.
+
+## Record (`record`)
+
+Encoder and container selection helpers for `otter-rec` (bounded list of installed tools).
+
+## Config (`config`)
+
+Shared key paths and load helpers for tools that read small `.conf` fragments.
+
+## App configs
+
+`app_configs.zig` defines structs for calc, emoji, clip, cal, timer, weather, pick, rec, shot, and related tools. Import from `otter_tools_core.app_configs` in both the app and `otter-settings`.

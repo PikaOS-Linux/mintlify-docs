@@ -1,0 +1,89 @@
+---
+title: "Advanced features"
+sidebarTitle: "Advanced"
+description: "Nested structs, custom types, Dynamic fields, and import in otter-conf."
+---
+
+## Nested structs
+
+Sub-structs flatten with a prefix:
+
+```zig
+const ClockConfig = struct {
+    enabled: bool = true,
+    text_color: Color = Color.white,
+};
+
+const Config = struct {
+    clock: ClockConfig = .{},
+};
+```
+
+```conf
+clock_enabled = true
+clock_text_color = "#FF0000FF"
+```
+
+Direct field names win over prefix matches.
+
+## Custom value types
+
+Structs with `parse` and `toStr` parse as single string values:
+
+```zig
+const Color = packed struct(u32) {
+    pub fn parse(str: []const u8) !Color { ... }
+    pub fn toStr(self: Color) [9]u8 { ... }
+};
+```
+
+```conf
+background = "#FFFFFFFF"
+```
+
+Parse errors keep the field default.
+
+## Dynamic collections
+
+`Dynamic(T, prefix)` models indexed bind maps and similar tables:
+
+```zig
+const Bind = struct {
+    mods: u32 = 0,
+    key: []const u8 = "",
+    action: []const u8 = "",
+};
+
+const Config = struct {
+    binds: otter_conf.Dynamic(Bind, "bind") = .{},
+};
+```
+
+Accepted forms:
+
+```conf
+bind = "Super+q,killclient"
+bind_0 = "Super+Return,spawn,kitty"
+bind_1_mods = 4
+bind_1_key = "q"
+bind_1_action = "killclient"
+```
+
+Call `config.binds.deinit(gpa)` to free the arena-backed slice.
+
+## Import
+
+Split config across files:
+
+```conf
+import = "binds.conf"
+import = "rules.conf"
+name = "main"
+```
+
+```zig
+var res = try otter_conf.loadWithImports(Config, gpa, path, .{});
+defer res.deinit(gpa);
+```
+
+Relative imports resolve from the parent file's directory. Circular imports return `error.CircularImport`. Nesting is capped at 128 files.

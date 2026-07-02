@@ -1,39 +1,52 @@
 ---
 title: "otter-render"
 sidebarTitle: "otter-render"
-description: "CPU rendering pipeline: fonts, images, CommandList, quad_renderer, and SDF rounded rects."
+description: "CPU rendering: colors, surfaces, fonts, images, CommandList, and quad_renderer."
 ---
 
-CPU rendering pipeline for all Otter UI.
+`otter-render` is Otter Shell's software renderer. Colors, surfaces, FreeType fonts, HarfBuzz shaping, image decode, and deferred draw commands all live here.
 
-- ARGB color operations (Wayland argb8888 compatible)
-- FreeType font rendering with glyph caching
-- HarfBuzz shaping + itijah bidi via `TextSystem` / `ShapeScratch`
-- Image loading (PNG, JPG, BMP, GIF via zigimg). Decoded RGBA size is capped separately from compressed file size (up to 256 MiB decoded).
-- Sprite sheets and animation (integer-only ease-out quadratic)
-- `CommandList` deferred rendering + `quad_renderer` with scissor clipping and damage culling
-- `CommandList.graph()`: filled area plus line chart for time-series samples (used by monitor history graphs)
-- SDF-based rounded rectangles
+`otter-ui` builds `CommandList` entries. Apps call `quad_renderer.rasterize` to paint SHM buffers.
 
-### TextSystem
-
-`TextSystem` wraps HarfBuzz and itijah bidi around a `Font`. Use it for RTL text, mixed-direction labels, and CJK. Plain ASCII can stay on the FreeType fast path when you omit `TextSystem`.
-
-- `TextSystem.init(allocator, font)` / `deinit`
-- `ShapeScratch`: caller-owned buffer for shaped glyphs and bidi state, reused each frame
-- `hasStrongRtlUtf8` / `hasStrongRtlCodepoints`: quick checks before shaping
-- RTL glyph order matches HarfBuzz during rasterization
-
-Pass `text_system` and `text_scratch` through `otter-ui` `FrameOptions`, or attach both to `CommandList` for direct rasterization.
+## Quick example
 
 ```zig
 const render = @import("otter_render");
 
-fn drawHello(surface: *render.Surface, font: *render.Font) !void {
-    const accent = try render.parseColor("#FF5500");
-    surface.clear(render.Color.black);
-    font.drawText(surface, "Hello", .{ .x = 0, .y = 20 }, 16, accent);
-}
+const accent = try render.parseColor("#FF5500");
+var surface = render.Surface.fromPixels(&pixels, width, height);
+surface.clear(render.Color.black);
+
+const font = try render.Font.init(allocator, .{});
+defer font.deinit();
+font.drawText(&surface, "Hello", .{ .x = 0, .y = 20 }, 16, accent);
 ```
 
-Build flag `-Denable_text=false` drops font and shaping support.
+## Documentation map
+
+<CardGroup cols={2}>
+  <Card title="Colors and surfaces" icon="palette" href="/developers/libraries/otter-render/colors-and-surfaces">
+    `Color`, `Surface`, HiDPI scaling, and immediate-mode drawing.
+  </Card>
+  <Card title="Fonts and text" icon="font" href="/developers/libraries/otter-render/fonts-and-text">
+    `Font`, `TextSystem`, shaping, bidi, and fallbacks.
+  </Card>
+  <Card title="Images and animation" icon="image" href="/developers/libraries/otter-render/images-and-animation">
+    `Image`, sprite sheets, downsampling, and `Animation`.
+  </Card>
+  <Card title="Command list" icon="list" href="/developers/libraries/otter-render/command-list">
+    `DefaultCommandList`, scissor, damage culling, `quad_renderer`.
+  </Card>
+</CardGroup>
+
+## Build flags
+
+| Flag | Effect |
+|------|--------|
+| `-Denable_text=false` | Drop FreeType, HarfBuzz, Fontconfig |
+| `-Denable_svg=false` | SVG loads return `error.SvgDisabled` |
+| `-Denable_wide_image_formats=false` | Limit decode to PNG/JPEG |
+
+## Dependencies
+
+`otter-geo`, `otter-utils`, FreeType, HarfBuzz, Fontconfig, zigimg.

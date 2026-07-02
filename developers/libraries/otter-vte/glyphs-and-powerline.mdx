@@ -1,0 +1,29 @@
+---
+title: "Glyphs and powerline"
+sidebarTitle: "Glyphs"
+description: "PowerlineOps, BlockOps, and cell_glyphs in otter-vte."
+---
+
+## Powerline
+
+```zig
+const vte = @import("otter_vte");
+
+vte.drawPowerlineSeparator(cmds, rect, fg, bg, .right);
+vte.drawPowerlineTriangle(cmds, rect, fg, bg, .left);
+vte.drawPowerlineRound(cmds, rect, fg, bg, .right);
+```
+
+`PowerlineOps` and `PowerlineDirection` control separator geometry. Used by shell prompts and tab bars that mimic terminal powerline themes.
+
+## Block glyphs
+
+`BlockOps` draws block-drawing characters and heavy separators without font coverage gaps.
+
+## Custom glyphs
+
+`cell_glyphs.GlyphRects` maps special codepoints to pre-rasterized rects. Register glyphs for icons or private-use slots the primary font lacks.
+
+## Color mapping
+
+`ghosttyColor` converts terminal palette indices to `otter-render` `Color` for Ghostty-compatible themes.

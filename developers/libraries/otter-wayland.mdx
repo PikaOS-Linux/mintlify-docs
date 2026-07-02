@@ -1,43 +1,50 @@
 ---
 title: "otter-wayland"
 sidebarTitle: "otter-wayland"
-description: "Wayland client: layer shell, workspaces, keyboard, IME, clipboard, and damage tracking."
+description: "Wayland client: connection, layer shell, input, SHM pools, capture, and damage."
 ---
 
-Wayland client library wrapping common protocols.
+`otter-wayland` wraps the Wayland client APIs Otter Shell apps share: compositor connection, layer and XDG surfaces, pointer and keyboard input, clipboard, SHM buffers, and screen capture.
 
-### Protocols
+Poll `Connection.dispatch()` in your main loop alongside config watchers and timer FDs.
 
-- `wl_compositor`, `wl_seat`, `wl_shm`, `wl_output`
-- `zwlr_layer_shell_v1`: panels and overlays
-- `ext_workspace_manager_v1`: workspace tracking
-- `zwlr_foreign_toplevel_manager_v1`: active window tracking
-- `zwp_text_input_v3`: IME for CJK input
-- `ext_session_lock_v1`: lockscreen
-- `wl_data_device`: clipboard and drag-and-drop
-- `wp_viewporter`: HiDPI buffer scaling
+## Quick example
 
-### Key modules
+```zig
+const wl = @import("otter_wayland");
 
-- `Connection`: event loop and dispatch
-- `Keyboard`: xkbcommon wrapper with key repeat
-- `TextInput`: IME integration (check `isComposing()` before handling keys)
-- `Clipboard`: paste and drag-and-drop
-- `DamageTracker`: dirty rect accumulation with overflow fallback to full redraw
-- `capture`: `ext_image_copy_capture_v1` output and toplevel capture helpers
-- `capture_overlay`: dimmed frozen-capture backdrop for interactive tools
-- `selection_overlay`: shared region selector for `otter-screenshot`, `otter-shot`, and `otter-rec`
+var conn: wl.Connection = .{};
+try conn.init();
+defer conn.deinit();
 
-### Region selection overlay
+while (conn.running) {
+    try conn.dispatch();
+}
+```
 
-Drag-to-select for screenshots, product shots, and recordings. Pixels go straight to SHM buffers with incremental damage. This path does not use Surface Description.
+## Documentation map
 
-Each app passes a preset (namespace, pool names, visual mode):
+<CardGroup cols={2}>
+  <Card title="Connection and surfaces" icon="plug" href="/developers/libraries/otter-wayland/connection-and-surfaces">
+    `Connection`, layer shell, `XdgToplevel`, `LayerPopup`, workspaces.
+  </Card>
+  <Card title="Input" icon="keyboard" href="/developers/libraries/otter-wayland/input">
+    Pointer, keyboard, IME, clipboard, virtual keyboard.
+  </Card>
+  <Card title="SHM and damage" icon="memory" href="/developers/libraries/otter-wayland/shm-and-damage">
+    `DoubleShmPool`, `SingleShmPool`, `DamageTracker`, `Renderer`.
+  </Card>
+  <Card title="Capture and overlays" icon="camera" href="/developers/libraries/otter-wayland/capture-and-overlays">
+  Screen capture, selection overlay, dim overlay.
+  </Card>
+</CardGroup>
 
-| Preset | Used by | Visual mode |
-|--------|---------|-------------|
-| `selection_overlay.preset.screenshot` | `otter-screenshot` | Frozen capture at full brightness; border-only selection chrome |
-| `selection_overlay.preset.shot` | `otter-shot` | Frozen capture dimmed outside the selection |
-| `selection_overlay.preset.rec` | `otter-rec` | Same as shot |
+## Protocols
 
-Live mode skips the freeze and draws a shaded overlay instead. The selector can hide the cursor when the capture omits it.
+`wl_compositor`, `wl_seat`, `wl_shm`, `wl_output`, `zwlr_layer_shell_v1`, `ext_workspace_manager_v1`, `zwlr_foreign_toplevel_manager_v1`, `zwp_text_input_v3`, `ext_session_lock_v1`, `wl_data_device`, `wp_viewporter`, `wp_cursor_shape_manager_v1`.
+
+Workspace providers also exist for Hyprland IPC, Niri, dwl, and Otter tag layouts.
+
+## Dependencies
+
+`otter-geo`, `otter-render`, `otter-utils`, wayland-client, xkbcommon.

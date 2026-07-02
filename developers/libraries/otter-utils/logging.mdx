@@ -1,0 +1,41 @@
+---
+title: "Logging"
+sidebarTitle: "Logging"
+description: "Scoped loggers, counters, timers, and reporters in otter-utils."
+---
+
+`otter-utils` logging is zero-allocation. Scoped loggers tag output by component name. Counters and timers help profile daemon hot paths.
+
+## Scoped logger
+
+```zig
+const log = @import("otter_utils").log;
+
+const mylog = log.Scoped("my-component");
+mylog.info("starting up", .{});
+mylog.debug("value: {}", .{42});
+mylog.err("something failed", .{});
+```
+
+Log level follows the app's build mode and any global filter the app sets.
+
+## Performance helpers
+
+```zig
+var counter = log.Counter{};
+counter.inc();
+counter.add(5);
+const total = counter.reset();
+
+var timer = log.Timer{};
+timer.begin();
+// ... work ...
+const elapsed_ms = timer.elapsedMs();
+
+var reporter = log.Reporter("perf", 30).init();
+if (reporter.shouldReport()) |elapsed| {
+    // emit periodic metrics
+}
+```
+
+Use `Reporter` in bar daemons and collectors that should not spam logs every frame.

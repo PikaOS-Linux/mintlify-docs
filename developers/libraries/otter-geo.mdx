@@ -1,10 +1,41 @@
 ---
 title: "otter-geo"
 sidebarTitle: "otter-geo"
-description: "Pure geometry types for layout: Point, Rect, Padding, Transform, Align."
+description: "Integer geometry types for Otter Shell layout: Point, Rect, Padding, Transform, Align."
 ---
 
-Pure geometry types:
+`otter-geo` holds 2D geometry for layout and hit testing. Integer math only on hot paths. No rendering dependencies.
 
-- `Point`, `Rect`, `Size`, `Padding`, `Transform`, `Align`
-- Integer-only math: no floating point in layout paths
+`otter-ui`, `otter-render`, `otter-wayland`, and `otter-config-types` all import these types.
+
+## Quick example
+
+```zig
+const geo = @import("otter_geo");
+
+const rect = geo.Rect{ .x = 0, .y = 0, .width = 100, .height = 40 };
+const inner = geo.Point{ .x = 20, .y = 10 };
+
+if (rect.containsPoint(inner)) {
+    const shrunk = rect.removePadding(geo.Padding.uniform(8)) orelse return;
+    _ = shrunk;
+}
+```
+
+## Documentation map
+
+<CardGroup cols={2}>
+  <Card title="Types and operations" icon="ruler-combined" href="/developers/libraries/otter-geo/types-and-operations">
+    `Point`, `Rect`, `Circle`, `Padding`, `Align`, and `Transform`.
+  </Card>
+</CardGroup>
+
+## Design rules
+
+- Coordinates are `u16` or `u31` depending on type. No floats in layout.
+- `Rect` helpers cover intersection, union, inset, and centering.
+- `Transform` uses 16.16 fixed-point rotation for integer-safe transforms.
+
+## Dependencies
+
+None.

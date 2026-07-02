@@ -1,0 +1,46 @@
+---
+title: "Patterns"
+sidebarTitle: "Patterns"
+description: "Conventions for otter-config-types structs and otter-settings integration."
+---
+
+## Field defaults
+
+Every field needs a default. Partial on-disk configs are valid.
+
+## Nested structs
+
+Flatten in `theme.conf` / app `.conf` files with underscores:
+
+```
+clock_enabled = true
+clock_time_format = "%H:%M"
+```
+
+Maps to `config.clock.enabled`, `config.clock.time_format`.
+
+## Optional colors
+
+```zig
+text_color: ?Color = null,
+```
+
+Resolution order at runtime:
+
+1. Explicit value in app config
+2. Matching `otter-theme` token
+3. Compiled default on the struct
+
+## Enums
+
+Use Zig enums for constrained choices (`Position { top, bottom }`, bar widget alignments). Config file uses the enum field name without quotes.
+
+## Adding a new app config
+
+1. Add `src/myapp.zig` with `pub const Config = struct { ... }`.
+2. Re-export from `root.zig`.
+3. Load in the app with `otter_conf.load(Config, ...)`.
+4. Add a tab in `otter-settings/src/tabs.zig` that edits the same struct.
+5. Document user-facing keys in the app page under **Apps** or **Desktop**.
+
+Keep workspace-only apps (`otter-assist`, `otter-dock`) out of packaged install docs unless explicitly marked.

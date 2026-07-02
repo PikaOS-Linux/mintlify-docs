@@ -1,0 +1,46 @@
+---
+title: "Fonts and text"
+sidebarTitle: "Fonts"
+description: "Font, TextSystem, ShapeScratch, and RTL/CJK text in otter-render."
+---
+
+## Font (FreeType)
+
+```zig
+const font = try render.Font.init(allocator, .{});
+defer font.deinit();
+
+font.drawText(&surface, "Hello", .{ .x = 0, .y = 20 }, 16, render.Color.white);
+const width = font.measureText("Hello", 16);
+```
+
+Loading priority: explicit `font_path`, then `font_family` discovery, then bundled fallback (`IoskeleyMonoNerdFont-Regular.ttf`). Fallback faces mmap lazily on first missing glyph.
+
+Glyph cache evicts at 8192 entries and on allocation failure.
+
+## TextSystem
+
+For RTL, CJK, and mixed-direction labels:
+
+```zig
+var text_system = try render.TextSystem.init(allocator, &font);
+defer text_system.deinit();
+
+var scratch: render.ShapeScratch = .{};
+const shaped = try text_system.shapeInto("مرحبا", &scratch, .{});
+```
+
+Helpers:
+
+- `hasStrongRtlUtf8` / `hasStrongRtlCodepoints`: cheap bidi preflight
+- `measure`, `wrap`, `truncate`, `cursorRect`: layout-facing APIs
+- `draw`: FreeType fast path or shaped glyph rasterization
+
+Pass `text_system` and `text_scratch` through `otter-ui` `FrameOptions`, or attach both to `CommandList` for direct rasterization.
+
+## HiDPI text
+
+- `drawTextScaled` / `measureTextScaled`: logical coords via `Surface`
+- `measureTextAtScale`: explicit scale without a `Surface`
+
+Build with `-Denable_text=false` to omit the text stack entirely.

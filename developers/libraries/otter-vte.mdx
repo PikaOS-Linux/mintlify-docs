@@ -4,11 +4,32 @@ sidebarTitle: "otter-vte"
 description: "Terminal cell rendering: DynamicCommandList, powerline glyphs, and CellRenderer."
 ---
 
-Terminal rendering boundary for embeddable terminal views.
+`otter-vte` owns terminal draw commands and cell rasterization. PTY sessions and Ghostty integration stay in app code (`otter-term`).
 
-- `DynamicCommandList`: terminal-specific draw commands
-- `PowerlineOps`, `BlockOps`: powerline and block glyph rendering
-- `CellRenderer`: generic cell renderer with comptime hooks
-- `cell_glyphs`: custom cell glyph support
+Embedding apps get powerline separators, block glyphs, and shaped text through the shared `otter-render` path when `TextSystem` is attached.
 
-Used by `otter-term` and any app embedding terminal output.
+## Documentation map
+
+<CardGroup cols={2}>
+  <Card title="Command list" icon="list" href="/developers/libraries/otter-vte/command-list">
+    `DynamicCommandList` and terminal-specific draw ops.
+  </Card>
+  <Card title="Glyphs and powerline" icon="shapes" href="/developers/libraries/otter-vte/glyphs-and-powerline">
+    `PowerlineOps`, `BlockOps`, and custom cell glyphs.
+  </Card>
+  <Card title="Cell renderer" icon="table-cells" href="/developers/libraries/otter-vte/cell-renderer">
+    `CellRenderer`, hooks, and `Renderer` facade.
+  </Card>
+</CardGroup>
+
+## Stack boundary
+
+| Layer | Owner |
+|-------|-------|
+| PTY I/O, scrollback, selection | App (`otter-term`) |
+| Cell grid → draw commands | `otter-vte` |
+| Command playback | `otter-render` `quad_renderer` |
+
+## Dependencies
+
+`otter-geo`, `otter-render`.

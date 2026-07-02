@@ -1,0 +1,59 @@
+---
+title: "SHM and damage"
+sidebarTitle: "SHM"
+description: "WaylandShmPool, DamageTracker, and Renderer in otter-wayland."
+---
+
+## SHM pools
+
+Two pool types share the same acquire API:
+
+| Pool | Use |
+|------|-----|
+| `DoubleShmPool` | Interactive surfaces (bar, launcher, settings) |
+| `SingleShmPool` | Static content (wallpaper). `forceReleaseAll()` for rare redraws |
+
+```zig
+self.shm_pool = try otter_wayland.DoubleShmPool.init(.{
+    .wl_shm = wl_shm,
+    .width = 800,
+    .height = 600,
+    .scale = 2,
+    .name = "my-surface",
+});
+self.shm_pool.?.bindListeners(); // after struct is at final address
+
+if (self.shm_pool.?.acquire()) |acquired| {
+    var surface = render.Surface.fromPixelsScaledWithStride(
+        acquired.pixels,
+        pool.physicalWidth(),
+        pool.physicalHeight(),
+        acquired.stride_pixels,
+        scale,
+    );
+    wl_surface.attach(acquired.wl_buffer, 0, 0);
+    wl_surface.damageBuffer(0, 0, pool.physicalWidth(), pool.physicalHeight());
+    wl_surface.commit();
+}
+```
+
+Row stride is 256-byte aligned. Use `acquired.stride_pixels` when wrapping pixels.
+
+`resizeWithScale` requires all buffers to be free.
+
+## DamageTracker
+
+Accumulates dirty rectangles for partial redraws. Overflow falls back to full-surface damage.
+
+```zig
+var tracker = otter_wayland.DamageTracker.init(width, height);
+tracker.addRect(dirty);
+const rects = tracker.rects();
+const full = tracker.needsFullRedraw();
+```
+
+Pass rects to `otter-render` `quad_renderer` and `wl_surface.damageBuffer`.
+
+## Renderer helper
+
+`createRenderer` ties pool acquire, `UiState.rasterize`, and commit into one path for simple apps. Most apps still manage pools explicitly for custom damage.

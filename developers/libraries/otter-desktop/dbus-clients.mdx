@@ -1,0 +1,41 @@
+---
+title: "D-Bus clients"
+sidebarTitle: "D-Bus"
+description: "D-Bus services in otter-desktop: UPower, MPRIS, NetworkManager, and more."
+---
+
+All clients share the `dbus.Connection` wrapper around vendored basu (sd-bus). Poll `getFd()` and drain with `while (conn.process()) {}`.
+
+## Connection
+
+```zig
+var conn = try otter_desktop.dbus.Connection.open(allocator, .session);
+defer conn.deinit();
+const fd = conn.getFd();
+```
+
+## Services
+
+| Client | Bus | Role |
+|--------|-----|------|
+| `UPower` | session | Battery state, on-battery detection |
+| `PowerProfiles` | system | balanced / performance profiles |
+| `Mpris` | session | Media metadata and transport control |
+| `NetworkManager` | system | WiFi scan, connections, byte counters |
+| `ScxLoader` | system | SCX scheduler switch (`scx_flow` for bar `falcond` widget) |
+| `Screensaver` | session | Inhibit screen blanking |
+| `SystemTray` / `StatusNotifierWatcher` | session | Tray icons and menus |
+| `NotificationService` | session | `org.freedesktop.Notifications` for `otter-notifications` |
+| `PolkitAgent` | system | Auth agent registration |
+| `Fprintd` | system | Fingerprint reader |
+| `Logind` | system | Session seat hints |
+
+Each service exposes `startMonitoring()`, `subscribe()`, `getFd()`, and `process()` for the same poll-loop pattern.
+
+## Portals
+
+`portal_file_chooser` and `portal_screencast` wrap XDG desktop portal APIs when D-Bus is enabled.
+
+## Disabled builds
+
+With `-Denable_dbus=false`, types compile to `void`. Guard imports with `desktop.has_dbus`.

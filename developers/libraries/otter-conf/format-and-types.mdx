@@ -1,0 +1,47 @@
+---
+title: "Format and types"
+sidebarTitle: "Format"
+description: "otter-conf file syntax and supported Zig types."
+---
+
+Config files use one assignment per line. Comments start with `#`. Whitespace around `=` is ignored.
+
+## Basic syntax
+
+```conf
+# Comments on their own line
+key = value
+name = "my-application"
+port = 8080
+enabled = true
+log_level = Info
+```
+
+## Supported types
+
+| Zig type | Example |
+|----------|---------|
+| `bool` | `debug = true` |
+| Integers (`i8`..`u64`) | `port = 8080`, `negative = -42` |
+| `f32` / `f64` | `timeout = 30.5` |
+| `[]const u8` | `host = "127.0.0.1"` |
+| Enum | `mode = Production` (exact field name) |
+| Fixed array | `rgb = [255, 128, 0]` |
+| Slice | `hosts = ["a", "b"]` (heap allocated) |
+| Optional | Omit key to keep default `null` |
+
+### String escapes
+
+Inside quoted strings: `\"`, `\\`, `\n`, `\r`, `\t`.
+
+## Struct rules
+
+- All fields must have defaults.
+- Partial configs are valid: only changed keys need to appear on disk.
+- Field names must be ASCII identifiers.
+
+## Limitations
+
+- No inline comments (comment lines only).
+- No multiline strings (use `\n`).
+- Nested structs support one level of flattening (no deep paths).

@@ -1,0 +1,45 @@
+---
+title: "Colors and surfaces"
+sidebarTitle: "Colors"
+description: "Color, Surface, and HiDPI drawing in otter-render."
+---
+
+## Color
+
+ARGB layout matches Wayland `argb8888`.
+
+```zig
+const render = @import("otter_render");
+
+const c = try render.parseColor("#FF5500");
+const faded = render.Color.white.withAlpha(128);
+```
+
+`Color.parseHex` accepts `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, and named colors.
+
+## Surface
+
+Pixel buffer with drawing primitives:
+
+```zig
+var surface = render.Surface.fromPixels(&pixels, width, height);
+surface.clear(render.Color.black);
+surface.fillRect(.{ .x = 2, .y = 2, .width = 10, .height = 10 }, render.Color.red);
+surface.drawRectOutline(rect, render.Color.white, 1);
+```
+
+`subSurface` returns a clipped view into a parent buffer.
+
+## HiDPI
+
+```zig
+var surface = render.Surface.fromPixelsScaled(&pixels, phys_w, phys_h, scale);
+surface.fillRectLogical(logical_rect, color);
+const phys = surface.toPhysicalRect(logical_rect);
+```
+
+Set `scale` on `CommandList` when recording logical coordinates for rasterization.
+
+## When to draw directly
+
+Prefer `CommandList` + `quad_renderer` for app UI. Direct `Surface` calls remain useful for tests, one-off buffers, and legacy widget `draw` methods.

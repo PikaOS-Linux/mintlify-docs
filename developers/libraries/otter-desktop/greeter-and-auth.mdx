@@ -1,0 +1,37 @@
+---
+title: "Greeter and auth"
+sidebarTitle: "Auth"
+description: "PAM, session catalog, logind, and power actions in otter-desktop."
+---
+
+## PAM
+
+```zig
+var auth = otter_desktop.PamAuth.init("otter-lock");
+const result = try auth.authenticate(password);
+```
+
+`PamSession` wraps full session open/close for `otter-greeter`. Build with `-Denable_pam=true` for lock and greeter packages.
+
+## Session catalog
+
+`session_catalog` scans Wayland `.desktop` session files and maps `DesktopNames` to XDG session environment variables.
+
+`session_launcher` builds user/session env without inventing logind-owned variables.
+
+## Accounts and seats
+
+- `accounts_service`: user list with passwd fallback
+- `logind_seats`: seat records and watch hooks for greeter UI
+
+## Power actions
+
+`power_actions` routes shutdown, reboot, and suspend through logind policy checks.
+
+## Greeter integration
+
+`otter-greeter` composes these modules with `otter-ui` Surface Description. Lock screen (`otter-lock`) uses `PamAuth` only; greeter uses full `PamSession` plus session picker.
+
+## Polkit and fprintd
+
+`PolkitAgent` registers the desktop auth agent. `Fprintd` optional fingerprint path for lock and polkit dialogs when hardware is present.

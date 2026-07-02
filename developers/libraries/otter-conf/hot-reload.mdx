@@ -1,0 +1,50 @@
+---
+title: "Hot reload"
+sidebarTitle: "Hot reload"
+description: "hasChanged, Watcher, and event-loop integration for otter-conf."
+---
+
+Apps watch config files with `hasChanged` polling or `Watcher` inotify.
+
+## Modification time check
+
+```zig
+const result = try otter_conf.loadWithMetadata(Config, allocator, path, .{});
+const last_mtime = result.mtime_ns;
+
+if (try otter_conf.hasChanged(path, last_mtime)) {
+    // reload
+}
+```
+
+## Watcher
+
+```zig
+var watcher = try otter_conf.Watcher.init(allocator);
+defer watcher.deinit();
+
+_ = try watcher.addWatch(allocator, path);
+
+// Poll watcher.getFd() with Wayland:
+while (watcher.nextEvent()) |event| {
+    if (event.isModified()) {
+        config = try otter_conf.load(Config, allocator, path, .{});
+    }
+}
+```
+
+Event helpers match `otter-utils` inotify: `isModified`, `isDeleted`, `isCreated`, `isMoved`, `isIgnored`.
+
+## Imports and multiple paths
+
+When using `loadWithImports`, `result.paths` lists every file touched. Watch all of them or watch directories that contain imported fragments.
+
+```zig
+var res = try otter_conf.loadWithImports(Config, gpa, path, .{});
+defer res.deinit(gpa);
+// res.config, res.paths
+```
+
+## Thread safety
+
+Parsers are not thread-safe on the same buffer. Load once per file, then share the resulting struct read-only across threads.

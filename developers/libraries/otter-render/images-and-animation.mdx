@@ -1,0 +1,50 @@
+---
+title: "Images and animation"
+sidebarTitle: "Images"
+description: "Image loading, sprites, and Animation in otter-render."
+---
+
+## Image loading
+
+```zig
+var image = try render.Image.loadFromFile(allocator, "icon.png");
+defer image.deinit();
+
+image.draw(&surface, .{ .x = 0, .y = 0, .width = 32, .height = 32 });
+```
+
+Formats via zigimg: PNG, JPG, BMP, GIF, and more. Decoded RGBA is capped separately from compressed file size (up to 256 MiB decoded).
+
+| API | Use |
+|-----|-----|
+| `loadFromFileAtSize` | Raster or SVG at target pixel size |
+| `loadFromFileDownsampled` | Large wallpapers with box filter |
+| `drawCover` | Fill area, crop overflow |
+| `drawRegionScaledClipped` | Source rect with optional flip |
+
+## Sprites
+
+```zig
+const sheet = render.SpriteSheet.init(image.width, image.height, 32, 32, 16);
+const frame = sheet.frameRect(3).?;
+cmds.sprite(dest_rect, &image, frame, .{ .flip_x = true });
+```
+
+`SpriteAnim` maps elapsed time to frame indices. No internal timer; apps tick it.
+
+## Animation
+
+Integer-only ease-out quadratic progress (0..256):
+
+```zig
+var anim = render.Animation.init(750, 144); // 750ms at 144 Hz
+while (anim.tick(true)) {
+    const w = anim.lerp(collapsed_w, expanded_w);
+}
+```
+
+No floats or heap allocation.
+
+## CommandList.graph
+
+`CommandList.graph()` draws filled area plus line chart for time-series samples. Used by `otter-monitor` history graphs.

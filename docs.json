@@ -101,28 +101,108 @@
             "group": "Libraries",
             "pages": [
               "developers/libraries",
-              "developers/libraries/otter-utils",
-              "developers/libraries/otter-geo",
-              "developers/libraries/otter-conf",
-              "developers/libraries/otter-render",
-              "developers/libraries/otter-wayland",
-              "developers/libraries/otter-vte",
-              "developers/libraries/otter-theme",
-              "developers/libraries/otter-config-types",
-              "developers/libraries/otter-tools-core",
-              "developers/libraries/otter-desktop",
-            {
-              "group": "otter-ui",
-              "pages": [
-                "developers/libraries/otter-ui",
-                "developers/libraries/otter-ui/surface-description",
-                "developers/libraries/otter-ui/layout",
-                "developers/libraries/otter-ui/nodes",
-                "developers/libraries/otter-ui/input-and-overlays",
-                "developers/libraries/otter-ui/drawing-primitives",
-                "developers/libraries/otter-ui/bar-widgets"
-              ]
-            }
+              {
+                "group": "otter-utils",
+                "pages": [
+                  "developers/libraries/otter-utils",
+                  "developers/libraries/otter-utils/arrays-and-paths",
+                  "developers/libraries/otter-utils/logging",
+                  "developers/libraries/otter-utils/inotify",
+                  "developers/libraries/otter-utils/config-and-runtime-paths"
+                ]
+              },
+              {
+                "group": "otter-geo",
+                "pages": [
+                  "developers/libraries/otter-geo",
+                  "developers/libraries/otter-geo/types-and-operations"
+                ]
+              },
+              {
+                "group": "otter-conf",
+                "pages": [
+                  "developers/libraries/otter-conf",
+                  "developers/libraries/otter-conf/format-and-types",
+                  "developers/libraries/otter-conf/loading-api",
+                  "developers/libraries/otter-conf/hot-reload",
+                  "developers/libraries/otter-conf/advanced-features"
+                ]
+              },
+              {
+                "group": "otter-render",
+                "pages": [
+                  "developers/libraries/otter-render",
+                  "developers/libraries/otter-render/colors-and-surfaces",
+                  "developers/libraries/otter-render/fonts-and-text",
+                  "developers/libraries/otter-render/images-and-animation",
+                  "developers/libraries/otter-render/command-list"
+                ]
+              },
+              {
+                "group": "otter-wayland",
+                "pages": [
+                  "developers/libraries/otter-wayland",
+                  "developers/libraries/otter-wayland/connection-and-surfaces",
+                  "developers/libraries/otter-wayland/input",
+                  "developers/libraries/otter-wayland/shm-and-damage",
+                  "developers/libraries/otter-wayland/capture-and-overlays"
+                ]
+              },
+              {
+                "group": "otter-vte",
+                "pages": [
+                  "developers/libraries/otter-vte",
+                  "developers/libraries/otter-vte/command-list",
+                  "developers/libraries/otter-vte/glyphs-and-powerline",
+                  "developers/libraries/otter-vte/cell-renderer"
+                ]
+              },
+              {
+                "group": "otter-theme",
+                "pages": [
+                  "developers/libraries/otter-theme",
+                  "developers/libraries/otter-theme/tokens",
+                  "developers/libraries/otter-theme/presets-and-loading"
+                ]
+              },
+              {
+                "group": "otter-config-types",
+                "pages": [
+                  "developers/libraries/otter-config-types",
+                  "developers/libraries/otter-config-types/app-config-modules",
+                  "developers/libraries/otter-config-types/patterns"
+                ]
+              },
+              {
+                "group": "otter-tools-core",
+                "pages": [
+                  "developers/libraries/otter-tools-core",
+                  "developers/libraries/otter-tools-core/tool-modules",
+                  "developers/libraries/otter-tools-core/theme-helpers"
+                ]
+              },
+              {
+                "group": "otter-desktop",
+                "pages": [
+                  "developers/libraries/otter-desktop",
+                  "developers/libraries/otter-desktop/applications",
+                  "developers/libraries/otter-desktop/dbus-clients",
+                  "developers/libraries/otter-desktop/system-services",
+                  "developers/libraries/otter-desktop/greeter-and-auth"
+                ]
+              },
+              {
+                "group": "otter-ui",
+                "pages": [
+                  "developers/libraries/otter-ui",
+                  "developers/libraries/otter-ui/surface-description",
+                  "developers/libraries/otter-ui/layout",
+                  "developers/libraries/otter-ui/nodes",
+                  "developers/libraries/otter-ui/input-and-overlays",
+                  "developers/libraries/otter-ui/drawing-primitives",
+                  "developers/libraries/otter-ui/bar-widgets"
+                ]
+              }
             ]
           }
         ]

@@ -1,0 +1,28 @@
+---
+title: "Cell renderer"
+sidebarTitle: "Cell renderer"
+description: "CellRenderer, hooks, and Renderer in otter-vte."
+---
+
+## CellRenderer
+
+Generic comptime cell renderer. Apps supply hooks for cursor shape, hyperlink hits, and selection highlights.
+
+```zig
+const vte = @import("otter_vte");
+
+const Hooks = vte.CellRendererHooks(MyCell, MyState);
+
+var renderer = vte.CellRenderer(MyCell, Hooks).init(&state);
+try renderer.drawGrid(&cmds, visible_rows, visible_cols);
+```
+
+`textRunBatchingSafe` reports whether adjacent cells can merge into one text draw call (same style, no wide-char boundary).
+
+## Renderer facade
+
+`vte.Renderer` wraps command list allocation, damage rects, and `quad_renderer` playback for simpler embedders.
+
+## Integration with otter-term
+
+`otter-term` maps Ghostty screen cells into `MyCell`, wires PTY resize events, and forwards pointer selection. New terminal features should extend hooks here rather than duplicating draw logic in the app.

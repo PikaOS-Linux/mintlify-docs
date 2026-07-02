@@ -1,0 +1,70 @@
+---
+title: "Input"
+sidebarTitle: "Input"
+description: "Pointer, keyboard, IME, clipboard, and virtual keyboard in otter-wayland."
+---
+
+## Pointer (SeatState)
+
+```zig
+seat_state.setCallbacks(.{
+    .on_motion = onMotion,
+    .on_button = onButton,
+    .on_scroll = onScroll,
+    .on_scroll_end = onScrollEnd,
+    .context = &app,
+});
+seat_state.setCursorShape(.pointer);
+
+// Raw coords before clamping (negative = off-surface)
+const px = seat_state.pointer_x;
+const py = seat_state.pointer_y;
+```
+
+## Keyboard
+
+```zig
+var keyboard = try otter_wayland.Keyboard.init();
+keyboard.setCallbacks(.{ .on_key = onKey, .context = &app });
+seat_state.keyboard = &keyboard;
+
+// Key repeat via timerfd
+if (keyboard.getRepeatFd()) |fd| {
+    keyboard.handleRepeat();
+}
+```
+
+`on_key` receives keysym, UTF-8 text, press/release state, and modifier mask.
+
+## Text input (IME)
+
+```zig
+var text_input = otter_wayland.TextInput.init(conn.text_input_manager, conn.seat);
+text_input.setCallbacks(.{ .on_commit = onCommit, .on_preedit = onPreedit, .context = &app });
+
+text_input.enable(wl_surface);
+text_input.setCursorRectangle(x, y, 1, height);
+text_input.commit();
+
+if (text_input.isComposing()) {
+    // defer key handling to IME
+}
+```
+
+Always call `commit()` after enable, cursor moves, or disable.
+
+## Clipboard
+
+```zig
+var clipboard: otter_wayland.Clipboard = .{};
+clipboard.init(conn.display, ddm, seat);
+
+var buf: [4096]u8 = undefined;
+if (clipboard.getText(conn.display, &buf)) |text| { }
+
+clipboard.setDropCallback(onDrop, &app);
+```
+
+## Virtual keyboard
+
+`TextInjector` injects committed text when an on-screen keyboard is active without duplicating IME state.
