@@ -1,0 +1,172 @@
+---
+title: "Surface Description"
+sidebarTitle: "Surface Description"
+description: "UiState, UiFrame, frame lifecycle, capacities, and rasterization."
+---
+
+Surface Description is the frame API in `otter-ui`. You build a tree of `SurfaceNode` values. Each frame, `UiFrame` measures it, places rects, emits `otter-render` commands, and records where clicks land.
+
+## Core objects
+
+### `UiState(capacities)`
+
+Long-lived state on your app struct. Holds:
+
+- `commands`: the frame's `DefaultCommandList`
+- `elements`: laid-out element rects (for inspector/debug)
+- `hit_regions`: interactive regions for `hitTest` and `dispatch`
+- `overlays` / `tooltips`: queued after the root tree renders
+- `input`: last pointer, hover, active, and focus ids
+- `scroll_states`, `animation_states`, `text_states`: keyed by `SurfaceId`
+
+Create once with explicit capacity limits. Overflow returns `FrameError.Overflow`.
+
+```zig
+const caps = ui.ui_frame.Capacities{
+    .elements = 256,
+    .hit_regions = 128,
+    .overlays = 16,
+    .tooltips = 8,
+    .semantics = 64, // optional accessibility tree
+};
+var ui_state: ui.UiState(caps) = .{};
+```
+
+### `UiFrame`
+
+Short-lived handle from `ui_state.begin(options)`. Call `render`, `queueOverlay`, `queueTooltip`, then `finish`. Don't keep it across frames.
+
+### `FrameOptions`
+
+| Field | Required | Purpose |
+|-------|----------|---------|
+| `viewport` | yes | Root bounds (usually full window) |
+| `scale` | yes | HiDPI scale from the Wayland surface |
+| `font` | for text | Default font for labels and controls |
+| `theme` | recommended | Color tokens from `otter-theme` |
+| `styles` | optional | `StyleSet` overrides |
+| `input` | optional | Pointer/focus snapshot; defaults to state from last `dispatch` |
+| `text_system` / `text_scratch` | for RTL/CJK | HarfBuzz + bidi shaping via `otter-render` |
+| `text_provider` | optional | Lazy `TextSystem` creation callback |
+| `allocator` | optional | Needed for some overlay paths |
+
+Pass `text_system` and `text_scratch` when the UI shows user-typed text, RTL labels, or CJK. Plain ASCII labels can skip them.
+
+## Frame lifecycle
+
+```
+begin(FrameOptions)
+  -> render(root_node, bounds)     // layout + draw + hit registration
+  -> queueOverlay(...)             // optional popups/menus
+  -> queueTooltip(...)             // optional hover text
+  -> finish()                      // flush overlays, debug HUD
+  -> state.rasterize(surface, ...) // CommandList -> pixels
+```
+
+```zig
+var frame = ui_state.begin(.{
+    .viewport = window_rect,
+    .scale = surface.scale,
+    .font = font,
+    .theme = &theme,
+    .text_system = &text_system,
+    .text_scratch = &text_scratch,
+    .input = .{
+        .pointer = pointer_pos,
+        .hovered = hovered_id,
+        .active = pressed_id,
+        .focused = focused_id,
+    },
+});
+
+_ = try frame.render(&root, frame.viewport);
+try frame.finish();
+ui_state.rasterize(surface, damage_tracker.rects(), false);
+```
+
+### `render(node, bounds)`
+
+1. **Measure** the node subtree (content intrinsic size).
+2. **Apply** `LayoutSpec` sizing rules inside `bounds`.
+3. **Place** children and **emit** draw commands for leaf content.
+4. **Register** hit regions for nodes with `hit` set.
+
+Returns the final rectangle the root occupied.
+
+### `finish()`
+
+Renders queued overlays and tooltips on top, updates debug metrics, finalizes overlay damage. Call `finish()` before rasterizing.
+
+### `state.rasterize(surface, damage_rects, full_redraw)`
+
+Hands the command list to `otter-render`'s `quad_renderer`. Pass damage rects from `otter-wayland` `DamageTracker` for partial redraws.
+
+## Stable ids with `SurfaceId`
+
+Every interactive or inspectable node needs an `id`:
+
+```zig
+const save_id = ui.SurfaceId.namedComptime("settings.save");
+const row_id = ui.SurfaceId.namedComptime("settings.row").childInt(index);
+```
+
+- `named("settings.save")` hashes a string at runtime
+- `namedComptime("settings.save")` hashes at compile time (preferred)
+- `child(parent, "suffix")` / `childInt(parent, n)` builds hierarchical ids for list rows
+
+Use the same id in your input handler and in the node tree.
+
+## Building node trees
+
+### Static children array
+
+```zig
+var children: [3]ui.SurfaceNode = undefined;
+children[0] = ui.SurfaceNode.label(title_id, "Monitor", 16, null);
+children[1] = ui.SurfaceNode.button(refresh_id, "Refresh");
+children[2] = ui.SurfaceNode.toggle(toggle_id, .{ .checked = enabled });
+
+const root = ui.SurfaceNode.column(root_id, .{
+    .width = .fill,
+    .height = .fill,
+    .gap = 8,
+}, &children);
+```
+
+### Comptime tuple via `staticChildren`
+
+```zig
+const children = ui.staticChildren(.{
+    ui.SurfaceNode.label(title_id, "Monitor", 16, null),
+    ui.SurfaceNode.button(refresh_id, "Refresh"),
+});
+const root = ui.SurfaceNode.column(root_id, .{ .width = .fill, .height = .fill }, &children);
+```
+
+Store child nodes in struct fields when ids or specs depend on runtime state (see `otter-note/src/surface.zig`).
+
+## Theme and disabled state
+
+Leaf emitters read colors from `FrameOptions.theme` when spec color fields are `null`. Set `disabled = true` on control specs (for example `ButtonSpec.disabled`) to gray out content and mark hit regions non-enabled.
+
+For app-specific chrome, pass `styles: &my_style_set` or set explicit colors on each spec.
+
+## Debug overlays
+
+Toggle with Ctrl+Shift+I at runtime, or start with `--inspect` / `--metrics`. `UiState` records frame timing, command counts, and memory in `debug_metrics`.
+
+## Common mistakes
+
+| Mistake | Fix |
+|---------|-----|
+| Skipping `finish()` | Overlays and tooltips never draw |
+| Reusing one `UiFrame` across frames | Call `begin()` each frame; state resets internally |
+| No `id` on clickable nodes | Set `hit` on the node or use a constructor that sets it (`button`, `toggle`, etc.) |
+| Capacity too small | Increase `Capacities.elements` or `hit_regions`; overflow is an error |
+| Shaped text shows wrong glyphs | Pass `text_system` and `text_scratch` in `FrameOptions` |
+
+## Next
+
+- [Layout model](/developers/libraries/otter-ui/layout): `NodeKind`, `SizeRule`, flex, alignment
+- [Nodes and controls](/developers/libraries/otter-ui/nodes): per-control spec fields
+- [Input and overlays](/developers/libraries/otter-ui/input-and-overlays): pointer routing and popups

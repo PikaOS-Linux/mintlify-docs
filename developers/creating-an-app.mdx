@@ -147,7 +147,7 @@ CLI tools can use minimal deps (`otter-tools-core` + `otter-conf`) with no Wayla
 
 ## 4. Build the UI with Surface Description
 
-New app UI should use the bounded `UiState` frame API:
+Use Surface Description via `UiState` and `UiFrame`. The [otter-ui guide](/developers/libraries/otter-ui) covers layout, nodes, input, and examples.
 
 ```zig
 const ui = @import("otter_ui");
@@ -179,7 +179,7 @@ _ = try frame.render(&root, frame.viewport);
 try frame.finish();
 
 // Rasterize via otter-render (commands inherit text_system from the frame)
-render.quad_renderer.rasterize(ui.render.DefaultCommandList, &state.commands, surface, null, null, true);
+state.rasterize(surface, null, true);
 ```
 
 Use `state.hitTest(point)` for pointer input. No parallel hit arrays needed.

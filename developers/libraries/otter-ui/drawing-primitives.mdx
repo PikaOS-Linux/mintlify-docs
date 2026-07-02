@@ -1,0 +1,165 @@
+---
+title: "Drawing primitives"
+sidebarTitle: "Drawing"
+description: "Stateless drawing.zig helpers in otter-ui for custom UI outside Surface Description."
+---
+
+`ui.drawing` is a bag of stateless draw helpers. They append to a `DefaultCommandList`. Surface Description uses them under the hood. Call them yourself when you need custom drawing outside the node tree:
+
+- Building custom nodes before upstream helpers exist
+- Drawing in legacy widget `draw` methods (`otter-bar`)
+- Composing one-off chrome (`monitor.zig`, `auth_surface.zig`)
+
+Every function takes explicit parameters (colors, font, rect). `drawing.zig` does not look up theme globals. Pass colors from your loaded `Theme`.
+
+## Module map
+
+| Submodule | Exports |
+|-----------|---------|
+| `drawing.core` | `panel`, `border`, `control`, `listRow`, `wrappedText` |
+| `drawing.frame` | `roundedFill`, `surfacePanel`, `controlFrame`, `textBaselineY` |
+| `drawing.controls` | `button`, `toggle`, `checkbox`, `tabBar`, `scrollbar`, `formRow`, `numberInput`, `progressBar`, `colorSwatch`, `dropdown` |
+| `drawing.input` | `inputBox`, `wrappingInputBox`, `passwordInputBox` |
+| `drawing.text` | `truncateText`, `textTruncated` |
+| `drawing.select` | Select trigger rendering |
+| `drawing.dropdown` | `dropdownOverlay`, hit tests for menu rows |
+| `drawing.color_picker` | `colorPickerPopup`, `HSV`, hit tests |
+
+Import from the root re-export:
+
+```zig
+const ui = @import("otter_ui");
+ui.drawing.button(cmds, rect, "OK", hovered, pressed, style, font);
+```
+
+## Common parameters
+
+| Parameter | Type | Notes |
+|-----------|------|-------|
+| `cmds` | `*DefaultCommandList` | Collects draw commands |
+| `rect` | `geo.Rect` | Destination in logical pixels |
+| `font` | `*render.Font` | Required for text primitives |
+| `style` | per-function struct | Colors, padding, radius |
+| `theme` | passed by caller | Not stored inside drawing |
+
+Set `cmds.scale` from the Wayland surface scale before drawing (Surface Description does this in `begin()`).
+
+## Controls (`drawing.controls`)
+
+### `button`
+
+```zig
+ui.drawing.button(cmds, rect, label, hovered, pressed, style, font);
+```
+
+`ButtonStyle`: `background`, `hover_background`, `pressed_background`, `text_color`, `border_color`, `radius`, `padding`, `font_size`, `disabled`.
+
+### `toggle`
+
+Pill switch. `ToggleStyle`: `on_color`, `off_color`, `thumb_color`, `disabled_color`.
+
+### `checkbox`
+
+Box + optional label. `CheckboxStyle`: `box_color`, `check_color`, `text_color`, `font_size`.
+
+### `iconButton`
+
+Icon over label stack (logout menu pattern). `IconButtonStyle`: border, hover, `icon_size`, `padding`.
+
+### `dropdown` / `dropdownOverlay`
+
+Trigger row and floating option list. Pair with `dropdownOverlayHitTest` for manual hit routing outside Surface Description.
+
+### `tabBar`
+
+Horizontal tabs. `TabBarStyle` mirrors `TabsSpec` colors.
+
+### `scrollbar` / `roundedScrollbar`
+
+Track + thumb from `ui.ScrollState`. `ScrollbarStyle`: track/thumb colors, width, radius.
+
+### `formRow` / `sectionHeader`
+
+Settings rows: fixed label column + value text.
+
+### `numberInput`
+
+Decrement, value field, increment. Returns `NumberInputResult` with sub-rects. Use `numberInputHitTest` for three-zone clicks.
+
+### `progressBar`
+
+Track + fill by `value_0_100` (0..100 byte percent).
+
+### `colorSwatch`
+
+Small filled square with optional checkerboard for alpha.
+
+## Text input (`drawing.input`)
+
+### `inputBox`
+
+Single-line field with cursor, selection, placeholder, IME preedit underline.
+
+```zig
+ui.drawing.inputBox(
+    cmds, rect,
+    text, preedit,
+    cursor_byte, sel_start, sel_end,
+    placeholder,
+    style, font,
+);
+```
+
+`InputBoxStyle`: `background`, `text_color`, `placeholder_color`, `cursor_color`, `selection_color`, `border_color`, `font_size`, `padding`, `border_width`, `radius`.
+
+Helpers:
+
+- `inputBoxCursorFromClick` / `wrappingInputBoxCursorFromClick`
+- `wrappingInputBox` + `wrappingInputBoxHeight` for multiline
+- `passwordInputBox` + `maskUtf8` for masked fields
+
+## Text (`drawing.text`)
+
+- `truncateText` / `textTruncated`: ellipsis overflow for narrow rects
+- `wrappedText` / `wrappedTextHeight`: multiline word wrap
+
+Pass `text_system` through `cmds` when drawing RTL or CJK (same as Surface Description).
+
+## Panels and frames (`drawing.frame`, `drawing.core`)
+
+- `surfacePanel`: raised card with shadow (settings panels)
+- `controlFrame`: inset background inside a border (inputs, buttons)
+- `roundedFill` / `roundedBorder`: low-level rounded rects
+- `panel`, `border`, `control`: composable building blocks
+- `listRow`: selectable row with optional icon (launcher results)
+
+## Color picker (`drawing.color_picker`)
+
+```zig
+const hsv = ui.drawing.HSV.fromColor(color);
+ui.drawing.colorPickerPopup(cmds, rect, hsv, alpha, style, font);
+```
+
+`colorPickerHitTest` returns which sub-region (SV, hue, alpha) was clicked. `colorPickerUpdate` maps drag position to new color.
+
+## When to use primitives vs nodes
+
+| Use `SurfaceNode` | Use `drawing.*` directly |
+|-------------------|--------------------------|
+| App windows and forms | Bar widget `draw` specs |
+| Anything needing `hitTest` / `dispatch` | Fully custom render loops |
+| Settings, monitor, lock UI | `monitor.zig` graph/table helpers |
+
+Prefer Surface Description for new code. Primitives remain the implementation layer and escape hatch.
+
+## Related modules
+
+- `ui.table`: sortable tables for monitor-style UIs (uses `drawing` + direct `cmds`)
+- `ui.monitor`: sidebar, graphs, search box built on primitives
+- `ui.auth_surface`: lock/greeter shared auth layout
+- `ui.overlay_chrome`: loupe/crosshair for screenshot tools
+
+## Next
+
+- [Nodes and controls](/developers/libraries/otter-ui/nodes): Surface Description wrappers around these primitives
+- [Bar widgets](/developers/libraries/otter-ui/bar-widgets): daemon widget draw path

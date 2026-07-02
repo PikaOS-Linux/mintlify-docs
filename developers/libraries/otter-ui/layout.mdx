@@ -1,0 +1,203 @@
+---
+title: "Layout model"
+sidebarTitle: "Layout"
+description: "How otter-ui measures and places SurfaceNode trees: NodeKind, SizeRule, flex, and alignment."
+---
+
+Layout is all integers. No heap during measure or place. Every node has a `LayoutSpec`. Containers (`row`, `column`, `stack`, `grid`, `scroll_area`) place children inside the rect the parent got.
+
+## Node kinds (`NodeKind`)
+
+| Kind | Children | Layout behavior |
+|------|----------|-----------------|
+| `leaf` | none | Draws `content` only (label, button, panel, image, etc.) |
+| `row` | yes | Horizontal flexbox: children left to right |
+| `column` | yes | Vertical flexbox: children top to bottom |
+| `stack` | yes | Children share the same area; later siblings paint on top |
+| `grid` | yes | Fixed column count (`grid_columns`); row-major placement |
+| `spacer` | none | Empty space; respects `LayoutSpec` sizing |
+| `scroll_area` | yes | Like `column`, but clips children to the viewport |
+
+Constructors:
+
+```zig
+ui.SurfaceNode.row(id, layout, children)
+ui.SurfaceNode.column(id, layout, children)
+ui.SurfaceNode.panel(id, layout, panel_spec) // leaf with panel background
+```
+
+For `stack`, `grid`, and `scroll_area`, set `kind` and `children` on a `SurfaceNode` struct:
+
+```zig
+const root = ui.SurfaceNode{
+    .id = scroll_id,
+    .kind = .scroll_area,
+    .layout = .{ .width = .fill, .height = .fill },
+    .children = &scroll_children,
+};
+```
+
+`scroll_area` enables scissor clipping automatically. Pair it with app-managed scroll offset and a `UniformList` when virtualizing long lists (see [Input and overlays](/developers/libraries/otter-ui/input-and-overlays)).
+
+## Size rules (`SizeRule`)
+
+```zig
+pub const SizeRule = union(enum) {
+    fit,           // intrinsic content size
+    fill,          // take remaining space in parent main axis
+    fixed: Size,   // exact pixel size
+};
+```
+
+Set on `LayoutSpec.width` and `LayoutSpec.height` independently.
+
+| Rule | Row main axis (horizontal) | Column main axis (vertical) |
+|------|---------------------------|----------------------------|
+| `fit` | Child natural width | Child natural height |
+| `fill` | Share leftover width by `flex` weight | Share leftover height by `flex` weight |
+| `fixed` | Exact width | Exact height |
+
+### Flex weights
+
+When multiple siblings use `.fill` on the same axis, space splits by `layout.flex` (default `1`):
+
+```zig
+ui.SurfaceNode{
+    .id = sidebar_id,
+    .kind = .column,
+    .layout = .{ .width = .{ .fixed = 200 }, .height = .fill },
+    .children = &sidebar_children,
+},
+ui.SurfaceNode{
+    .id = content_id,
+    .kind = .column,
+    .layout = .{ .width = .fill, .height = .fill, .flex = 3 },
+    .children = &main_children,
+},
+```
+
+In a `row`, the first child gets 200 px width; the second takes the rest.
+
+## `LayoutSpec` fields
+
+```zig
+pub const LayoutSpec = struct {
+    width: SizeRule = .fit,
+    height: SizeRule = .fit,
+    min_width: Size = 0,
+    min_height: Size = 0,
+    max_width: Size = max_size,
+    max_height: Size = max_size,
+    padding: Padding = Padding.zero,
+    gap: Size = 0,           // space between children
+    flex: u16 = 1,           // fill weight
+    align_x: AxisAlign = .start,
+    align_y: AxisAlign = .start,
+    clip: bool = false,      // scissor children to this rect
+};
+```
+
+### Alignment (`AxisAlign`)
+
+`start`, `center`, `end`, `stretch`.
+
+In a `row`, `align_y` positions children vertically. `stretch` makes cross-axis `.fill` children expand to the container height.
+
+In a `column`, `align_x` positions children horizontally.
+
+### Padding and gap
+
+- `padding`: inset applied before laying out children
+- `gap`: pixels between adjacent children on the main axis
+
+Use `ui.Padding.uniform(12)` or per-edge `{ .north = 8, .south = 8, .east = 16, .west = 16 }`.
+
+## Measure and place pipeline
+
+1. **measureNode**: bottom-up intrinsic sizes
+2. **applySizing**: map measured size + parent bounds + `LayoutSpec` to final rect
+3. **placeNode**: emit draws, register hits, recurse into children
+
+Leaf measurement examples:
+
+| Content | Measured size |
+|---------|---------------|
+| `label` | text width + font height |
+| `button` | text + horizontal/vertical padding |
+| `toggle` | `ToggleSpec.width` x `ToggleSpec.height` |
+| `slider` / `progress` | min width from layout, fixed height from spec |
+| `image` | image dimensions + `ImageFit` rules |
+
+## Container recipes
+
+### Header + scrollable body + footer
+
+```zig
+const body = ui.SurfaceNode{
+    .id = body_id,
+    .kind = .scroll_area,
+    .layout = .{ .width = .fill, .height = .fill },
+    .children = &form_fields,
+};
+
+const shell_children = [_]ui.SurfaceNode{
+    ui.SurfaceNode{
+        .id = header_id,
+        .kind = .leaf,
+        .content = .{ .section = .{ .title = "General" } },
+    },
+    body,
+    ui.SurfaceNode.button(apply_id, "Apply"),
+};
+
+const root = ui.SurfaceNode.column(root_id, .{
+    .width = .fill,
+    .height = .fill,
+    .gap = 12,
+    .padding = ui.Padding.uniform(16),
+}, &shell_children);
+```
+
+### Toolbar row
+
+```zig
+const toolbar = ui.SurfaceNode.row(toolbar_id, .{
+    .width = .fill,
+    .height = .{ .fixed = 40 },
+    .gap = 8,
+    .align_y = .center,
+    .padding = .{ .west = 12, .east = 12 },
+}, &toolbar_children);
+```
+
+### Overlay stack (dim + dialog)
+
+Use `kind = .stack` when a panel and its scrim share one area, or queue a separate overlay in `finish()` for popups anchored to a control (preferred for dropdowns).
+
+### Settings-style form grid
+
+`grid` with `grid_columns = 2` gives equal-width columns. Each cell is a child node (often a `form_row` leaf).
+
+## `stack` vs overlays
+
+| Approach | When |
+|----------|------|
+| `stack` | Layers in the same layout pass (background + foreground in one tree) |
+| `queueOverlay` | Popups, menus, tooltips that must float above everything and dismiss on outside click |
+
+Overlays get higher hit `z` and run through `shouldDismissOverlays()`.
+
+## Focus scopes
+
+Set `focus_scope = true` on a container node to keep keyboard focus traversal inside a panel (modals, sidebar sections). Child hits inherit the scope id.
+
+## Related types
+
+- `UniformList` / `UniformGrid`: compute visible item ranges for virtualized children ([Input and overlays](/developers/libraries/otter-ui/input-and-overlays))
+- `ScrollState`: thumb position for `scrollbar` nodes
+- `Element` / `findElement`: debug inspector rects after `render`
+
+## Next
+
+- [Nodes and controls](/developers/libraries/otter-ui/nodes): leaf content types and specs
+- [Surface Description](/developers/libraries/otter-ui/surface-description): full frame lifecycle

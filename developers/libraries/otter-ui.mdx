@@ -1,43 +1,105 @@
 ---
 title: "otter-ui"
 sidebarTitle: "otter-ui"
-description: "Widget framework and Surface Description frame API for Otter Shell UI apps."
+description: "Build Otter Shell UIs with Surface Description: layout, controls, input, and bar widgets."
 ---
 
-Widget framework and Surface Description frame API.
+`otter-ui` is how Otter Shell apps draw UI. For new apps, use **Surface Description**: build a `SurfaceNode` tree each frame, let `UiFrame` lay it out, emit draw commands, and register hit targets.
 
-### Surface Description (use this for new code)
+`otter-bar` and a few older code paths still use **widget structs** with comptime registries. Everything else (settings, monitor, lock, greeter, new toplevel windows) should use Surface Description.
 
-- Bounded `UiState(capacities)` owns frame arrays and `DefaultCommandList`
-- `UiFrame` handles layout, hit registration, overlay ordering
-- `UniformList` for scrollable fixed-row lists without heap allocation
-- `state.hitTest(point)` returns topmost hit region
-- Pass `text_system` and `text_scratch` in `FrameOptions` for RTL, CJK, or other shaped text
+## Two UI paths
 
-### Drawing primitives (30+ helpers in `drawing.zig`)
+| Path | Use when | Examples |
+|------|----------|----------|
+| **Surface Description** | New app UI, forms, dialogs, scrollable panels | `otter-settings`, `otter-monitor`, `otter-lock`, `otter-greeter-ui` |
+| **Bar widgets + registries** | Config-driven horizontal widget rows in daemons | `otter-bar` |
 
-- `button`, `inputBox`, `toggle`, `checkbox`, `dropdown`, `tabBar`, `scrollbar`, `progressBar`, `colorSwatch`, and more
+Both paths rasterize through the same `otter-render` `CommandList` and `quad_renderer`.
 
-### Widget registries (bar and daemon layouts)
+## Surface Description in one frame
 
-Bar-style apps store widgets as struct fields and route layout, input, damage, and draw through comptime registries:
+```zig
+const ui = @import("otter_ui");
 
-- `FieldRegistry(Owner, specs)`: lookup and dispatch for optional widget fields
-- `NamedWidgetList(Owner, spec)`: same for bounded dynamic lists like `button_menu`
+const caps = ui.ui_frame.Capacities{ .elements = 64, .hit_regions = 64, .overlays = 8 };
+var state: ui.UiState(caps) = .{};
 
-Registries cover lookup, width, area, hit testing, popups, lifecycle, damage, and frame dispatch. Layout code calls widget methods directly. The embedded `Widget` shell only tracks area and pointer motion.
+var frame = state.begin(.{
+    .viewport = .{ .x = 0, .y = 0, .width = width, .height = height },
+    .scale = surface.scale,
+    .font = font,
+    .theme = &theme,
+});
 
-Use Surface Description for new app UI. Reach for registries when you need config-driven widget rows like `otter-bar`.
+const save_id = ui.SurfaceId.namedComptime("save");
+const children = [_]ui.SurfaceNode{
+    ui.SurfaceNode.label(ui.SurfaceId.namedComptime("title"), "Settings", 18, null),
+    ui.SurfaceNode.button(save_id, "Save"),
+};
+const root = ui.SurfaceNode.column(ui.SurfaceId.namedComptime("root"), .{
+    .width = .fill,
+    .height = .fill,
+    .gap = 8,
+    .padding = ui.Padding.uniform(12),
+}, &children);
 
-### Bar widget specs
+_ = try frame.render(&root, frame.viewport);
+try frame.finish();
 
-Bar widgets no longer use vtable polymorphism. Each widget type has a draw spec under `widgets/specs/` (for example `widgets/specs/clock.zig`). Registries call those specs and widget struct hooks for input, popups, and damage.
+state.rasterize(surface, damage_rects, full_redraw);
 
-### Other modules
+if (state.hitTest(pointer)) |hit| {
+    if (hit.id.eql(save_id)) { /* handle click */ }
+}
+```
 
-- `table.zig`: bounded sortable tables with sticky headers, row viewports, row actions, and footers
-- `monitor.zig`: sidebar navigation, metric cards, search box, user filter, history graphs, and quit dialogs for system monitor UIs
-- `input_buffer.zig`: text input with cursor, selection, and shared selection movement
-- `icon_cache.zig`: cached XDG icon rendering
-- `scroll_state.zig`: vertical scroll tracking
-- `overlay_chrome.zig`: loupe panel and crosshair chrome for pixel-compositing overlays
+## Documentation map
+
+<CardGroup cols={2}>
+  <Card title="Surface Description" icon="layer-group" href="/developers/libraries/otter-ui/surface-description">
+    `UiState`, frame lifecycle, capacities, text shaping, rasterization.
+  </Card>
+  <Card title="Layout model" icon="table-columns" href="/developers/libraries/otter-ui/layout">
+    `NodeKind`, `LayoutSpec`, `SizeRule`, rows, columns, grids, scrolling.
+  </Card>
+  <Card title="Nodes and controls" icon="square" href="/developers/libraries/otter-ui/nodes">
+    Every leaf type, its spec fields, and default hit behavior.
+  </Card>
+  <Card title="Input and overlays" icon="hand-pointer" href="/developers/libraries/otter-ui/input-and-overlays">
+    Hit testing, `dispatch`, focus, popups, tooltips, `UniformList`.
+  </Card>
+  <Card title="Drawing primitives" icon="paintbrush" href="/developers/libraries/otter-ui/drawing-primitives">
+    `drawing.zig` helpers for custom drawing outside Surface Description.
+  </Card>
+  <Card title="Bar widgets" icon="bars" href="/developers/libraries/otter-ui/bar-widgets">
+    `FieldRegistry`, bar widget types, when to skip Surface Description.
+  </Card>
+</CardGroup>
+
+## Key types
+
+| Type | Module | Role |
+|------|--------|------|
+| `UiState(capacities)` | `ui_frame` | Owns commands, elements, hit regions, overlays per frame |
+| `UiFrame` | `ui_frame` | Per-frame layout and draw context from `state.begin()` |
+| `SurfaceNode` / `Node` | `ui_frame_spec_types` | Declarative node: kind, layout, content, children |
+| `SurfaceId` / `Id` | `ui_frame_core_types` | Stable element identity for hits and focus |
+| `FrameOptions` | `ui_frame_core_types` | Viewport, theme, font, input snapshot, text shaping |
+| `UniformList` | `ui_frame_list_types` | Virtualize fixed-height rows without heap allocation |
+| `InputBuffer(cap)` | `input_buffer` | UTF-8 text buffer for `textInput` nodes |
+| `drawing` | `drawing.zig` | Stateless draw helpers used by node emitters |
+
+## Dependencies
+
+`otter-ui` links `otter-geo`, `otter-render`, `otter-theme`, `otter-wayland`, `otter-desktop`, `otter-tools-core`, and `otter-utils`. Load a `Theme` and `Font` and pass them through `FrameOptions` so controls pick up colors from `theme.conf`.
+
+## Reference apps
+
+| App | What to read |
+|-----|--------------|
+| `otter-settings` | Large form UI, tabs, dropdowns, color pickers |
+| `otter-monitor` | Sidebar, tables, search, graphs, quit dialogs |
+| `otter-lock` / `otter-greeter` | `auth_surface` built on Surface Description |
+| `otter-note` | Layer popup with `textInput` and markdown preview |
+| `otter-bar` | Widget registries and `widgets/specs/` |

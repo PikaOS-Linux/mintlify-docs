@@ -1,0 +1,207 @@
+---
+title: "Input and overlays"
+sidebarTitle: "Input"
+description: "Hit testing, dispatch, focus, overlays, tooltips, and UniformList in otter-ui."
+---
+
+`render` records hit regions. Your Wayland loop passes pointer and keyboard events through `dispatch`, or you can call `hitTest` yourself.
+
+## Hit regions
+
+Each interactive node with `hit` set appends a `HitRegion`:
+
+```zig
+pub const HitRegion = struct {
+    id: Id,
+    focus_scope: Id,
+    rect: Rect,
+    kind: HitKind,
+    z: i16,           // overlays use 1024
+    data: u64,        // your cookie (list index, etc.)
+    flags: HitFlags,  // enabled, focusable, overlay
+};
+```
+
+After `render` + `finish`:
+
+```zig
+if (ui_state.hitTest(point)) |hit| {
+    if (hit.kind == .button and hit.id.eql(save_id)) {
+        // click target
+    }
+    if (hit.data == row_index) {
+        // list_row cookie
+    }
+}
+```
+
+`hitTest` picks the topmost enabled region containing the point (higher `z` wins).
+
+## `dispatch` event router
+
+`UiState.dispatch` updates `input` snapshot and returns a `DispatchResult`:
+
+| Event | `DispatchAction` | Typical app response |
+|-------|------------------|---------------------|
+| `pointer_motion` | `.hover` | Track `hovered` id for button hover styles |
+| `pointer_leave` | `.leave` | Clear hover |
+| `button_press` | `.press` | Set `pressed` id, start slider drag |
+| `button_release` | `.release` | Fire click if still over same id |
+| `scroll` | `.scroll` | Adjust `ScrollState` or `UniformList.scroll_offset` |
+| `keyboard_focus` | `.focus` | Move `focused` id inside scope |
+| `text_input_focus` | `.text_focus` | Open IME for `text_input` nodes |
+
+```zig
+const result = ui_state.dispatch(.{ .button_press = .{
+    .point = pointer,
+    .button = button_code,
+}});
+
+switch (result.action) {
+    .press => if (result.id.eql(slider_id)) self.dragging_slider = true,
+    else => {},
+    else => {},
+}
+```
+
+Feed the same `input` snapshot back into the next frame's `FrameOptions.input` so controls render hovered/pressed/focused states.
+
+### `InputSnapshot`
+
+```zig
+.input = .{
+    .pointer = pointer_pos,
+    .hovered = hovered_id,
+    .active = pressed_id,
+    .focused = text_field_id,
+},
+```
+
+## Focus traversal
+
+Set `focus_scope = true` on modal panels. `keyboard_focus` events with `FocusMove` (`.next`, `.previous`, `.first`, `.last`) walk focusable hits inside that scope.
+
+Focusable kinds include buttons, text inputs, toggles, sliders, selects, and tabs.
+
+## Overlays
+
+Popups that must float above the main tree go through `queueOverlay`, not `stack`.
+
+```zig
+const menu_node = ui.SurfaceNode{
+    .id = menu_id,
+    .kind = .leaf,
+    .layout = .{ .width = .fill, .height = .fill },
+    .content = .{ .rect = .{ .fill = panel_color, .radius = 8 } },
+    // ... menu children via nested render in overlay node
+};
+
+try frame.queueOverlay(.{
+    .id = overlay_id,
+    .anchor = .{ .element = trigger_id }, // or .rect, .pointer, .viewport
+    .placement = .below,                  // .above, .start, .end, .centered
+    .size = .{ .x = 200, .y = 160 },
+    .node = &menu_node,
+    .z = 1024,
+});
+```
+
+`finish()` renders overlays after the root tree. Overlay hits set `HitFlags.overlay = true`.
+
+Dismiss when clicking outside:
+
+```zig
+if (ui_state.shouldDismissOverlays(click_point)) {
+    self.dropdown_open = false;
+}
+```
+
+Placement `.below` flips to `.above` automatically when the popup would clip past the viewport bottom.
+
+## Tooltips
+
+```zig
+try frame.queueTooltip(.{
+    .id = tip_id,
+    .anchor = .{ .element = icon_id },
+    .placement = .above,
+    .text = "Force quit sends SIGKILL",
+    .font_size = 12,
+    .max_width = 280,
+});
+```
+
+Empty `text` is skipped.
+
+## `UniformList` (virtualized rows)
+
+Fixed-height lists without allocating per-row nodes. Compute which indices are visible, build only those `list_row` nodes each frame.
+
+```zig
+const list = ui.UniformList{
+    .item_count = processes.len,
+    .item_height = 42,
+    .viewport_height = table_rect.height,
+    .scroll_offset = self.scroll_offset,
+    .overscan = 1,
+};
+
+const range = list.visibleRange();
+var row_nodes: [32]ui.SurfaceNode = undefined; // bound your max visible + overscan
+var count: usize = 0;
+for (range.start..range.end) |i| {
+    row_nodes[count] = ui.SurfaceNode.listRow(
+        ui.SurfaceId.namedComptime("row").childInt(i),
+        .{ .title = processes[i].name, .selected = i == self.selected },
+        i,
+    );
+    count += 1;
+}
+```
+
+Helpers:
+
+| Method | Purpose |
+|--------|---------|
+| `visibleRange()` | Start/end index and y offset for scrolling |
+| `hitIndex(list_rect, point)` | Which row index was clicked |
+| `scrollOffsetForSelection(selected)` | Scroll so selection stays visible |
+| `moveSelection(selected, move)` | Keyboard up/down/page |
+| `contentHeight()` | Total scrollable height |
+| `maxScrollOffset()` | Clamp scroll offset |
+
+`UniformGrid` adds column-aware scrolling and hit testing for grid layouts.
+
+## Scrollbars
+
+1. Keep scroll offset in app state.
+2. Pass `ui.ScrollState` with content and viewport heights into `ScrollbarSpec`.
+3. On `dispatch` `.scroll` over the list area, adjust offset.
+4. Optionally add a `scrollbar` node bound to the same `ScrollState`.
+
+`ui_state.scrollState(id)` returns a persistent slot keyed by `SurfaceId`.
+
+## Text input and IME
+
+1. `text_input` node with `focused = true` when `input.focused` matches.
+2. On `text_input_focus` dispatch, enable Wayland `text-input-v3` on that surface.
+3. Pipe committed text and preedit into `InputBuffer`.
+4. Pass buffer contents back into `TextInputSpec` each frame.
+
+See `otter-settings` and `otter-launcher` for full IME wiring.
+
+## Damage and partial redraw
+
+After `rasterize`, merge damage from:
+
+- `DamageTracker` for surface commits
+- `overlayDamageRect()` when overlays animate open/close
+
+## Debug inspector
+
+`Ctrl+Shift+I` toggles element rects and semantics. `findElement(id)` returns the laid-out `Element` after `render`.
+
+## Next
+
+- [Nodes and controls](/developers/libraries/otter-ui/nodes): spec fields per control
+- [Drawing primitives](/developers/libraries/otter-ui/drawing-primitives): manual command emission

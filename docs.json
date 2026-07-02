@@ -111,7 +111,18 @@
               "developers/libraries/otter-config-types",
               "developers/libraries/otter-tools-core",
               "developers/libraries/otter-desktop",
-              "developers/libraries/otter-ui"
+            {
+              "group": "otter-ui",
+              "pages": [
+                "developers/libraries/otter-ui",
+                "developers/libraries/otter-ui/surface-description",
+                "developers/libraries/otter-ui/layout",
+                "developers/libraries/otter-ui/nodes",
+                "developers/libraries/otter-ui/input-and-overlays",
+                "developers/libraries/otter-ui/drawing-primitives",
+                "developers/libraries/otter-ui/bar-widgets"
+              ]
+            }
             ]
           }
         ]

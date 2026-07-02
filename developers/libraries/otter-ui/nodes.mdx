@@ -1,0 +1,358 @@
+---
+title: "Nodes and controls"
+sidebarTitle: "Nodes"
+description: "SurfaceNode content types, spec fields, hit kinds, and constructors in otter-ui."
+---
+
+A `SurfaceNode` is one piece of the tree:
+
+- `kind`: container or `leaf`
+- `layout`: [LayoutSpec](/developers/libraries/otter-ui/layout)
+- `content`: what to draw (leaf only)
+- `children`: child nodes (containers)
+- `id`: [SurfaceId](/developers/libraries/otter-ui/surface-description)
+- `hit` / `hit_data`: pointer routing
+- `semantics`: optional accessibility metadata
+- `focus_scope`: keep keyboard focus inside this subtree
+
+Leaf nodes draw one control. Set `hit` (or use a constructor that sets it) on anything you want to click.
+
+## Constructors vs manual nodes
+
+Many controls have helpers on `SurfaceNode`:
+
+```zig
+ui.SurfaceNode.button(id, "Save")
+ui.SurfaceNode.label(id, "Name", 14, null)
+ui.SurfaceNode.toggle(id, .{ .checked = true })
+```
+
+For `section`, `tabs`, `form_row`, `color_swatch`, and `gradient_swatch`, build the struct manually:
+
+```zig
+ui.SurfaceNode{
+    .id = id,
+    .kind = .leaf,
+    .layout = .{ .width = .fill },
+    .content = .{ .form_row = .{
+        .label = "Refresh interval",
+        .value = "3 seconds",
+    } },
+}
+```
+
+## Structural leaves
+
+### `panel` (`PanelSpec`)
+
+Rounded card background with optional border and shadow.
+
+| Field | Purpose |
+|-------|---------|
+| `background` | Fill color (required) |
+| `border`, `shadow`, `highlight_edge` | Chrome |
+| `radius`, `border_width` | Corner and stroke |
+
+```zig
+ui.SurfaceNode.panel(id, .{ .width = .fill, .height = .fill }, .{
+    .background = theme.surfaces.raised,
+    .radius = theme.density.panel_radius,
+})
+```
+
+### `rect` (`RectStyle`)
+
+Flat filled or bordered rectangle. Use for dividers, highlights, custom backgrounds.
+
+| Field | Purpose |
+|-------|---------|
+| `fill` | Background color |
+| `border`, `border_width`, `radius`, `corners` | Optional outline |
+
+### `spacer` (container kind)
+
+Empty node. Size comes from `LayoutSpec` (often `.fill` to push siblings).
+
+## Text and actions
+
+### `label` (`LabelSpec`)
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `text` | required | UTF-8 |
+| `font_size` | `14` | |
+| `color` | theme foreground | `null` = theme default |
+| `baseline_offset` | auto | Fine-tune vertical alignment |
+
+No hit region. Not focusable.
+
+### `button` (`ButtonSpec`)
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `text` | required | |
+| `font_size` | `14` | |
+| `hovered`, `pressed`, `disabled` | `false` | Drive from `input.hovered` / `input.active` |
+| `background`, `hover_background`, `pressed_background` | theme | Optional overrides |
+| `text_color`, `border`, `radius`, `padding` | theme defaults | |
+
+Constructor sets `hit = .button`.
+
+```zig
+ui.SurfaceNode.button(save_id, "Save") // minimal
+// or full spec:
+ui.SurfaceNode{
+    .id = save_id,
+    .kind = .leaf,
+    .content = .{ .button = .{
+        .text = "Save",
+        .hovered = ui_state.input.hovered.eql(save_id),
+        .pressed = ui_state.input.active.eql(save_id),
+    } },
+    .hit = .button,
+}
+```
+
+### `icon_button` (`IconButtonSpec`)
+
+| Field | Purpose |
+|-------|---------|
+| `icon` | `?*const anyopaque` image pointer |
+| `fallback_text` | Shown when icon is null |
+| `icon_size`, `font_size` | Layout |
+| `selected`, `disabled` | State |
+| `background`, `selected_background`, `icon_color`, `border`, `radius` | Colors |
+
+`hit = .icon_button`.
+
+## Text input
+
+### `text_input` (`TextInputSpec`)
+
+| Field | Purpose |
+|-------|---------|
+| `text` | Committed UTF-8 from your `InputBuffer` |
+| `preedit` | IME composition string |
+| `cursor_byte`, `selection_start_byte`, `selection_end_byte` | Caret and selection |
+| `placeholder` | Shown when text is empty |
+| `focused` | Focus ring and cursor |
+| `disabled`, `wrap` | State |
+| `background`, `text_color`, `placeholder_color`, `border`, `cursor`, `selection` | Colors |
+| `padding`, `radius` | Chrome |
+
+`hit = .text_input`. Pair with `ui.InputBuffer(N)` in app state and Wayland text-input protocol for IME.
+
+```zig
+ui.SurfaceNode.textInput(field_id, .{
+    .text = self.search.text(),
+    .placeholder = "Search processes",
+    .focused = self.search_focused,
+    .cursor_byte = self.search.cursorByte(),
+})
+```
+
+## Boolean and numeric controls
+
+### `checkbox` (`CheckboxSpec`)
+
+| Field | Purpose |
+|-------|---------|
+| `label` | Optional text beside box |
+| `checked`, `disabled` | State |
+| `font_size`, `box_size`, `color` | Layout and colors |
+
+`hit = .checkbox`.
+
+### `toggle` (`ToggleSpec`)
+
+| Field | Default |
+|-------|---------|
+| `checked`, `disabled` | `false` |
+| `width` | `38` |
+| `height` | `22` |
+| `color` | theme accent |
+
+`hit = .toggle`.
+
+### `slider` (`SliderSpec`)
+
+| Field | Purpose |
+|-------|---------|
+| `value_q16` | `0..65535` (0%..100% in 16.16 fixed point) |
+| `disabled` | Gray out |
+| `height`, `track_height`, `color` | Layout |
+
+`hit = .slider`. Default layout width is `.fill`.
+
+### `number_input` (`NumberInputSpec`)
+
+Stepper with decrement/value/increment zones.
+
+| Field | Purpose |
+|-------|---------|
+| `value_text` | Display string |
+| `font_size`, `height`, `min_width` | Layout |
+| `disabled` | State |
+| `background`, `button_background`, `text_color`, `border`, `radius` | Colors |
+
+`hit = .number_value` on the center field. Decrement/increment buttons use separate hit kinds (`.number_decrement`, `.number_increment`) when emitted.
+
+### `progress` (`ProgressSpec`)
+
+Read-only bar.
+
+| Field | Purpose |
+|-------|---------|
+| `value_q16` | Fill amount |
+| `height`, `color` | Layout |
+
+No hit region.
+
+## Selection and color
+
+### `select` (`SelectSpec`)
+
+Dropdown trigger or inline popup.
+
+| Field | Purpose |
+|-------|---------|
+| `selected_text`, `placeholder` | Display |
+| `options` | Slice of option labels |
+| `selected_index`, `hover_index`, `scroll_offset` | List state |
+| `open` | Popup visible |
+| `mode` | `.trigger`, `.inline_popup`, or `.menu` |
+| `item_height`, `max_visible`, `font_size` | Layout |
+| `disabled` | State |
+
+`hit = .select`. Option rows use `.select_option` in overlay pass.
+
+### `color_picker` (`ColorPickerSpec`)
+
+Inline SV square + hue/alpha bars.
+
+| Field | Purpose |
+|-------|---------|
+| `color` | Current `Color` |
+| `alpha` | `0..255` |
+| `sv_size`, `bar_width`, `padding` | Layout |
+| `disabled`, `background`, `border`, `radius` | State and chrome |
+
+`hit = .color_picker_sv` on the saturation/value area. Hue and alpha bars have `.color_picker_hue` and `.color_picker_alpha`.
+
+### `color_picker_popup` (`ColorPickerPopupSpec`)
+
+Larger popup variant used by settings. Pass `hsv` from `ui.drawing.HSV`.
+
+### `color_swatch` / `gradient_swatch`
+
+Small preview tiles. Set `layout` to fixed size. `gradient_swatch` takes `start`, `mid`, `end` colors.
+
+## Navigation chrome
+
+### `tabs` (`TabsSpec`)
+
+| Field | Purpose |
+|-------|---------|
+| `items` | Slice of `{ .id, .label, .disabled }` |
+| `active` | Selected index |
+| `font_size`, `height`, `horizontal_padding`, `gap` | Layout |
+| Color fields | Active/inactive tab styling |
+
+Tab hits use `.tab`. Build manually:
+
+```zig
+.content = .{ .tabs = .{
+    .items = &tab_items,
+    .active = self.active_tab,
+} },
+```
+
+### `section` (`SectionSpec`)
+
+Section header with optional underline.
+
+| Field | Purpose |
+|-------|---------|
+| `title` | Header text |
+| `font_size`, `color`, `underline`, `show_underline` | Style |
+
+### `form_row` (`FormRowSpec`)
+
+Settings-style label + value row.
+
+| Field | Purpose |
+|-------|---------|
+| `label`, `value` | Text |
+| `label_width`, `label_font_size`, `truncate_label` | Layout |
+| `label_color`, `value_color` | Colors |
+
+### `list_row` (`ListRowSpec`)
+
+Selectable list item with optional icon and subtitle.
+
+| Field | Purpose |
+|-------|---------|
+| `title`, `subtitle` | Text |
+| `icon`, `icon_size` | Leading image |
+| `selected` | Highlight state |
+| Color and `padding`, `radius`, `font_size` | Chrome |
+
+Constructor: `listRow(id, spec, hit_data)`. `hit = .button`, `hit_data` carries list index.
+
+### `scrollbar` (`ScrollbarSpec`)
+
+| Field | Purpose |
+|-------|---------|
+| `state` | `ui.ScrollState` (offset, content height, viewport) |
+| `width`, `disabled` | Layout |
+| `track_color`, `thumb_color`, `radius` | Colors |
+
+`hit = .scroll`. Pair with app scroll offset updates on `.scroll` dispatch events.
+
+## Media
+
+### `image` (`ImageSpec`)
+
+| Field | Purpose |
+|-------|---------|
+| `image` | `?*const otter_render.Image` |
+| `fit` | `.contain`, `.cover`, `.cover_scaled`, `.stretch`, `.center` |
+| `source_rect`, `alpha`, `pixelated`, `flip_x`, `radius`, `corners` | Rendering |
+
+### `icon` (`IconSpec`)
+
+| Field | Purpose |
+|-------|---------|
+| `image` | Optional bitmap |
+| `fallback_text` | Letter or symbol if no image |
+| `fallback_font`, `font_size`, `color` | Text fallback styling |
+| `fill`, `circle_fill` | Background behind glyph |
+
+## Hit kinds reference
+
+| `HitKind` | Control |
+|-----------|---------|
+| `.button` | `button`, `list_row` |
+| `.text_input` | `text_input` |
+| `.checkbox` | `checkbox` |
+| `.toggle` | `toggle` |
+| `.slider` | `slider` |
+| `.icon_button` | `icon_button` |
+| `.number_decrement` / `.number_value` / `.number_increment` | `number_input` |
+| `.select` / `.select_option` | `select` |
+| `.color_picker_sv` / `.hue` / `.alpha` | `color_picker` |
+| `.tab` | `tabs` |
+| `.scroll` | `scrollbar` |
+| `.overlay` | Queued overlays |
+| `.generic` | Custom; set manually |
+
+Set `hit_data: u64` to pass a list index, enum tag, or pointer cookie to your handler.
+
+## Disabled content
+
+`ButtonSpec.disabled`, `ToggleSpec.disabled`, `SelectSpec.disabled`, and similar flags mark the control visually disabled and set `HitFlags.enabled = false` so `hitTest` skips them.
+
+## Next
+
+- [Input and overlays](/developers/libraries/otter-ui/input-and-overlays): wire hits to app logic
+- [Drawing primitives](/developers/libraries/otter-ui/drawing-primitives): lower-level helpers behind these emitters

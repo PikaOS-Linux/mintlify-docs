@@ -1,0 +1,126 @@
+---
+title: "Bar widgets"
+sidebarTitle: "Bar widgets"
+description: "Widget structs, FieldRegistry, and bar specs in otter-ui for otter-bar-style daemons."
+---
+
+`otter-bar` and similar daemons use **widget structs**, not Surface Description trees. Each widget is a Zig struct with `draw`, `setArea`, `getWidth`, and optional input hooks. Layout code lines them up in a row and calls those methods directly.
+
+Stick to this path for config-driven status bar rows. New windows and forms should use [Surface Description](/developers/libraries/otter-ui/surface-description).
+
+## Widget shell
+
+Every bar widget embeds `ui.Widget`:
+
+```zig
+pub const Clock = struct {
+    widget: ui.Widget,
+    // widget-specific fields
+
+    pub fn draw(self: *Clock, frame: anytype, clip: Rect) !void { ... }
+    pub fn setArea(self: *Clock, area: Rect) void { self.widget.area = area; }
+    pub fn getWidth(self: *Clock) u31 { ... }
+    // optional: motion, leave, click, scroll, getPopupSupport
+};
+```
+
+`Widget` tracks `area` and pointer motion state. No vtable on the hot path for bar specs (see below).
+
+## Widget registries
+
+### `FieldRegistry(Owner, specs)`
+
+Maps layout string names (`"clock"`, `"volume"`) to optional struct fields on the bar owner:
+
+```zig
+const specs = [_]ui.widget_registry.FieldSpec{
+    .{ .name = "clock", .field = "clock_widget" },
+    .{ .name = "volume", .field = "volume_widget" },
+};
+const registry = ui.widget_registry.FieldRegistry(Bar, &specs);
+```
+
+Registry methods: lookup by name, `getWidth`, `setArea`, hit test, popup enumeration, damage collection, `drawByName`.
+
+### `NamedWidgetList(Owner, spec)`
+
+Same dispatch for dynamic lists like `button_menu`:
+
+```zig
+const spec = ui.widget_registry.NamedListSpec{
+    .list_field = "custom_buttons",
+    .widget_field = "widget",
+    .layout_prefix = "button_menu",
+};
+```
+
+## Draw specs (`widgets/specs/`)
+
+Bar widgets render through **draw specs** under `widgets/specs/` (for example `widgets/specs/clock.zig`). Specs are comptime structs with `draw(frame, clip, ...)` that call `drawing` primitives or emit Surface Description subtrees for complex popups.
+
+Registries invoke specs plus widget hooks for:
+
+- Input (`click`, `scroll`, `motion`)
+- Popups (`getPopupSupport`, volume/MPRIS/network menus)
+- Damage (`collectDamage`, `markFullRedraw`)
+
+## Available bar widgets
+
+| Widget | Config name | Notes |
+|--------|-------------|-------|
+| `Clock` | `clock` | Time/date, optional calendar command |
+| `Battery` | `battery` | UPower D-Bus |
+| `Brightness` | `brightness` | Backlight sysfs, scroll to adjust |
+| `Button` | `button_menu`, custom | Runs shell command |
+| `Workspaces` | `workspaces` | otter-tag / ext-workspace / dwl IPC |
+| `ActiveWindow` | `title` | Focused window title |
+| `PowerProfiles` | `power_profiles` | power-profiles-daemon |
+| `CpuLoad` | `cpu_load` | `/proc` CPU percent |
+| `CpuTemp` | `cpu_temp` | Thermal zones |
+| `Memory` | `memory` | RAM percent |
+| `Network` | `network` | NetworkManager stats and menu |
+| `Weather` | `weather` | Reads `otter-weather` cache file |
+| `Falcond` | `falcond` | SCX scheduler status |
+| `Volume` | `volume` | PipeWire, scroll, device popup |
+| `Mpris` | `mpris` | Media player controls |
+| `SystemTray` | `system_tray` | StatusNotifierItem row |
+
+Enable flags in `otter-bar.conf` (`workspaces_enabled`, `falcond_enabled`, etc.). See [otter-bar](/desktop/otter-bar).
+
+## D-Bus and PipeWire dependencies
+
+Several widgets need runtime services:
+
+| Widget | Requires |
+|--------|----------|
+| Battery, PowerProfiles, MPRIS, SystemTray, Network | D-Bus (`-Denable_dbus=true`) |
+| Volume | PipeWire (`-Denable_pipewire=true`) |
+
+Build with `-Denable_dbus=false` or `-Denable_pipewire=false` to drop widgets at compile time.
+
+## Popups and tooltips
+
+Widgets implementing `getPopupSupport` can open `PopupMenu` or custom layer surfaces (volume slider, network Wi-Fi list). `HoverState` drives tooltip delay. Popups render in a separate draw pass with damage tracking.
+
+## Damage and redraw
+
+Bar polls D-Bus, timers, and config inotify. Each widget reports damage via the registry so `DamageTracker` gets minimal rects. Full redraw on theme or config reload.
+
+## Adding a custom bar widget
+
+1. Create `widgets/my_widget.zig` struct with `draw`, `setArea`, `getWidth`.
+2. Add `widgets/specs/my_widget.zig` draw spec.
+3. Register field in `otter-bar` config schema and layout parser.
+4. Add `FieldSpec` entry to the bar registry.
+
+For one-off launcher buttons, use `NamedWidgetList` and `button_menu` config entries instead of a new widget type.
+
+## Surface Description in bar popups
+
+Some widgets (volume popup, MPRIS expanded) build a small `UiState` internally for the popup panel while the bar strip stays on the widget path. Hybrid pattern: bar strip = widget spec; popup = Surface Description.
+
+## Next
+
+- [Surface Description](/developers/libraries/otter-ui/surface-description): default path for new apps
+- [otter-bar](/desktop/otter-bar): end-user configuration
+- [Creating an app](/developers/creating-an-app): choose surface type and lifecycle
