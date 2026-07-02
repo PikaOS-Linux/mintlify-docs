@@ -4,9 +4,9 @@ sidebarTitle: "otter-config-types"
 description: "Typed config structs shared across Otter Shell apps and otter-settings."
 ---
 
-`otter-config-types` holds the Zig structs `otter-conf` parses for each app. `otter-settings` tabs edit the same types apps load at runtime.
+`otter-config-types` is the Zig structs `otter-conf` parses for each app. `otter-settings` edits the same types at runtime.
 
-Add new configurable apps here first, then register a settings tab in `otter-settings/src/tabs.zig`.
+New configurable app? Add the struct here first, then a tab in `otter-settings/src/tabs.zig`.
 
 ## Quick example
 

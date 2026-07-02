@@ -4,11 +4,11 @@ sidebarTitle: "Arrays & paths"
 description: "BoundedArray, FilePath, and FixedString in otter-utils."
 ---
 
-Otter Shell avoids heap allocation on hot paths. `otter-utils` supplies fixed-capacity containers and stack path builders.
+Hot paths skip the heap. These types give you fixed-capacity containers and stack path builders.
 
 ## BoundedArray
 
-Drop-in for removed `std.BoundedArray` in Zig 0.15+. Fixed capacity, dynamic length, no heap.
+Drop-in for removed `std.BoundedArray` in Zig 0.15+. Same idea: fixed capacity, dynamic length, nothing on the heap.
 
 ```zig
 const utils = @import("otter_utils");

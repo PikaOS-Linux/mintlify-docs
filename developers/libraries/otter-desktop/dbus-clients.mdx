@@ -4,7 +4,7 @@ sidebarTitle: "D-Bus"
 description: "D-Bus services in otter-desktop: UPower, MPRIS, NetworkManager, and more."
 ---
 
-All clients share the `dbus.Connection` wrapper around vendored basu (sd-bus). Poll `getFd()` and drain with `while (conn.process()) {}`.
+All clients go through `dbus.Connection` (vendored basu / sd-bus). Poll `getFd()`, then drain with `while (conn.process()) {}`.
 
 ## Connection
 

@@ -4,9 +4,9 @@ sidebarTitle: "otter-conf"
 description: "Comptime-generic config parser with mmap I/O, serialization, and inotify hot-reload."
 ---
 
-`otter-conf` parses flat `key = value` files into Zig structs. The parser is generated at comptime from your struct shape. Files load through memory-mapped I/O.
+`otter-conf` turns flat `key = value` files into Zig structs. Your struct shape drives a comptime-generated parser. Files load through mmap.
 
-Otter Shell apps define schemas in `otter-config-types` and load them with `otter-conf`.
+App schemas live in `otter-config-types`; apps load them with `otter-conf`.
 
 ## Quick start
 

@@ -41,11 +41,11 @@ Reads Falcond daemon status file via inotify. Surfaces performance mode and acti
 
 ## Monitor collector
 
-`desktop.Monitor` provides bounded procfs/sysfs polling for `otter-monitor`:
+`desktop.Monitor` polls procfs and sysfs with bounded buffers for `otter-monitor`:
 
 - Processes and applications
 - CPU, memory, GPU (sysfs or NVML)
 - Disk and network
 - 60-sample history rings
 
-Keeps collection logic out of the monitor app's UI code.
+Collection logic stays here so the monitor app can focus on UI.

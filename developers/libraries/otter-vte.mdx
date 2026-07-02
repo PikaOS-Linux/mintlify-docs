@@ -4,9 +4,9 @@ sidebarTitle: "otter-vte"
 description: "Terminal cell rendering: DynamicCommandList, powerline glyphs, and CellRenderer."
 ---
 
-`otter-vte` owns terminal draw commands and cell rasterization. PTY sessions and Ghostty integration stay in app code (`otter-term`).
+`otter-vte` handles terminal draw commands and cell rasterization. PTY sessions and Ghostty wiring stay in the app (`otter-term`).
 
-Embedding apps get powerline separators, block glyphs, and shaped text through the shared `otter-render` path when `TextSystem` is attached.
+Attach `TextSystem` and you get powerline separators, block glyphs, and shaped text through `otter-render`.
 
 ## Documentation map
 

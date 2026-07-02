@@ -4,9 +4,9 @@ sidebarTitle: "otter-render"
 description: "CPU rendering: colors, surfaces, fonts, images, CommandList, and quad_renderer."
 ---
 
-`otter-render` is Otter Shell's software renderer. Colors, surfaces, FreeType fonts, HarfBuzz shaping, image decode, and deferred draw commands all live here.
+`otter-render` is the software renderer behind Otter Shell UI. Colors, surfaces, FreeType, HarfBuzz shaping, image decode, deferred draw commands.
 
-`otter-ui` builds `CommandList` entries. Apps call `quad_renderer.rasterize` to paint SHM buffers.
+`otter-ui` fills a `CommandList`. You call `quad_renderer.rasterize` to paint SHM buffers.
 
 ## Quick example
 

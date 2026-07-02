@@ -4,7 +4,7 @@ sidebarTitle: "Command list"
 description: "DefaultCommandList, scissor, damage culling, and quad_renderer."
 ---
 
-Deferred rendering records draw ops into a bounded buffer, then plays them back once per frame.
+Record draw ops into a bounded buffer, play them back once per frame.
 
 ## Recording
 
@@ -48,4 +48,4 @@ Rounded corners use an SDF path inside `quad_renderer`. Surface Description pane
 
 ## Ownership
 
-New app UI should use `otter-ui` `UiState`, which owns the command list. Direct recording remains for bar widgets, monitor chrome, and renderer internals.
+New app UI should go through `otter-ui` `UiState`, which owns the command list. Bar widgets, monitor chrome, and renderer internals still record commands directly.

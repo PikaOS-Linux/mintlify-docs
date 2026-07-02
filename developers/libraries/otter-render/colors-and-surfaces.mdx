@@ -42,4 +42,4 @@ Set `scale` on `CommandList` when recording logical coordinates for rasterizatio
 
 ## When to draw directly
 
-Prefer `CommandList` + `quad_renderer` for app UI. Direct `Surface` calls remain useful for tests, one-off buffers, and legacy widget `draw` methods.
+Prefer `CommandList` and `quad_renderer` for app UI. Direct `Surface` calls still make sense in tests, one-off buffers, and legacy widget `draw` methods.

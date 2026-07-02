@@ -4,9 +4,9 @@ sidebarTitle: "otter-wayland"
 description: "Wayland client: connection, layer shell, input, SHM pools, capture, and damage."
 ---
 
-`otter-wayland` wraps the Wayland client APIs Otter Shell apps share: compositor connection, layer and XDG surfaces, pointer and keyboard input, clipboard, SHM buffers, and screen capture.
+`otter-wayland` is the shared Wayland client layer: compositor connection, layer and XDG surfaces, pointer and keyboard input, clipboard, SHM buffers, screen capture.
 
-Poll `Connection.dispatch()` in your main loop alongside config watchers and timer FDs.
+Poll `Connection.dispatch()` in your main loop with config watchers and timer FDs.
 
 ## Quick example
 
@@ -35,7 +35,7 @@ while (conn.running) {
     `DoubleShmPool`, `SingleShmPool`, `DamageTracker`, `Renderer`.
   </Card>
   <Card title="Capture and overlays" icon="camera" href="/developers/libraries/otter-wayland/capture-and-overlays">
-  Screen capture, selection overlay, dim overlay.
+    Screen capture, selection overlay, dim overlay.
   </Card>
 </CardGroup>
 
