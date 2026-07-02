@@ -29,10 +29,11 @@ Pass `text_system` and `text_scratch` through `otter-ui` `FrameOptions`, or atta
 ```zig
 const render = @import("otter_render");
 
-const color = try render.parseColor("#FF5500");
-var surface = render.Surface.fromPixels(&pixels, width, height);
-surface.clear(render.Color.black);
-font.drawText(&surface, "Hello", .{ .x = 0, .y = 20 }, 16, render.Color.white);
+fn drawHello(surface: *render.Surface, font: *render.Font) !void {
+    const accent = try render.parseColor("#FF5500");
+    surface.clear(render.Color.black);
+    font.drawText(surface, "Hello", .{ .x = 0, .y = 20 }, 16, accent);
+}
 ```
 
 Build flag `-Denable_text=false` drops font and shaping support.

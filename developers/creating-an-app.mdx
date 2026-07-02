@@ -8,22 +8,28 @@ Build a new Wayland app on the Otter Shell stack.
 
 ## 1. Create the project
 
-Initialize a Zig project and add Otter dependencies in `build.zig.zon`:
+Initialize a Zig project and add Otter dependencies in `build.zig.zon`. This file uses Zig object literal syntax, not JSON:
 
-```json
-{
-    "name": "my-otter-app",
-    "version": "0.1.0",
-    "dependencies": {
-        "otter_ui": { "path": "../otter-ui" },
-        "otter_wayland": { "path": "../otter-wayland" },
-        "otter_render": { "path": "../otter-render" },
-        "otter_theme": { "path": "../otter-theme" },
-        "otter_conf": { "path": "../otter-conf" },
-        "otter_config_types": { "path": "../otter-config-types" },
-        "otter_utils": { "path": "../otter-utils" }
-    }
-    // Add otter_desktop if you need D-Bus, icons, or .desktop parsing
+```zig
+.{
+    .name = .my_otter_app,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .otter_ui = .{ .path = "../otter-ui" },
+        .otter_wayland = .{ .path = "../otter-wayland" },
+        .otter_render = .{ .path = "../otter-render" },
+        .otter_theme = .{ .path = "../otter-theme" },
+        .otter_conf = .{ .path = "../otter-conf" },
+        .otter_config_types = .{ .path = "../otter-config-types" },
+        .otter_utils = .{ .path = "../otter-utils" },
+        // Add otter_desktop if you need D-Bus, icons, or .desktop parsing.
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
 }
 ```
 
@@ -36,13 +42,34 @@ zig fetch --save git+https://git.pika-os.com/otter-shell/otter-conf
 ## 2. Wire imports in build.zig
 
 ```zig
-const otter_ui = b.dependency("otter_ui", .{ .target = target, .optimize = optimize });
-const otter_wayland = b.dependency("otter_wayland", .{ .target = target, .optimize = optimize });
-const otter_render = b.dependency("otter_render", .{ .target = target, .optimize = optimize });
+const otter_ui = b.dependency("otter_ui", .{
+    .target = target,
+    .optimize = optimize,
+});
+const otter_wayland = b.dependency("otter_wayland", .{
+    .target = target,
+    .optimize = optimize,
+});
+const otter_render = b.dependency("otter_render", .{
+    .target = target,
+    .optimize = optimize,
+});
 
-exe.root_module.addImport("otter_ui", otter_ui.module("otter_ui"));
-exe.root_module.addImport("otter_wayland", otter_wayland.module("otter_wayland"));
-exe.root_module.addImport("otter_render", otter_render.module("otter_render"));
+const imports = [_]std.Build.Module.Import{
+    .{ .name = "otter_ui", .module = otter_ui.module("otter_ui") },
+    .{ .name = "otter_wayland", .module = otter_wayland.module("otter_wayland") },
+    .{ .name = "otter_render", .module = otter_render.module("otter_render") },
+};
+
+const exe = b.addExecutable(.{
+    .name = "my-otter-app",
+    .root_module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &imports,
+    }),
+});
 ```
 
 ## 3. Choose your app pattern
