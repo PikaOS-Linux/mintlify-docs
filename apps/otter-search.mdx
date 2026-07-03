@@ -1,0 +1,125 @@
+---
+title: "otter-search"
+sidebarTitle: "Desktop Search"
+description: "Fast file and content search for your desktop. Fuzzy path search and live grep over documents, downloads, and home directories."
+---
+
+`otter-search` is the desktop search daemon for Otter Shell. It builds and maintains fast indexes over your personal files and supports both fuzzy path search and content (grep-style) search.
+
+A companion CLI, `otter-searchctl`, lets you query the indexes, check status, list roots, or trigger a reindex. **The daemon must be running** for `otter-searchctl` to work.
+
+The daemon watches for filesystem changes so results stay fresh.
+
+## Binaries
+
+- `otter-search` — the indexing daemon
+- `otter-searchctl` — the control CLI (talks to the daemon)
+
+## Starting the Daemon
+
+Run once per session (or add to autostart).
+
+```bash
+otter-search
+```
+
+<Tip>
+  Add `otter-search` to your compositor autostart so indexes are ready early. The daemon binds `$XDG_RUNTIME_DIR/otter-shell/otter-search.sock`.
+</Tip>
+
+## CLI: otter-searchctl
+
+| Command                        | Description |
+|--------------------------------|-------------|
+| `otter-searchctl status`       | Daemon health, root states, memory (RSS/PSS), and scan progress |
+| `otter-searchctl roots`        | List configured + expanded search roots with status |
+| `otter-searchctl reindex`      | Ask the daemon to drop and rebuild indexes |
+| `otter-searchctl path QUERY...`   | Fuzzy path search across indexed roots |
+| `otter-searchctl content QUERY...`| Live content (grep) search within indexed files |
+
+`path` and `content` accept space-separated multi-word queries. Up to 50 results are returned by default.
+
+Results are printed as JSON.
+
+Example:
+
+```bash
+otter-searchctl path report pdf
+otter-searchctl content "quarterly results"
+```
+
+### Example JSON (path)
+
+```json
+{"items":[{"kind":"file","path":"/home/you/Documents/invoice-2026.pdf","name":"invoice-2026.pdf","root":0,"size":12345,"modified":1720000000,"score":42}]}
+```
+
+Path results include `root` index, `size`, `modified`, and `score`.
+
+Content results include `preview`, `line`, `col`, `ranges`, `root`, and `score`.
+
+## Configuration
+
+`~/.config/otter-shell/otter-search.conf`
+
+```conf
+enable_xdg_user_dirs = true
+enable_home_config = true
+enable_home_shallow = true
+content_indexing = true
+max_content_file_bytes = 10 * 1024 * 1024   # 10 MiB
+cache_budget_max_bytes = 256 * 1024 * 1024  # 256 MiB
+max_files_per_root = 100000
+
+# Add extra roots (Dynamic fields use indexed form)
+root_0_path = "/home/you/projects"
+root_0_enabled = true
+```
+
+See the [otter-conf Dynamic docs](/developers/libraries/otter-conf/advanced-features) for all accepted forms (`root_0_...`, bare, etc.).
+
+### Options
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enable_xdg_user_dirs` | true | Index XDG dirs (Desktop, Documents, Downloads, Music, Pictures, Public, Templates, Videos) |
+| `enable_home_config` | true | Index `~/.config` recursively |
+| `enable_home_shallow` | true | Index direct children of `$HOME` (path only, shallow) |
+| `content_indexing` | true | Enable live grep / content search |
+| `max_content_file_bytes` | 10 MiB | Skip content indexing for larger files |
+| `cache_budget_max_bytes` | 256 MiB | Total memory budget across recursive roots |
+| `max_files_per_root` | 100,000 | Skip roots that look too large at startup |
+| `root` | (none) | Additional user roots (repeatable via Dynamic) |
+
+`status` also reports top-level `rss_kb` / `pss_kb` plus per-root scan progress fields when available.
+
+Heavy directories (`.git`, `node_modules`, `.cache`, `.local`, `.cargo`, etc.) are excluded by default.
+
+## Exclusions and Safety
+
+Built-in exclusions keep memory usage reasonable:
+
+- VCS dirs, build/cache dirs, dependency trees
+- Hidden dirs (except `~/.config`)
+- Symlinks are not followed for indexing
+
+If a root exceeds `max_files_per_root` it is marked `too_large` and skipped for recursive indexing.
+
+## Reindexing
+
+```bash
+otter-searchctl reindex
+```
+
+Use after large file operations or when you want fresh results immediately. The daemon also watches for changes.
+
+## Integration Notes
+
+- Designed for use by scripts, file managers, and other tools via `otter-searchctl`.
+- JSON output makes it easy to consume programmatically.
+- See `otter-config-types` (search) and `otter-tools-core` (search module) for embedding the same logic in other tools.
+- Launcher file/content search integration may be added in the future.
+
+<Note>
+  Content search is capped and skips binaries/large files. For very large collections consider tuning budgets or limiting roots.
+</Note>
