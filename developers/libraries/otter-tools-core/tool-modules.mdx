@@ -38,6 +38,14 @@ RGB/HSL/hex conversion for `otter-pick` and launcher color preview.
 
 Encoder and container selection helpers for `otter-rec` (bounded list of installed tools).
 
+## Search (`search`, `search_client`)
+
+Support for the desktop search daemon. Handles root expansion (XDG user dirs, `~/.config`, shallow `$HOME`, plus user roots), built-in directory exclusions, wrappers over the fff fuzzy engine for path search and live content grep, a JSON protocol client, and config loading.
+
+Used by `otter-search` and `otter-searchctl`.
+
+The search functionality lives in an opt-in `otter_tools_search` module so that other tools do not pull in the native fff library.
+
 ## Config (`config`)
 
 Shared key paths and load helpers for tools that read small `.conf` fragments.

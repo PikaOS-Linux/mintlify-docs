@@ -12,7 +12,7 @@ Small-app config schemas live in `app_configs.zig`, synced with `otter-settings`
 
 <CardGroup cols={2}>
   <Card title="Tool modules" icon="wrench" href="/developers/libraries/otter-tools-core/tool-modules">
-    Calculator, emoji, clipboard, calendar, weather, color, record.
+    Calculator, emoji, clipboard, search, calendar, weather, color, record.
   </Card>
   <Card title="Theme helpers" icon="palette" href="/developers/libraries/otter-tools-core/theme-helpers">
     SplatHash, semantic palettes, and shared app configs.
@@ -31,6 +31,7 @@ Small-app config schemas live in `app_configs.zig`, synced with `otter-settings`
 | `weather` | `otter-weather` |
 | `color` | `otter-pick` |
 | `record` | `otter-rec` encoder selection |
+| `search` / `search_client` | `otter-search` daemon and `otter-searchctl` |
 
 Clipboard helpers invoke `wl-copy` by name. Packaged installs shadow that binary with `otter-copy`.
 

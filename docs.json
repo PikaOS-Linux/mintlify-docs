@@ -53,6 +53,7 @@
               "apps/otter-screenshot",
               "apps/otter-rec",
               "apps/otter-clip",
+              "apps/otter-search",
               "apps/otter-shot"
             ]
           },
