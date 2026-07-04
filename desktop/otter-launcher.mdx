@@ -1,7 +1,7 @@
 ---
 title: "otter-launcher"
 sidebarTitle: "Launcher"
-description: "App launcher with fuzzy search, IME, and calculator, emoji, and clipboard modes."
+description: "App launcher with fuzzy search, IME, and calculator, emoji, clipboard, and desktop file search modes."
 ---
 
 `otter-launcher` is a centered search overlay. Like fuzzel, rofi, or wofi, on the shared Otter UI stack.
@@ -30,6 +30,10 @@ Extensions appear above app matches:
 | `=2+3*4` or `calc 2+3*4` | Calculator via [otter-calc](/apps/otter-calc) |
 | `:heart` or `emoji heart` | Emoji search via [otter-emoji](/apps/otter-emoji) |
 | `clip` or `clip query` | Clipboard history via [otter-clip](/apps/otter-clip) |
+| `file invoice` or `f invoice` | Fuzzy path search via [otter-search](/apps/otter-search) |
+| `grep TODO` or `g TODO` | Content (grep) search via [otter-search](/apps/otter-search) |
+
+File and grep modes talk to the `otter-search` daemon over its runtime socket. Start the daemon first (session autostart is enough). Queries are debounced so typing does not flood the daemon. Selecting a path opens it with `xdg-open` (or a matching handler).
 
 ## Keyboard shortcuts
 

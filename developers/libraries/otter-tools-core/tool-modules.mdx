@@ -38,13 +38,18 @@ RGB/HSL/hex conversion for `otter-pick` and launcher color preview.
 
 Encoder and container selection helpers for `otter-rec` (bounded list of installed tools).
 
-## Search (`search`, `search_client`)
+## Search (`otter_tools_search`, `search_client`)
 
-Support for the desktop search daemon. Handles root expansion (XDG user dirs, `~/.config`, shallow `$HOME`, plus user roots), built-in directory exclusions, wrappers over the fff fuzzy engine for path search and live content grep, a JSON protocol client, and config loading.
+Desktop search is pure Zig. No Rust or vendored fuzzy engines.
 
-Used by `otter-search` and `otter-searchctl`.
+| Module | Import | Role |
+|--------|--------|------|
+| `otter_tools_search` | separate build module rooted at `src/search.zig` | Index, scan, fuzzy path search, content grep, root expansion, exclusions |
+| `search_client` | `otter_tools_core.search_client` | Unix-socket protocol client for the daemon |
 
-The search functionality lives in an opt-in `otter_tools_search` module so that other tools do not pull in the native fff library.
+`otter_tools_search` expands roots (XDG user dirs, `~/.config`, shallow `$HOME`, plus user roots), skips heavy dirs, and scores path and content hits. Submodules live under `src/search/` (`file_index`, `scanner`, `finder`, `fuzzy`, `content`, `query`, `scoring`).
+
+`otter-search` and `otter-searchctl` link both modules. `otter-launcher` only needs `search_client` to query a running daemon. Other tools stay free of the search core unless they import `otter_tools_search`.
 
 ## Config (`config`)
 
