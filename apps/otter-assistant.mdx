@@ -1,0 +1,62 @@
+---
+title: "otter-assistant"
+sidebarTitle: "Assistant"
+description: "Local AI chat client for otter-assist. Encrypted threads, Markdown, and tool permission prompts. Ships in otter-shell-extras."
+---
+
+`otter-assistant` is the chat window for [otter-assist](/apps/otter-assist). The daemon owns transport and tools. This app owns threads, permissions, Markdown, and code highlighting.
+
+<Note>
+  Install with `pikman install otter-shell-extras`. That pulls in `otter-assist`, `otter-assistant`, and `otter-assist-data` along with the speech tools.
+</Note>
+
+## Launch
+
+```bash
+otter-assistant
+```
+
+You can also open **Otter Assistant** from [otter-launcher](/desktop/otter-launcher). Start `otter-assist` first (or autostart it). No daemon, no replies.
+
+## Chat
+
+Type in the prompt box and press **Enter**. The status line shows tool progress, then tokens per second and time to first token when the reply finishes.
+
+Successful exchanges save as encrypted thread files under `$XDG_DATA_HOME/otter-shell/assistant/threads/`. `assistant/current.id` picks the active thread. An old `assistant/current.thread` file migrates into the default thread on first use.
+
+## Tool permissions
+
+Web Search and Desktop Search ask before they run:
+
+| Action | Result |
+|--------|--------|
+| **Enter** | Allow once for this request |
+| **Ctrl+Enter** | Save the matching `*_always_allow` flag in `otter-assistant.conf` |
+
+The request sends one-shot approval to `otter-assist`. Other clients stay gated unless their own config allows the tool.
+
+## Rendering
+
+Replies render as Markdown: headings, tables, task lists, remote and local images (cached by Otter), and fenced code blocks highlighted with `zhl`.
+
+## Configuration
+
+Client settings live in `~/.config/otter-shell/otter-assistant.conf`:
+
+```conf
+window_width = 980
+window_height = 720
+font_size = 14
+max_tokens = 512
+temperature = 0.2
+web_always_allow = false
+desktop_search_always_allow = false
+```
+
+Backend options (`backend`, tools, idle unload) live in `otter-assist.conf`. Edit those under **Assist** in otter-settings, or see [otter-assist](/apps/otter-assist).
+
+## Related
+
+- [otter-assist](/apps/otter-assist): local inference daemon and `otter-assistctl`
+- [otter-search](/apps/otter-search): desktop search used by the assistant tool
+- [Installation](/installation): what `otter-shell-extras` includes

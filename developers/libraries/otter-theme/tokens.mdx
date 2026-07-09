@@ -37,7 +37,11 @@ Shared menu and tooltip styling: `popup.background`, `popup.border`, `popup.high
 
 ## Decorations
 
-`decorations.server_side` requests compositor-side XDG decorations when supported.
+`decorations.prefered_decoration_type` picks how XDG toplevels ask for decorations: `none`, `server`, `client`, or `client_floating`. Default is `server`.
+
+## CSD
+
+When client-side decorations are active, `csd` styles them. `button_layout` is GTK-style (default `:sbc`). The rest covers titlebar colors and sizes, button colors, and border radius/size.
 
 ## Transparency
 

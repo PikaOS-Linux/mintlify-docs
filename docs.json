@@ -63,6 +63,8 @@
               "apps/otter-note",
               "apps/otter-cal",
               "apps/otter-timer",
+              "apps/otter-assistant",
+              "apps/otter-assist",
               "apps/otter-transcribe"
             ]
           },

@@ -77,11 +77,15 @@ Restart `otter-monitor` after you change the refresh interval. Theme colors stil
 
 ## Assist tab
 
-The **Assist** tab edits `otter-assist.conf`. That app is workspace-only today (not in the `otter-shell` metapackage). Fields:
+The **Assist** tab edits `otter-assist.conf` for the [otter-assist](/apps/otter-assist) daemon (from `otter-shell-extras`):
 
 - **Backend**: `cpu` or `vulkan`
-- **Vulkan device**: GPU index, or `-1` for the default device
-- **Idle seconds**: how long the assist UI waits before going idle (default `120`)
+- **Vulkan device**: GPU index, or `-1` for llama.cpp auto selection
+- **Idle seconds**: unload the idle model after this many seconds (default `120`)
+- Tool toggles and always-allow flags for knowledge, web, weather, and desktop search
+- **Pika search URL**, knowledge index path, and tool-call budgets
+
+Full key list: [otter-assist](/apps/otter-assist). The chat client keeps its own file, `otter-assistant.conf`, for window size, generation limits, and UI always-allow flags.
 
 ## What otter-settings does not configure
 

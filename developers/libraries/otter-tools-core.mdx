@@ -34,7 +34,9 @@ Desktop search ships as a second build module, `otter_tools_search`, so only `ot
 | `color` | `otter-pick` |
 | `record` | `otter-rec` encoder selection |
 | `search_client` | `otter-searchctl`, `otter-launcher` (daemon protocol) |
+| `assist_client` | `otter-assistctl`, `otter-assistant` (daemon socket protocol) |
 | `otter_tools_search` | `otter-search` daemon (Zig index and query core) |
+| `zidx` | Knowledge index helpers used by `otter-assist` |
 
 Clipboard helpers invoke `wl-copy` by name. Packaged installs shadow that binary with `otter-copy`.
 

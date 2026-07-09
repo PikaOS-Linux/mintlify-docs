@@ -1,7 +1,7 @@
 ---
 title: "Installation"
 sidebarTitle: "Installation"
-description: "Install Otter Shell with pikman. `otter-shell` is the base desktop; add `otter-shell-extras` for speech tools."
+description: "Install Otter Shell with pikman. Base desktop is `otter-shell`; add `otter-shell-extras` for speech tools and Otter Assistant."
 ---
 
 Otter Shell ships as native packages on PikaOS, built and versioned together in [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith). Install with **pikman**.
@@ -38,13 +38,13 @@ Otter Shell ships as native packages on PikaOS, built and versioned together in 
 
     Pulls every component at the same version. See the package table below.
 
-    For speech tools (transcription and text-to-speech):
+    For speech tools and Otter Assistant:
 
     ```bash
     pikman install otter-shell-extras
     ```
 
-    `otter-shell` **recommends** `otter-shell-extras` but does not require it. Transcription and voice synthesis are not in the base metapackage.
+    `otter-shell` **recommends** `otter-shell-extras` but does not require it. Transcription, voice synthesis, and Otter Assistant stay out of the base metapackage.
   </Step>
 
   <Step title="Install individual packages (optional)">
@@ -61,7 +61,7 @@ Otter Shell ships as native packages on PikaOS, built and versioned together in 
 | Metapackage | Contents |
 |-------------|----------|
 | `otter-shell` | Full desktop shell: bar, launcher, notifications, wallpaper, theme generator, OSD, logout, settings, polkit, lock, idle, greeter, terminal, system monitor, Jade pet, screenshot tools, clipboard, notes, timer, weather, and other core helpers. Includes `otter-shell-fonts`. |
-| `otter-shell-extras` | Optional speech tools only: `otter-transcribe` and `otter-vox`. |
+| `otter-shell-extras` | Speech tools (`otter-transcribe`, `otter-vox`) and Otter Assistant (`otter-assist`, `otter-assistant`, `otter-assist-data`). |
 
 ## Packages in `otter-shell`
 
@@ -71,6 +71,7 @@ Installed by `pikman install otter-shell`:
 |---------|-------------|
 | `otter-bar` | Status bar with widgets, system tray, and MPRIS |
 | `otter-launcher` | Application launcher overlay |
+| `otter-search` | Desktop search daemon (launcher `file` / `grep` modes) |
 | `otter-notifications` | Notification daemon (freedesktop.org spec) |
 | `otter-wallpaper` | Wallpaper daemon |
 | `otter-theme-gen` | Wallpaper-reactive theme generator |
@@ -97,7 +98,7 @@ Installed by `pikman install otter-shell`:
 | `otter-weather` | Weather fetcher and bar widget |
 | `otter-shell-fonts` | Bundled fallback fonts |
 
-**Not in either metapackage:** `otter-transcribe` and `otter-vox` (install via `otter-shell-extras`).
+**Not in the base metapackage** (install via `otter-shell-extras`): `otter-transcribe`, `otter-vox`, `otter-assist`, `otter-assistant`, and `otter-assist-data`.
 
 ## Verify the installation
 

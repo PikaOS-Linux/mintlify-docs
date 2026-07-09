@@ -1,0 +1,93 @@
+---
+title: "otter-assist"
+sidebarTitle: "Assist backend"
+description: "Local text-generation daemon for Otter Shell. Ships in otter-shell-extras with knowledge, web, weather, and desktop search tools."
+---
+
+`otter-assist` runs the local model behind Otter Assistant. It listens on a Unix socket tied to your Wayland display, does inference on-device, and can call out for knowledge lookup, web search, weather, or desktop search. The chat window is [otter-assistant](/apps/otter-assistant).
+
+<Note>
+  `otter-assist`, `otter-assistant`, and `otter-assist-data` ship in **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.
+</Note>
+
+## Packages
+
+| Package | Role |
+|---------|------|
+| `otter-assist` | Daemon (`otter-assist`) and control CLI (`otter-assistctl`) |
+| `otter-assist-data` | GGUF model plus packaged knowledge indexes under `/usr/lib/otter-assist/` |
+| `otter-assistant` | XDG toplevel chat client |
+
+Packaged builds load the model from `/usr/lib/otter-assist/models/` (from `otter-assist-data`). Indexes land under `/usr/lib/otter-assist/indexes/`.
+
+## Start the daemon
+
+If you use the assistant, start this with your session:
+
+```bash
+otter-assist &
+```
+
+Useful flags:
+
+```bash
+otter-assist --threads 4
+otter-assist --backend cpu
+otter-assist --vulkan-device 0
+otter-assist --idle-seconds 120
+```
+
+Vulkan is the default backend. Set `backend = cpu` to load the CPU llama library instead, so the daemon never pulls in Vulkan drivers. Thread count defaults to `min(cpu_count, 8)`.
+
+## Control CLI
+
+```bash
+otter-assistctl infer "Rewrite this shorter: Otter Shell is a Zig-based Wayland desktop shell."
+otter-assistctl --json infer "Reply with one word: ok"
+otter-assistctl chat --file request.json
+otter-assistctl status
+otter-assistctl unload
+```
+
+`infer` streams plain token chunks as they arrive. `--json infer` and `chat` stream newline-delimited JSON events (`message_delta`, `tool_requested`, `approval_required`, `final`).
+
+## Configuration
+
+Defaults live in `~/.config/otter-shell/otter-assist.conf`. Use the **Assist** tab in [otter-settings](/desktop/otter-settings), or edit the file:
+
+```conf
+backend = vulkan
+vulkan_device = -1
+idle_seconds = 120
+knowledge_enabled = true
+web_enabled = true
+web_always_allow = false
+weather_enabled = true
+desktop_search_enabled = true
+desktop_search_always_allow = false
+pika_search_url = "https://search.pika-os.com/search?lang=en"
+knowledge_index_dir = "/usr/lib/otter-assist/indexes"
+max_tool_calls = 4
+max_web_searches = 2
+```
+
+| Key | Meaning |
+|-----|---------|
+| `backend` | `vulkan` (default) or `cpu` |
+| `vulkan_device` | `-1` for llama.cpp auto selection; `0` first GPU, `1` second, and so on |
+| `idle_seconds` | Unload the idle model after this many seconds (default `120`) |
+| `knowledge_enabled` | Run packaged knowledge retrieval on JSON chat requests |
+| `web_enabled` / `web_always_allow` | Allow web search; ask for approval unless always-allow is on |
+| `weather_enabled` | Open-Meteo weather tool (same path as `otter-weather`) |
+| `desktop_search_enabled` / `desktop_search_always_allow` | Query `otter-search` over its socket; blocked unless always-allow or one-shot approval |
+| `pika_search_url` | Web search endpoint |
+| `knowledge_index_dir` | Packaged index directory |
+| `max_tool_calls` / `max_web_searches` | Tool call budgets per request |
+
+Web search only fires on its own when `web_enabled` and `web_always_allow` are both true, and the prompt actually needs current or web-backed info. Otherwise you get an `approval_required` event and no network call. Desktop search returns metadata and content previews only.
+
+Every prompt gets the current UTC date and time, so the model does not invent relative dates. The packaged default model is the v12 full-knowledge LFM2.5 1.2B Q4_0 checkpoint.
+
+## Session setup
+
+Add `otter-assist` to compositor autostart when you use Otter Assistant. See [Session setup](/desktop/session-setup). Keep [otter-search](/apps/otter-search) running if you want the desktop search tool.

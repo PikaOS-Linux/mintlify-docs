@@ -51,6 +51,10 @@ Desktop search is pure Zig. No Rust or vendored fuzzy engines.
 
 `otter-search` and `otter-searchctl` link both modules. `otter-launcher` only needs `search_client` to query a running daemon. Other tools stay free of the search core unless they import `otter_tools_search`.
 
+## Assist client (`assist_client`)
+
+Unix-socket client for `otter-assist`. Covers `infer`, `status`, `unload`, JSON chat requests, and streamed events (`message_delta`, tool events, `final`). Used by `otter-assistctl` and `otter-assistant`.
+
 ## Config (`config`)
 
 Shared key paths and load helpers for tools that read small `.conf` fragments.

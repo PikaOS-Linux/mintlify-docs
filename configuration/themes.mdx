@@ -71,6 +71,33 @@ font_dpi_aware = true
 
 `font_dpi_aware = true` scales font and padding on high-DPI displays. Empty `font_family = ""` falls back to the bundled Nerd Font.
 
+## Window decorations
+
+You can choose how Otter XDG toplevels ask for decorations, and how client-side titlebars look when CSD is on.
+
+In otter-settings, open the **Theme** tab and use the **Decorations** and **CSD** sections. Or set keys in `theme.conf`:
+
+```conf
+# Prefer server, client, client_floating, or none
+decorations_prefered_decoration_type = "server"
+
+# Client-side decoration chrome (used when CSD is active)
+csd_button_layout = ":sbc"
+csd_titlebar_height = 28
+csd_border_size = 1
+```
+
+| Value | Meaning |
+|-------|---------|
+| `server` | Prefer compositor (SSD) decorations when supported |
+| `client` | Prefer application (CSD) decorations |
+| `client_floating` | Prefer CSD while floating; maximized windows follow the compositor |
+| `none` | No decoration preference |
+
+`csd_button_layout` uses GTK-style layout. `:` is the center. Letters before it go left; letters after go right. `c` = close, `b` = maximize, `s` = minimize. Default `:sbc` puts minimize, maximize, and close on the right.
+
+CSD also has titlebar and button color tokens (`csd_titlebar_bg_active`, `csd_button_close_bg`, and related keys). Built-in presets fill those in.
+
 ## Built-in presets
 
 In the otter-settings theme browser:
