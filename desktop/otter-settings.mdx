@@ -49,6 +49,7 @@ Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotke
 | Theme | `theme.conf` |
 | Monitor | `otter-monitor.conf` |
 | Assist | `otter-assist.conf` |
+| Clicker | `otter-clicker.conf` |
 
 Also includes drag-and-drop bar layout, custom bar buttons, and clipboard paste (Ctrl+V) in text fields via Wayland data device.
 
@@ -63,7 +64,7 @@ On the tab:
 - **Islands mode**: Otter Shell Islands surface styling
 - **Strategy**: how colors are pulled from the wallpaper (`material_you`, `analogous`, `vibrant`, `monochromatic`, `direct`, `temperature`)
 - **Contrast**, **Vibrancy**, and **Opacity**: tune the generated palette
-- **Templates**: pick which third-party configs get rewritten (terminals, GTK, Hyprland Lua at `~/.config/hypr/otter-theme.lua`, `bottom`, btop, and others)
+- **Templates**: pick which third-party configs get rewritten (terminals, GTK, Hyprland Lua at `~/.config/hypr/otter-theme.lua`, `bottom`, btop, KDE color schemes, Papirus folder colors, and others)
 
 Turn on only the templates you want overwritten. Click **Apply** to save. For fixed presets instead, see [Themes](/configuration/themes). See [otter-theme-gen](/desktop/otter-theme-gen) for daemon details.
 
@@ -74,6 +75,10 @@ The **Monitor** tab edits `otter-monitor.conf` for [otter-monitor](/apps/otter-m
 - **Refresh interval seconds**: how often the collector polls `/proc` and sysfs (1 to 3600)
 
 Restart `otter-monitor` after you change the refresh interval. Theme colors still hot-reload from `theme.conf`.
+
+## Clicker tab
+
+The **Clicker** tab edits `otter-clicker.conf` for [otter-clicker](/apps/otter-clicker). Interval, button, single or double click, repeat count, jitter, hold time, and fixed-position mode.
 
 ## Assist tab
 

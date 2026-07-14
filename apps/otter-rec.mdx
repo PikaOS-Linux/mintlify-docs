@@ -13,16 +13,20 @@ otter-rec is Otter Shell's screen recorder. Run it once to start, run it again t
 ```bash
 otter-rec                                             # toggle recording (start/stop)
 otter-rec --output recording.mp4                      # specify output file
+otter-rec --output ~/Videos/clip-YYYY-MM-DD-HH-MM-SS.mp4  # expand timestamp token
 otter-rec --region select --output region.mp4         # interactive region selection
 otter-rec --region X,Y,W,H                            # fixed region (global logical coordinates)
 otter-rec --window active --output window.mp4         # capture the active window
+otter-rec --source screen --output screen.mp4         # fullscreen capture
 otter-rec --hevc                                      # encode with HEVC instead of H.264
 otter-rec --av1                                       # encode with AV1
 otter-rec --portal --source screen --output out.mp4   # force xdg-desktop-portal source picker
 otter-rec --dry-run --source screen --output out.mp4  # print resolved settings, do not record
 ```
 
-`--region select` opens the same drag-to-select UI as [otter-screenshot](/apps/otter-screenshot) and [otter-shot](/apps/otter-shot). Drag a rectangle, or pass `--region X,Y,W,H` for fixed global logical coordinates. `--window active` captures the focused window through `ext_foreign_toplevel_image_capture_source_manager_v1`.
+`--region select` opens the same drag-to-select UI as [otter-screenshot](/apps/otter-screenshot) and [otter-shot](/apps/otter-shot). Drag a rectangle, or pass `--region X,Y,W,H` for fixed global logical coordinates. `--window active` captures the focused window through `ext_foreign_toplevel_image_capture_source_manager_v1`. `--source screen` selects fullscreen. CLI capture selectors override the configured mode; when you pass more than one, the last one wins.
+
+`YYYY-MM-DD-HH-MM-SS` in a configured or CLI `--output` path expands to the local start time.
 
 ## Hardware Encoding
 
@@ -55,9 +59,9 @@ seconds = 0
 bitrate = 12000000
 ```
 
-- `output`: destination file path. Empty writes to `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`
+- `output`: destination file path. Empty writes to `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`. The `YYYY-MM-DD-HH-MM-SS` token expands to the local start time
 - `source`: capture source hint for encoder path selection
-- `mode`: `fullscreen`, `region`, or `window`
+- `mode`: `fullscreen`, `region`, or `window` (CLI `--region`, `--window`, and `--source` override this; last selector wins)
 - `codec`: `h264`, `hevc`, or `av1`
 - `force_portal`: `true` always uses xdg-desktop-portal source selection (same as `--portal`)
 - `fps`: target frame rate (default `30`)

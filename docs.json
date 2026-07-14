@@ -74,6 +74,7 @@
               "apps/otter-calc",
               "apps/otter-emoji",
               "apps/otter-pick",
+              "apps/otter-clicker",
               "apps/otter-vox",
               "apps/otter-weather"
             ]

@@ -1,7 +1,7 @@
 ---
 title: "Input"
 sidebarTitle: "Input"
-description: "Pointer, keyboard, IME, clipboard, and virtual keyboard in otter-wayland."
+description: "Pointer, keyboard, IME, clipboard, virtual keyboard, and virtual pointer in otter-wayland."
 ---
 
 ## Pointer (SeatState)
@@ -68,3 +68,7 @@ clipboard.setDropCallback(onDrop, &app);
 ## Virtual keyboard
 
 `TextInjector` injects committed text when an on-screen keyboard is active without duplicating IME state.
+
+## Virtual pointer
+
+`Connection` binds `zwlr_virtual_pointer_manager_v1` when the compositor advertises it. Tools such as `otter-clicker` use that manager for compositor-native pointer injection so physical mouse motion does not move a fixed click target.

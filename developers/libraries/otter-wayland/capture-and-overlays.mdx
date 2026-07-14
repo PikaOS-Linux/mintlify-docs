@@ -1,7 +1,7 @@
 ---
 title: "Capture and overlays"
 sidebarTitle: "Capture"
-description: "Screen capture, selection overlay, and dim overlay in otter-wayland."
+description: "Screen capture, region and point selection overlays, and dim overlay in otter-wayland."
 ---
 
 ## Screen capture
@@ -20,7 +20,7 @@ Used by screenshot, recording, and wallpaper tools.
 
 ## Selection overlay
 
-Drag-to-select for `otter-screenshot`, `otter-shot`, and `otter-rec`. Pixels go straight to SHM with incremental damage. This path skips Surface Description.
+Drag-to-select for `otter-screenshot`, `otter-shot`, and `otter-rec`. Also supports crosshair point selection for `otter-clicker` via `Selector.runPoint()`. Pixels go straight to SHM with incremental damage. This path skips Surface Description.
 
 | Preset | App | Visual |
 |--------|-----|--------|
@@ -28,7 +28,7 @@ Drag-to-select for `otter-screenshot`, `otter-shot`, and `otter-rec`. Pixels go 
 | `selection_overlay.preset.shot` | `otter-shot` | Dimmed outside selection |
 | `selection_overlay.preset.rec` | `otter-rec` | Same as shot |
 
-Live mode skips the freeze and draws a shaded overlay. The selector can hide the cursor when the capture omits it.
+Live mode skips the freeze and draws a shaded overlay. The selector can hide the cursor when the capture omits it. Point mode draws a transparent overlay with a crosshair cursor and returns a single `geo.Point`.
 
 ## Dim overlay
 

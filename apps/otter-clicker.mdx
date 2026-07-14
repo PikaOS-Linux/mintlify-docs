@@ -1,0 +1,53 @@
+---
+title: "otter-clicker"
+sidebarTitle: "Auto clicker"
+description: "Wayland auto-clicker with crosshair targeting and virtual-pointer injection."
+---
+
+`otter-clicker` clicks for you. Lock a point with the crosshair overlay, or click wherever the pointer already sits. When the compositor supports virtual pointers, a real mouse move will not steal that fixed target.
+
+## Commands
+
+```bash
+otter-clicker toggle   # stop a running instance, or start one
+otter-clicker start    # start only; refuses if already running
+otter-clicker stop     # stop only
+```
+
+With `fixed_position = true`, `toggle` / `start` show a crosshair overlay. Click to lock the target. **Escape** or **Ctrl+C** cancels selection. With `fixed_position = false`, it skips the overlay and clicks at the current pointer.
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-clicker.conf`. Edit in [otter-settings](/desktop/otter-settings) under **Clicker**, or by hand:
+
+```conf
+interval_ms = 100
+button = left
+click_type = single
+repeat_count = 0
+random_jitter_ms = 0
+hold_ms = 0
+fixed_position = true
+```
+
+| Key | Meaning |
+|-----|---------|
+| `interval_ms` | Time from click-start to click-start (default `100`) |
+| `button` | `left`, `middle`, or `right` |
+| `click_type` | `single` or `double` (double uses a 50 ms gap) |
+| `repeat_count` | Stop after N clicks; `0` runs until you toggle off |
+| `random_jitter_ms` | Extra random delay of `0..random_jitter_ms` per cycle |
+| `hold_ms` | How long each press is held |
+| `fixed_position` | `true` picks a point with the overlay; `false` uses the live pointer |
+
+If a hold or double-click takes longer than `interval_ms`, the next cycle starts right after it finishes.
+
+## How clicks are injected
+
+Fixed-position mode prefers `wlr-virtual-pointer-unstable-v1`. Compositors without that protocol fall back to `/dev/uinput`, which needs write access through your system's udev policy.
+
+## Hotkey setup
+
+<Tip>
+  Bind `otter-clicker toggle` in your compositor config for a global start/stop. See [Keybinds](/configuration/keybinds).
+</Tip>

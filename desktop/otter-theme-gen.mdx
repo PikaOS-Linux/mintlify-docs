@@ -62,9 +62,19 @@ Optional template keys rewrite third-party config files when colors change. All 
 ```conf
 template_gtk3_enabled = true
 template_hyprland_enabled = true
+template_kcolorscheme_enabled = true
+template_papirus_colors_enabled = true
 ```
 
-Shipped templates cover terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), `bottom`, btop, and more. Toggle them in the **Theme Gen** tab in otter-settings.
+Shipped templates cover terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), `bottom`, btop, KDE color schemes, Papirus folder colors, and more. Toggle them in the **Theme Gen** tab in otter-settings.
+
+### KDE color schemes
+
+Enable `template_kcolorscheme_enabled` to write `~/.local/share/color-schemes/Otter.colors` and sync related keys through `kdeglobals`. When KDE CLI tools are installed, the daemon can refresh the live session too.
+
+### Papirus folder colors
+
+Enable `template_papirus_colors_enabled` to create and select a user-owned `Otter-Papirus-*` icon theme for GTK and Qt. It inherits installed Papirus icons and points folder names at the closest Papirus color variant. No root and no writes under `/usr/share`. Papirus must already be installed.
 
 <Tip>
   Only `otter-theme-gen` and otter-settings should normalize `theme.conf` on disk. Other apps load it read-only.
