@@ -1,0 +1,46 @@
+---
+title: "otter-benchctl"
+sidebarTitle: "Bench CLI"
+description: "Command-line interface for Otter Bench: config, HUD, capture, metrics, benchmarks, and reports."
+---
+
+`otter-benchctl` drives every part of Otter Bench from a terminal. It ships with bash, zsh, fish, and elvish completions, plus a man page per subcommand.
+
+Install with `pikman install otter-gaming-utils` (or the `otter-benchctl` package).
+
+## Common commands
+
+```bash
+otter-benchctl status
+otter-benchctl doctor
+otter-benchctl config validate
+
+otter-benchctl hud toggle
+otter-benchctl hud reset
+otter-benchctl hud preview
+
+otter-benchctl metrics get cpu.load.total.percent
+otter-benchctl metrics watch
+otter-benchctl clients list
+
+otter-benchctl capture arm
+otter-benchctl capture start
+otter-benchctl capture stop
+
+otter-benchctl sessions
+otter-benchctl report
+otter-benchctl upload prepare
+
+otter-benchctl benchmark run <plan>
+otter-benchctl --help
+```
+
+Use `--format json` when you want machine-readable output. JSON goes to stdout; warnings and progress go to stderr.
+
+## Tips
+
+- `metrics get` reads what the daemon already holds. It does not force a poll. If nothing subscribed yet, you get "No sample yet" — start `metrics watch` to create demand.
+- Capture sessions are crash-recoverable and immutable once finalised. Analysis and reports are regenerable.
+- Import MangoHud configs with the import family of commands, then review dispositions before anything is written.
+
+See [otter-bench](/apps/otter-bench) for config paths and [otter-hud](/apps/otter-hud) for launching games.

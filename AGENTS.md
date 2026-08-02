@@ -16,6 +16,7 @@
 - Use **Otter Shell** for the desktop environment (not "Otter" alone in headings)
 - Use **pikman** for end-user installation (`pikman install otter-shell`), not `apt install`
 - **`otter-shell`** is the base metapackage; **`otter-shell-extras`** adds `otter-transcribe`, `otter-vox`, and Otter Assistant (`otter-assist`, `otter-assistant`, `otter-assist-data`)
+- **`otter-gaming-utils`** is a separate metapackage (not in `otter-shell`) for Otter Bench / Otter HUD; packaging repo is [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils)
 - Otter Shell does **not** ship a compositor. Do not document River or any compositor as the default.
 - The greeter (`otter-greeter`) uses Hyprland for the login screen only. User sessions use their own compositor.
 

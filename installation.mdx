@@ -1,10 +1,10 @@
 ---
 title: "Installation"
 sidebarTitle: "Installation"
-description: "Install Otter Shell with pikman. Base desktop is `otter-shell`; add `otter-shell-extras` for speech tools and Otter Assistant."
+description: "Install Otter Shell with pikman. Add otter-shell-extras for speech and Assistant, or otter-gaming-utils for Otter Bench and HUD."
 ---
 
-Otter Shell ships as native packages on PikaOS, built and versioned together in [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith). Install with **pikman**.
+Otter Shell ships as native packages on PikaOS, built and versioned together in [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith). Gaming tools ship from [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils). Install with **pikman**.
 
 ## System requirements
 
@@ -45,6 +45,14 @@ Otter Shell ships as native packages on PikaOS, built and versioned together in 
     ```
 
     `otter-shell` **recommends** `otter-shell-extras` but does not require it. Transcription, voice synthesis, and Otter Assistant stay out of the base metapackage.
+
+    For Otter Bench and the in-game HUD:
+
+    ```bash
+    pikman install otter-gaming-utils
+    ```
+
+    Separate from `otter-shell`. See [otter-bench](/apps/otter-bench).
   </Step>
 
   <Step title="Install individual packages (optional)">
@@ -62,6 +70,7 @@ Otter Shell ships as native packages on PikaOS, built and versioned together in 
 |-------------|----------|
 | `otter-shell` | Full desktop shell: bar, launcher, notifications, wallpaper, theme generator, OSD, logout, settings, polkit, lock, idle, greeter, terminal, system monitor, Jade pet, screenshot tools, clipboard, notes, timer, weather, and other core helpers. Includes `otter-shell-fonts`. |
 | `otter-shell-extras` | Speech tools (`otter-transcribe`, `otter-vox`) and Otter Assistant (`otter-assist`, `otter-assistant`, `otter-assist-data`). |
+| `otter-gaming-utils` | Otter Bench suite: `otter-bench`, `otter-benchd`, `otter-benchctl`, `otter-hud`, `otter-bench-hardwared`. |
 
 ## Packages in `otter-shell`
 
@@ -100,6 +109,20 @@ Installed by `pikman install otter-shell`:
 | `otter-shell-fonts` | Bundled fallback fonts |
 
 **Not in the base metapackage** (install via `otter-shell-extras`): `otter-transcribe`, `otter-vox`, `otter-assist`, `otter-assistant`, and `otter-assist-data`.
+
+## Packages in `otter-gaming-utils`
+
+Installed by `pikman install otter-gaming-utils` (built from [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils), not otter-zenith):
+
+| Package | Description |
+|---------|-------------|
+| `otter-bench` | Desktop app for HUD layouts, sessions, and benchmarks |
+| `otter-benchd` | Metrics and session daemon |
+| `otter-benchctl` | CLI |
+| `otter-hud` | Vulkan / OpenGL overlay and launcher |
+| `otter-bench-hardwared` | Privileged hardware helper (polkit) |
+
+See [otter-bench](/apps/otter-bench) and [otter-hud](/apps/otter-hud).
 
 ## Verify the installation
 

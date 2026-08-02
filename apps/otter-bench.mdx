@@ -1,0 +1,66 @@
+---
+title: "otter-bench"
+sidebarTitle: "Otter Bench"
+description: "Desktop app for Otter HUD layouts, telemetry, benchmarks, and session reports. Install with otter-gaming-utils."
+---
+
+Otter Bench is the desktop front end for Otter HUD and the benchmarking suite. Edit overlay layouts against a live preview that uses the same draw stream as the in-game HUD. Browse recorded sessions, run benchmark plans, and launch games with the HUD attached.
+
+It is **not** part of `otter-shell`. Install the gaming metapackage:
+
+```bash
+pikman install otter-gaming-utils
+```
+
+That pulls `otter-bench`, `otter-benchd`, `otter-benchctl`, `otter-hud`, and `otter-bench-hardwared`. Packaging lives in [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils).
+
+## Packages
+
+| Package | Role |
+|---------|------|
+| `otter-bench` | Desktop app, `.desktop` entry, icons |
+| `otter-benchd` | Per-user metrics and session daemon (socket-activated) |
+| `otter-benchctl` | CLI for config, capture, benchmarks, reports |
+| `otter-hud` | Vulkan layer, OpenGL hook, and `otter-hud` launcher |
+| `otter-bench-hardwared` | Optional privileged hardware helper (polkit) |
+
+`otter-bench` depends on the daemon, CLI, and HUD. The hardware helper is recommended; without it, those readings show as unavailable instead of zero.
+
+## Launch
+
+```bash
+otter-bench
+```
+
+Or open **Otter Bench** from [otter-launcher](/desktop/otter-launcher). The daemon starts through its user systemd unit when needed.
+
+Game lists show Steam artwork from the local Steam cache. Nothing in this package contacts the network.
+
+## What you can do
+
+Edit HUD layouts with a live preview that uses the same scene compiler as the injected overlay. Import MangoHud configs through a review wizard — nothing is dropped silently. Set collection profiles and per-game launch overrides, arm captures, run benchmark plans, and browse sessions.
+
+Reports and offline upload bundles stay on disk. There is no network upload client.
+
+Display smoothing (`style_smoothing`) only changes what the OSD draws. Captures and analysis always see raw samples.
+
+## Configuration
+
+Configs live under `~/.config/otter-shell/`:
+
+```
+otter-bench.conf                 UI, daemon, storage, privacy defaults
+otter-hud.conf                   injection, renderer, default layout
+otter-hud/layouts/*.conf         widget trees and styling
+otter-bench/collection/*.conf    metrics, sampling, retention
+otter-bench/profiles/*.conf      per-game bindings and launch overrides
+otter-bench/benchmarks/*.conf    warm-up, measured region, repetitions
+```
+
+Unknown and duplicate keys are **errors** here (unlike most Otter Shell apps). A typo in a benchmark plan should fail loudly.
+
+## Related
+
+- [otter-hud](/apps/otter-hud) — inject the overlay into a game
+- [otter-benchctl](/apps/otter-benchctl) — drive the suite from a terminal
+- [Installation](/installation) — metapackage contents

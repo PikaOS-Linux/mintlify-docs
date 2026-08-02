@@ -80,6 +80,14 @@
             ]
           },
           {
+            "group": "Gaming",
+            "pages": [
+              "apps/otter-bench",
+              "apps/otter-hud",
+              "apps/otter-benchctl"
+            ]
+          },
+          {
             "group": "Configuration",
             "pages": [
               "desktop/otter-settings",

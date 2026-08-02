@@ -98,6 +98,16 @@ csd_border_size = 1
 
 CSD also has titlebar and button color tokens (`csd_titlebar_bg_active`, `csd_button_close_bg`, and related keys). Built-in presets fill those in.
 
+## Background blur
+
+Many Otter surfaces can ask the compositor to blur what sits behind translucent regions. Toggle it in otter-settings (Theme / Theme Gen blur controls) or in `theme.conf`:
+
+```conf
+transparency_background_blur = true
+```
+
+Default is on. Needs a compositor that supports the Otter background-effect protocol path. If blur is unavailable, surfaces still draw with their usual alpha.
+
 ## Built-in presets
 
 In the otter-settings theme browser:

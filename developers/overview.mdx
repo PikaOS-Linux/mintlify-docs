@@ -13,10 +13,12 @@ The [otter-shell](https://git.pika-os.com/otter-shell) organization has **one gi
 | Repository | Type |
 |------------|------|
 | `otter-bar`, `otter-launcher`, `otter-term`, … | Applications |
+| `otter-bench` | Otter Bench / Otter HUD suite |
 | `otter-ui`, `otter-render`, `otter-wayland`, … | Shared libraries |
-| `otter-zenith` | Debian packaging and release assembly |
+| `otter-zenith` | Debian packaging for the desktop shell |
+| `otter-gaming-utils` | Debian packaging for Otter Bench and HUD |
 
-[otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) clones tagged component releases and builds `.deb` packages for PikaOS.
+[otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) clones tagged shell releases and builds `.deb` packages for PikaOS. [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils) does the same for Otter Bench against a pinned `LIB_VERSION` of the shell libraries.
 
 ## Architecture
 
@@ -61,6 +63,8 @@ In the source tree but **not packaged** in `otter-shell` or `otter-shell-extras`
 - `otter-hypr`: Hyprland layout and titlebar companion
 
 Otter Assistant packages (`otter-assist`, `otter-assistant`, `otter-assist-data`) ship in `otter-shell-extras`.
+
+Otter Bench and Otter HUD ship in `otter-gaming-utils` (separate from `otter-shell`).
 
 ## Next steps
 

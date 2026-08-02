@@ -1,10 +1,10 @@
 ---
 title: "otter-vox"
 sidebarTitle: "Text to Speech"
-description: "Convert text to speech on-device with an embedded Kokoro TTS model. Requires the otter-shell-extras metapackage."
+description: "On-device Audio8 TTS with Vulkan acceleration and CPU fallback. Requires otter-shell-extras."
 ---
 
-otter-vox turns text into speech on your machine using an embedded Kokoro TTS model. No internet connection required.
+`otter-vox` turns text into speech on your machine with a native Audio8 ggml runtime. Vulkan is used when available; otherwise it falls back to CPU. No Python, ONNX, or CUDA stack.
 
 <Note>
   `otter-vox` is part of **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.
@@ -12,67 +12,58 @@ otter-vox turns text into speech on your machine using an embedded Kokoro TTS mo
 
 ## Usage
 
-Pipe text into otter-vox or pass it as a positional argument. Use `--no-play` to write a WAV stream to stdout, or `-o` to save to a file.
+```bash
+otter-vox --play 'Welcome to Otter Shell.'
+printf 'Welcome to Otter Shell.' | otter-vox --no-play > speech.wav
+otter-vox --no-play -o speech.wav 'Welcome to Otter Shell.'
+otter-vox --list-voices
+otter-vox --list-gpus
+otter-vox --check-model
+```
+
+Keep the model warm for repeated speech:
 
 ```bash
-printf 'Welcome to Otter Shell.' | otter-vox --no-play | pw-play -  # pipe to PipeWire
-printf 'Welcome to Otter Shell.' | otter-vox -o speech.wav           # save to file
-otter-vox --voice bm_lewis --play 'Welcome to Otter Shell.'          # speak with voice
-otter-vox --check-model                                               # verify model
-otter-vox --list-voices                                               # list all voices
+otter-vox --serve
 ```
+
+Send one utterance per line on stdin while `--serve` is running.
 
 ## Voices
 
-otter-vox ships with Kokoro voice files embedded in the binary, covering several languages and accents.
+Default voice is `fer` (pre-encoded zero-shot clone). Fallback is `audio8-en-calm` from Audio8's licensed English reference. Select it with `--voice audio8-en-calm`.
 
-| Prefix | Language / Accent | Example voices |
-|--------|------------------|----------------|
-| `af_*` | American female | alloy, bella, jessica, nova, heart, kore, nicole, river, sarah, sky |
-| `am_*` | American male | adam, echo, michael, onyx, eric, fenrir, liam, puck |
-| `bf_*` | British female | alice, emma, isabella, lily |
-| `bm_*` | British male | daniel, george, lewis, fable |
-| `df_*` | German female | eva, victoria |
-| `dm_*` | German male | bernd, martin |
-| `ef_*` | Spanish female | dora |
-| `em_*` | Spanish male | alex, santa |
-| `ff_*` | French female | siwis |
-| `hf_*` | Hindi female | alpha, beta |
-| `hm_*` | Hindi male | omega, psi |
-| `if_*` | Italian female | sara |
-| `im_*` | Italian male | nicola |
-| `jf_*` | Japanese female | alpha, gongitsune, nezumi, tebukuro |
-| `jm_*` | Japanese male | kumo |
-| `pf_*` | Portuguese female | dora |
-| `pm_*` | Portuguese male | alex, santa |
-| `zf_*` | Chinese female | xiaobei, xiaoni, xiaoxiao, xiaoyi |
-| `zm_*` | Chinese male | yunjian, yunxi, yunxia, yunyang |
+Audio8 supports Cantonese, Chinese, Dutch, English, French, German, Italian, Japanese, Korean, Polish, and Spanish text. Voice identity transfers across those languages.
 
-<Tip>
-  Run `otter-vox --list-voices` to see all embedded voice names available in your install.
-</Tip>
+## Backend and GPU
 
-## Output Options
+```bash
+otter-vox --cpu --play 'CPU only.'
+otter-vox --backend vulkan --gpu gpu0 --play 'First discrete GPU.'
+```
 
-- **Default**: plays audio through your system audio output
-- **`--no-play`**: writes a raw WAV stream to stdout for piping to another program
-- **`-o PATH` / `--output PATH`**: saves audio to a file instead of (or alongside) playing it
-- **`-o speech.wav` with playback enabled**: saves the file and plays it at the same time
+| Config / flag | Meaning |
+|---------------|---------|
+| `backend = auto` | Prefer Vulkan on NVIDIA, AMD, and Intel; else CPU |
+| `backend = vulkan` / `cpu` | Force a backend (`--cpu` forces CPU) |
+| `gpu = auto` | Prefer a dedicated GPU, else the main available one |
+| `gpu = gpu0` … `gpu15` | Pin a device from `otter-vox --list-gpus` |
+| `cpu_threads = 8` | CPU thread count (capped to available logical CPUs) |
+
+Vulkan playback uses a non-blocking PipeWire queue with a 2-second prebuffer. CPU output buffers before playback so you do not get gaps.
 
 ## Configuration
 
-otter-vox reads `~/.config/otter-shell/otter-vox.conf`.
+`~/.config/otter-shell/otter-vox.conf` (also editable under **Voice** in [otter-settings](/desktop/otter-settings)):
 
 ```conf
 model_dir = ""
 output_path = "-"
 playback = true
-voice = "bm_george"
-cpu_threads = 4
+voice = "fer"
+backend = auto
+gpu = auto
+cpu_threads = 8
 ```
 
-- `model_dir`: empty uses the embedded model, extracted at runtime. Set a directory path to use your own Kokoro model and voice files
-- `output_path`: output destination (`-` for stdout)
-- `playback`: play audio after synthesis
-- `voice`: default voice name
-- `cpu_threads`: thread count for inference
+Empty `model_dir` uses packaged assets under `share/otter-vox/audio8`. The shipped model is a Q5_0/FP16 conversion of Audio8 TTS Preview 0.6B (~643 MiB).

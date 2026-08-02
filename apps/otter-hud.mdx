@@ -1,0 +1,45 @@
+---
+title: "otter-hud"
+sidebarTitle: "Otter HUD"
+description: "In-game Vulkan and OpenGL overlay. Prefix any command with otter-hud. Part of otter-gaming-utils."
+---
+
+Otter HUD draws inside the game. There is no separate desktop HUD process. A Vulkan implicit layer (`VK_LAYER_OTTER_HUD`) and an OpenGL preload hook capture frame timings and paint the overlay on present.
+
+Install with:
+
+```bash
+pikman install otter-gaming-utils
+```
+
+Or install `otter-hud` alone. The launcher works without [otter-benchd](/apps/otter-bench); without the daemon you get a diagnostic banner and the game still runs.
+
+## Launch a game with the HUD
+
+```bash
+otter-hud vkcube
+otter-hud --dry-run vkcube   # print env and command, do not exec
+otter-hud steam              # anything that needs the overlay
+```
+
+`otter-hud` sets the injection environment and `exec`s the program. Job control, signals, and exit status belong to the game. Everything after the program name passes through, so `otter-hud vkcube --gpu 0` works.
+
+The layer is implicit and **off by default**. It activates when `OTTER_HUD_ENABLED` is set, which the launcher does.
+
+## How it behaves
+
+- **Fails open.** If the daemon is missing, a layout is bad, or the ring is full, the game keeps running. Instrumentation goes quiet instead of taking the process down.
+- **No allocations on the present path.** Frame events go into a lock-free shared-memory ring. A full ring bumps a counter; it never blocks the producer.
+- **Missing data is never zero.** Sensors report unavailable with a reason. Graphs show gaps rather than inventing values.
+
+Edit layouts and collection in [otter-bench](/apps/otter-bench), or with [otter-benchctl](/apps/otter-benchctl).
+
+## 64-bit only (for now)
+
+Packaged builds ship the **x86_64** Vulkan layer only. A 32-bit process (common under Steam/Proton for older titles) cannot load that layer, so those games get no HUD until a 32-bit package exists.
+
+## Configuration
+
+Shared HUD settings: `~/.config/otter-shell/otter-hud.conf`
+
+Layouts: `~/.config/otter-shell/otter-hud/layouts/*.conf`
