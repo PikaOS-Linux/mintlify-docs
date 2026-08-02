@@ -12,7 +12,11 @@ Install with:
 pikman install otter-gaming-utils
 ```
 
-Or install `otter-hud` alone. The launcher works without [otter-benchd](/apps/otter-bench); without the daemon you get a diagnostic banner and the game still runs.
+Or install `otter-hud` alone.
+
+<Note>
+  For a full HUD (live metrics, your layout, telemetry into Bench), **`otter-benchd` must be running**. Without the daemon the game still launches and the layer fails open, but you only get a diagnostic banner — not a usable overlay. Start Bench once, run `otter-benchctl status`, or enable the user unit so the daemon is up before you play.
+</Note>
 
 ## Launch a game with the HUD
 
@@ -28,7 +32,7 @@ The layer is implicit and **off by default**. It activates when `OTTER_HUD_ENABL
 
 ## How it behaves
 
-- **Fails open.** If the daemon is missing, a layout is bad, or the ring is full, the game keeps running. Instrumentation goes quiet instead of taking the process down.
+- **Fails open.** Missing daemon, bad layout, or a full ring never take the game down. Instrumentation goes quiet (or shows the diagnostic banner) instead.
 - **No allocations on the present path.** Frame events go into a lock-free shared-memory ring. A full ring bumps a counter; it never blocks the producer.
 - **Missing data is never zero.** Sensors report unavailable with a reason. Graphs show gaps rather than inventing values.
 

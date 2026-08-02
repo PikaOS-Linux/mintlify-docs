@@ -26,13 +26,17 @@ That pulls `otter-bench`, `otter-benchd`, `otter-benchctl`, `otter-hud`, and `ot
 
 `otter-bench` depends on the daemon, CLI, and HUD. The hardware helper is recommended; without it, those readings show as unavailable instead of zero.
 
+<Note>
+  **`otter-benchd` must be running** for full use of the desktop app, [otter-benchctl](/apps/otter-benchctl), and [otter-hud](/apps/otter-hud). The daemon owns metrics, layouts, captures, and sessions. Without it, the GUI and CLI cannot do useful work, and the in-game HUD only shows a diagnostic banner.
+</Note>
+
 ## Launch
 
 ```bash
 otter-bench
 ```
 
-Or open **Otter Bench** from [otter-launcher](/desktop/otter-launcher). The daemon starts through its user systemd unit when needed.
+Or open **Otter Bench** from [otter-launcher](/desktop/otter-launcher). `otter-benchd` is socket-activated through its user systemd unit — starting the app or CLI usually brings it up. Check with `otter-benchctl status` or `systemctl --user status otter-benchd`.
 
 Game lists show Steam artwork from the local Steam cache. Nothing in this package contacts the network.
 

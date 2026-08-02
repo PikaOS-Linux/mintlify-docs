@@ -8,6 +8,10 @@ description: "Command-line interface for Otter Bench: config, HUD, capture, metr
 
 Install with `pikman install otter-gaming-utils` (or the `otter-benchctl` package).
 
+<Note>
+  Almost every command talks to **`otter-benchd`**. If the daemon is not running, status/metrics/capture/HUD/benchmark commands fail or return empty. Socket activation usually starts it on first use; confirm with `otter-benchctl status` or `systemctl --user status otter-benchd`.
+</Note>
+
 ## Common commands
 
 ```bash
@@ -39,6 +43,7 @@ Use `--format json` when you want machine-readable output. JSON goes to stdout; 
 
 ## Tips
 
+- Run `otter-benchctl status` first if something looks dead — most failures mean the daemon is not up.
 - `metrics get` reads what the daemon already holds. It does not force a poll. If nothing subscribed yet, you get "No sample yet" — start `metrics watch` to create demand.
 - Capture sessions are crash-recoverable and immutable once finalised. Analysis and reports are regenerable.
 - Import MangoHud configs with the import family of commands, then review dispositions before anything is written.
