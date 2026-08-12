@@ -106,7 +106,8 @@
             "pages": [
               "developers/overview",
               "developers/building",
-              "developers/creating-an-app"
+              "developers/creating-an-app",
+              "developers/plugins"
             ]
           },
           {
