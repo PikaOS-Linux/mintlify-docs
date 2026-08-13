@@ -22,6 +22,8 @@ Launch from [otter-launcher](/desktop/otter-launcher), bind a compositor hotkey,
 |-----|---------------|
 | Bar | Widget layout, clock, volume, tray, custom buttons |
 | Launcher | Size, colors, placeholder text |
+| Plugins | Enable or disable installed `.so` plugins |
+| Overview | Workspace overview card size, axis, captures |
 | Notifications | Position, timeouts, margins |
 | Wallpaper | Path, rotation, scale mode |
 | OSD | Volume/brightness overlay appearance |
@@ -34,7 +36,7 @@ Launch from [otter-launcher](/desktop/otter-launcher), bind a compositor hotkey,
 | Lock / Logout / Idle / Polkit / Jade | Session and overlay settings |
 | Recorder / Voice | `otter-rec` and `otter-vox` options |
 
-Compositor hotkeys (screenshot, launcher, lock) are **not** in otter-settings. Bind those in your compositor config. See [Keybinds](/configuration/keybinds).
+Compositor hotkeys (screenshot, launcher, overview, lock) are **not** in otter-settings. Bind those in your compositor config. See [Keybinds](/configuration/keybinds).
 
 ## Manual config files
 
@@ -45,6 +47,8 @@ Each app has a plain-text file in `~/.config/otter-shell/`. Edit by hand to scri
 | Shared theme | `~/.config/otter-shell/theme.conf` |
 | otter-bar | `~/.config/otter-shell/otter-bar.conf` |
 | otter-launcher | `~/.config/otter-shell/otter-launcher.conf` |
+| Plugins | `~/.config/otter-shell/plugins.conf` |
+| otter-overview | `~/.config/otter-shell/otter-overview.conf` |
 | otter-notifications | `~/.config/otter-shell/notifications.conf` |
 | otter-wallpaper | `~/.config/otter-shell/otter-wallpaper.conf` |
 | otter-theme-gen | `~/.config/otter-shell/otter-theme-gen.conf` |

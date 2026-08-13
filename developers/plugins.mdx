@@ -1,20 +1,22 @@
 ---
-title: "Otter Shell plugins"
+title: "Writing plugins"
 sidebarTitle: "Plugins"
-description: "Install paths, plugins.conf, the opf factory, ABI overview, and the hello-label / bar-search exemplars."
+description: "C ABI for bar widgets and launcher providers, plus opf to scaffold and pack them."
 ---
 
-Otter Shell loads third-party bar and launcher components as trusted `.so` plugins that contribute Surface Description (SD) through a small C ABI.
+Bar and launcher load third-party widgets as `.so` files. A plugin does not draw pixels. It emits Surface Description nodes through a small C ABI, and the host renders them.
 
-## Install
+User-facing install, enable toggles, and the example plugins: [Plugins](/desktop/plugins). This page is the write-your-own side.
 
-Install the examples package:
+`otter-shell` already ships `otter-shell-plugins` (examples) and `otter-plugin-factory` (`opf`). You can also install them on their own:
 
 ```bash
-pikman install otter-shell-plugins
+pikman install otter-shell-plugins otter-plugin-factory
 ```
 
-Packed plugins land at:
+## Layout and discovery
+
+Packed plugins look like this:
 
 ```
 /usr/lib/otter-shell/plugins/<id>/
@@ -22,7 +24,7 @@ Packed plugins land at:
   libotter_plugin_<snake_id>.so
 ```
 
-Hosts discover plugins in this order (first match per id wins):
+Hosts search in this order. First match per id wins:
 
 1. `OTTER_PLUGIN_PATH` (colon-separated roots)
 2. `$XDG_DATA_HOME/otter-shell/plugins`
@@ -30,28 +32,9 @@ Hosts discover plugins in this order (first match per id wins):
 4. `/usr/lib/otter-shell/plugins`
 5. `/usr/share/otter-shell/plugins`
 
-Layout names in bar/launcher config are mandatory `plugin:<id>` (for example `plugin:hello-label`). The bare id lives in `plugin.conf`.
+Bar and launcher layout names are always `plugin:<id>`. The bare id lives in `plugin.conf`.
 
-## Enable and configure
-
-User gates live in otter-conf:
-
-```
-~/.config/otter-shell/plugins.conf
-~/.config/otter-shell/plugins/<id>.conf
-```
-
-`plugins.conf` uses `<id>_enabled = true|false`. A missing key means **enabled**. **otter-settings** → **Plugins** writes these gates. Bar and launcher honor the same file before `dlopen`.
-
-Example:
-
-```conf
-hello-label_enabled = true
-bar-search_enabled = true
-snippet-provider_enabled = false
-```
-
-Per-plugin settings files are reserved for schemas declared with `provides_settings = true`.
+Enable gates live in `~/.config/otter-shell/plugins.conf` as `<id>_enabled = true|false`. A missing key means enabled. Hosts read that file before `dlopen`. Per-plugin files under `~/.config/otter-shell/plugins/<id>.conf` are reserved for schemas with `provides_settings = true`. That settings UI is not in yet.
 
 ## Manifest (`plugin.conf`)
 
@@ -69,26 +52,23 @@ provides_settings = false
 
 ## Factory CLI (`opf`)
 
-Scaffold and pack plugins with [`otter-plugin-factory`](https://git.pika-os.com/otter-shell/otter-plugin-factory) (separate from the examples package):
+[`otter-plugin-factory`](https://git.pika-os.com/otter-shell/otter-plugin-factory) is a separate package from the examples. After install, `opf` is on `PATH`. From a checkout, put `bin/` on `PATH` instead.
 
 ```bash
-export PATH="$PWD/bin:$PATH"   # from a factory checkout
-# or: alias opf=…/otter-plugin-factory/bin/opf
-
 opf new bar-widget my-chip
 opf new launcher-provider my-provider
 
 cd my-chip
 opf build
-opf pack                 # → zig-out/plugins/<id>/{plugin.conf,.so}
+opf pack                 # zig-out/plugins/<id>/{plugin.conf,.so}
 opf check                # manifest + otter_plugin_* exports
 ```
 
-Publish into the system/examples layout as `/usr/lib/otter-shell/plugins/<id>/`. See the factory `docs/publishing.md`.
+Copy `zig-out/plugins/<id>/` into `~/.local/share/otter-shell/plugins/` or set `OTTER_PLUGIN_PATH`. Factory `docs/publishing.md` covers the examples-package layout.
 
-## ABI overview (v1)
+## ABI v1
 
-Plugins export C symbols. Zig plugins may `@import` a mirrored `otter_plugin_abi` module. ABI major is `OTTER_PLUGIN_ABI_VERSION` (`1`).
+Plugins export C symbols. Zig plugins can `@import` a mirrored `otter_plugin_abi` module. ABI major is `OTTER_PLUGIN_ABI_VERSION` (`1`).
 
 Required exports:
 
@@ -98,59 +78,56 @@ Required exports:
 | `otter_plugin_init` / `otter_plugin_deinit` | Lifetime |
 | `otter_plugin_query` | Fill `OtterPluginManifest` |
 
-Bar (when `provides_bar_widget`):
+Bar, when `provides_bar_widget` is true:
 
-- `otter_plugin_bar_attach` → `OtterPluginBarInstance` with vtable
+- `otter_plugin_bar_attach` returns an `OtterPluginBarInstance` with a vtable
 - Vtable: `preferred_width`, `contribute`, `destroy`, optional `on_event`
 
-Launcher (when provider / SD-row flags are set):
+Launcher, when provider or SD-row flags are set:
 
 - `otter_plugin_launcher_query` / `otter_plugin_launcher_activate`
 - Optional `otter_plugin_launcher_contribute_row` for custom SD rows
 
-Host API during contribute (plugins emit SD; they do not scribble pixels):
+Host API during contribute:
 
 - `sd_rect` / `sd_label` / `sd_hit_button`
-- Optional `sd_text_input` for IME-backed fields (null-check on older hosts)
+- Optional `sd_text_input` for IME-backed fields. Null-check on older hosts.
 - `request_frame`, `log`
 
-Events delivered through `BarVTable.on_event` include click, hover, focus/blur, and text-input (buffer/preedit flags).
+`BarVTable.on_event` can receive click, hover, focus/blur, and text-input (buffer/preedit flags).
 
-Headers and mirrors live in `otter-bar` / `otter-launcher` / `otter-shell-plugins` (`include/otter_plugin_abi.h`, `abi/abi.zig`).
+Headers and Zig mirrors live in `otter-bar`, `otter-launcher`, and `otter-shell-plugins` (`include/otter_plugin_abi.h`, `abi/abi.zig`).
 
-## Exemplars in `otter-shell-plugins`
+## Examples in `otter-shell-plugins`
 
-| Layout id | Host | Proves |
+| Layout id | Host | What it shows |
 |---|---|---|
-| `plugin:hello-label` | bar | **M1** — real click callbacks (`on_event` toggles Hello↔Clicked) |
-| `plugin:bar-search` | bar | **M2** — `sd_text_input` + text-input-v3 IME (preedit/commit/focus) |
-| `plugin:cmd-watch` | bar | Interval command → label |
-| `plugin:disk-free` | bar | `statvfs` free space + usage bar |
-| `plugin:idle-inhibit` | bar | logind idle inhibit toggle via click |
-| `plugin:snippet-provider` | launcher | Results provider + custom SD rows |
+| `plugin:hello-label` | bar | Smallest click chip. `on_event` toggles Hello and Clicked. |
+| `plugin:bar-search` | bar | `sd_text_input` plus text-input-v3 IME (preedit, commit, focus) |
+| `plugin:cmd-watch` | bar | Interval command to a label |
+| `plugin:disk-free` | bar | `statfs` free space plus a usage bar |
+| `plugin:idle-inhibit` | bar | logind idle inhibit toggle on click |
+| `plugin:snippet-provider` | launcher | Results provider plus custom SD rows |
 
-### hello-label (M1)
+### hello-label
 
-Smallest SD chip that proves host click delivery:
+Smallest SD chip that gets a real click from the host:
 
-`bar_input_dispatch` → plugin slot → `BarVTable.on_event(CLICK)`.
+`bar_input_dispatch` to the plugin slot to `BarVTable.on_event(CLICK)`.
 
-Left click toggles label text (**Hello** ↔ **Clicked**) and background tint, then calls `host.request_frame`. No side-channel file.
+Left click toggles the label text (Hello / Clicked) and background tint, then calls `host.request_frame`. No side-channel file.
 
-```bash
-# After pikman install otter-shell-plugins, or local pack:
-# export OTTER_PLUGIN_PATH=$PWD/zig-out/plugins
-# In otter-bar.conf:
-#   layout_right = ["plugin:hello-label", "clock"]
+```conf
+# otter-bar.conf
+layout_right = plugin:hello-label, clock
 ```
 
-### bar-search (M2)
+### bar-search
 
-Bar text field using host `sd_text_input` with Wayland text-input-v3. Focus the field, type, and confirm IME preedit/commit (not ASCII-only faking). Escape blurs. A `$XDG_RUNTIME_DIR/otter-bar-search` side-channel remains only as a fallback on old hosts.
+Bar text field using host `sd_text_input` with Wayland text-input-v3. Focus the field, type, and confirm IME preedit/commit. Escape blurs. `$XDG_RUNTIME_DIR/otter-bar-search` is fallback only on old hosts.
 
-```bash
-# layout slot:
-#   layout_center = ["plugin:bar-search"]
+```conf
+layout_center = plugin:bar-search
 ```
 
 ## Local development
@@ -162,19 +139,21 @@ zig build -Doptimize=ReleaseFast pack
 export OTTER_PLUGIN_PATH="$PWD/zig-out/plugins"
 ```
 
-ABI smoke (no Wayland):
+ABI smoke, no Wayland:
 
 ```bash
 zig build plugin-abi-smoke -- zig-out/plugins/hello-label/libotter_plugin_hello_label.so
 ```
 
+Bar plugins: use `otter-bar`'s `zig build plugin-abi-smoke -- <so>`.
+
 ## Trust
 
-Installed `.so` plugins are fully trusted and share the host process. Prefer packages from `otter-shell-plugins` or plugins you built yourself.
+Installed `.so` plugins are fully trusted and share the host process. Ship examples through `otter-shell-plugins`, or load plugins you built yourself.
 
 ## Related repos
 
-- [otter-shell-plugins](https://git.pika-os.com/otter-shell/otter-shell-plugins) — examples package source
-- [otter-plugin-factory](https://git.pika-os.com/otter-shell/otter-plugin-factory) — `opf` CLI + agent skills
-- [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) — Debian packaging for `otter-shell-plugins`
-- [otter-bar](https://git.pika-os.com/otter-shell/otter-bar) / [otter-launcher](https://git.pika-os.com/otter-shell/otter-launcher) — host runtimes
+- [otter-shell-plugins](https://git.pika-os.com/otter-shell/otter-shell-plugins): examples package source
+- [otter-plugin-factory](https://git.pika-os.com/otter-shell/otter-plugin-factory): `opf` CLI and agent skills
+- [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith): Debian packaging
+- [otter-bar](https://git.pika-os.com/otter-shell/otter-bar) / [otter-launcher](https://git.pika-os.com/otter-shell/otter-launcher): host runtimes

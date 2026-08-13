@@ -20,6 +20,9 @@ In-app shortcuts live in each app's config file. Edit them in [otter-settings](/
 | otter-launcher | Launch selected | `Enter` |
 | otter-launcher | Navigate | `Up` / `Down`, `Tab`, `Page Up/Down` |
 | otter-launcher | Clear search | `Ctrl+U` |
+| otter-overview | Close / clear search | `Escape` |
+| otter-overview | Launch selected app | `Enter` |
+| otter-overview | Navigate tiles or apps | Arrows / `Tab`, `Page Up/Down` |
 | otter-lock | Submit password | `Enter` |
 | otter-polkit | Submit password | `Enter` |
 | otter-polkit | Cancel | `Escape` |
@@ -44,6 +47,7 @@ Bind in your compositor config. Adjust modifiers to match your setup.
 ```ini
 # ~/.config/hypr/hyprland.conf
 bind = $mainMod, D, exec, otter-launcher
+bind = SUPER, Super_L, exec, otter-overview
 bind = $mainMod, P, exec, otter-screenshot
 bind = $mainMod SHIFT, P, exec, otter-screenshot --fullscreen --output ~/Pictures/screenshot.png
 bind = $mainMod, R, exec, otter-rec
@@ -65,6 +69,7 @@ bind = $mainMod, T, exec, otter-transcribectl toggle
 
 ```
 bindsym $mod+d exec otter-launcher
+bindsym $mod+o exec otter-overview
 bindsym $mod+p exec otter-screenshot
 bindsym $mod+Shift+p exec otter-screenshot --fullscreen --output ~/Pictures/screenshot.png
 bindsym $mod+r exec otter-rec

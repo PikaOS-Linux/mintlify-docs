@@ -1,0 +1,75 @@
+---
+title: "Plugins"
+sidebarTitle: "Plugins"
+description: "Enable bar and launcher plugins, then add them to the bar as plugin:<id>."
+---
+
+Otter Shell can load extra bar widgets and launcher result providers as `.so` plugins. The `otter-shell` metapackage already installs the examples (`otter-shell-plugins`) and the scaffold CLI (`otter-plugin-factory`).
+
+A loaded plugin is native code inside the bar or launcher. Only enable plugins you installed and trust.
+
+## Enable a plugin
+
+Open [otter-settings](/desktop/otter-settings) and go to the **Plugins** tab. Each installed plugin has a toggle. That writes `~/.config/otter-shell/plugins.conf`:
+
+```conf
+hello-label_enabled = true
+bar-search_enabled = true
+snippet-provider_enabled = false
+```
+
+A missing key means enabled. Bar and launcher read this file before they load a plugin.
+
+## Put it on the bar
+
+Layout names always use `plugin:<id>`. The id is the `id` field in `plugin.conf`, not the package name.
+
+In otter-settings, drag an enabled plugin chip into the bar layout. Or edit `otter-bar.conf`:
+
+```conf
+layout_right = plugin:disk-free, tray, clock, battery, button_menu
+layout_center = plugin:bar-search
+```
+
+See [otter-bar](/desktop/otter-bar).
+
+## Example plugins
+
+These land under `/usr/lib/otter-shell/plugins/<id>/` with `otter-shell-plugins`:
+
+| Layout name | Host | What it does |
+|-------------|------|----------------|
+| `plugin:hello-label` | bar | Small chip. Click toggles the label between Hello and Clicked. |
+| `plugin:bar-search` | bar | Search field on the bar. Enter or blur opens [otter-launcher](/desktop/otter-launcher) with that query. |
+| `plugin:cmd-watch` | bar | Runs a command on an interval and shows the output. |
+| `plugin:disk-free` | bar | Free space from `statfs`, plus a usage bar. |
+| `plugin:idle-inhibit` | bar | logind idle inhibit. Click to toggle. |
+| `plugin:snippet-provider` | launcher | Extra launcher results with custom rows. |
+
+## Install path
+
+Hosts look for plugins in this order. First match per id wins:
+
+1. `OTTER_PLUGIN_PATH` (colon-separated roots)
+2. `$XDG_DATA_HOME/otter-shell/plugins`
+3. `~/.local/share/otter-shell/plugins`
+4. `/usr/lib/otter-shell/plugins`
+5. `/usr/share/otter-shell/plugins`
+
+Each plugin directory needs `plugin.conf` and the matching `.so`.
+
+To try a local build without installing:
+
+```bash
+export OTTER_PLUGIN_PATH="$PWD/zig-out/plugins"
+```
+
+You can also install the examples on their own:
+
+```bash
+pikman install otter-shell-plugins
+```
+
+## Trust
+
+Prefer the packaged examples, or plugins you built yourself. Writing your own: [Plugins for developers](/developers/plugins).

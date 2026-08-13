@@ -61,14 +61,6 @@ Otter Shell ships as native packages on PikaOS, built and versioned together in 
     ```bash
     pikman install otter-term otter-bar otter-launcher
     ```
-
-    Example bar/launcher plugins (optional):
-
-    ```bash
-    pikman install otter-shell-plugins
-    ```
-
-    See [Plugins](/developers/plugins).
   </Step>
 </Steps>
 
@@ -76,7 +68,7 @@ Otter Shell ships as native packages on PikaOS, built and versioned together in 
 
 | Metapackage | Contents |
 |-------------|----------|
-| `otter-shell` | Full desktop shell: bar, launcher, notifications, wallpaper, theme generator, OSD, logout, settings, polkit, lock, idle, greeter, terminal, system monitor, Jade pet, screenshot tools, clipboard, notes, timer, weather, and other core helpers. Includes `otter-shell-fonts`. |
+| `otter-shell` | Full desktop shell: bar, launcher, workspace overview, notifications, wallpaper, theme generator, OSD, logout, settings, polkit, lock, idle, greeter, terminal, system monitor, Jade pet, screenshot tools, clipboard, notes, timer, weather, example plugins, plugin factory, and other core helpers. Includes `otter-shell-fonts`. |
 | `otter-shell-extras` | Speech tools (`otter-transcribe`, `otter-vox`) and Otter Assistant (`otter-assist`, `otter-assistant`, `otter-assist-data`). |
 | `otter-gaming-utils` | Otter Bench suite: `otter-bench`, `otter-benchd`, `otter-benchctl`, `otter-hud`, `otter-bench-hardwared`. |
 
@@ -88,6 +80,7 @@ Installed by `pikman install otter-shell`:
 |---------|-------------|
 | `otter-bar` | Status bar with widgets, system tray, and MPRIS |
 | `otter-launcher` | Application launcher overlay |
+| `otter-overview` | Workspace and window overview overlay |
 | `otter-search` | Desktop search daemon (launcher `file` / `grep` modes) |
 | `otter-notifications` | Notification daemon (freedesktop.org spec) |
 | `otter-wallpaper` | Wallpaper daemon |
@@ -115,6 +108,8 @@ Installed by `pikman install otter-shell`:
 | `otter-clicker` | Auto-clicker with point selection |
 | `otter-weather` | Weather fetcher and bar widget |
 | `otter-shell-fonts` | Bundled fallback fonts |
+| `otter-shell-plugins` | Example bar and launcher `.so` plugins |
+| `otter-plugin-factory` | `opf` CLI to scaffold and pack plugins |
 
 **Not in the base metapackage** (install via `otter-shell-extras`): `otter-transcribe`, `otter-vox`, `otter-assist`, `otter-assistant`, and `otter-assist-data`.
 

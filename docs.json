@@ -31,7 +31,9 @@
             "group": "Desktop Shell",
             "pages": [
               "desktop/otter-bar",
+              "desktop/plugins",
               "desktop/otter-launcher",
+              "desktop/otter-overview",
               "desktop/otter-wallpaper",
               "desktop/otter-theme-gen",
               "desktop/otter-notifications",

@@ -34,6 +34,8 @@ Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotke
 |-----|------|
 | Bar | `otter-bar.conf` |
 | Launcher | `otter-launcher.conf` |
+| Plugins | `plugins.conf` |
+| Overview | `otter-overview.conf` |
 | Notifications | `notifications.conf` |
 | Wallpaper | `otter-wallpaper.conf` |
 | OSD | `otter-osd.conf` |
@@ -95,7 +97,7 @@ Full key list: [otter-assist](/apps/otter-assist). The chat client keeps its own
 
 ## What otter-settings does not configure
 
-Compositor hotkeys (launcher, screenshot, lock) belong in your Wayland compositor config. See [Keybinds](/configuration/keybinds).
+Compositor hotkeys (launcher, overview, screenshot, lock) belong in your Wayland compositor config. See [Keybinds](/configuration/keybinds).
 
 `otter-screenshot` has no persistent config file. CLI flags only.
 
@@ -103,6 +105,10 @@ Compositor hotkeys (launcher, screenshot, lock) belong in your Wayland composito
 
 Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, and One Dark. See [Themes](/configuration/themes) for color token details.
 
-<Tip>
-  Runtime `.so` plugins: see [Plugins](/developers/plugins) (install path, `plugins.conf`, ABI, M1/M2 exemplars).
-</Tip>
+## Plugins tab
+
+The **Plugins** tab lists installed `.so` plugins and writes `plugins.conf` enable toggles. Enabled bar plugins also show up as `plugin:<id>` chips in the bar layout palette. See [Plugins](/desktop/plugins).
+
+## Overview tab
+
+The **Overview** tab edits `otter-overview.conf` for [otter-overview](/desktop/otter-overview): card axis and scale, empty-workspace policy, thumbnail capture, and optional colors.

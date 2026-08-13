@@ -26,7 +26,7 @@ Autostart these for a working desktop:
 | `otter-transcribe` | Optional | Speech transcription (needs `otter-shell-extras`) |
 | `otter-assist` | Optional | Local AI backend for Otter Assistant (`otter-shell-extras`) |
 
-Do not autostart one-shot apps: `otter-launcher`, `otter-logout`, `otter-screenshot`. Bind hotkeys instead.
+Do not autostart one-shot apps: `otter-launcher`, `otter-overview`, `otter-logout`, `otter-screenshot`. Bind hotkeys instead.
 
 ## Compositor autostart examples
 
@@ -113,7 +113,7 @@ Config: `/etc/otter-shell/otter-greeter.conf`. See [otter-greeter](/desktop/otte
 
 | Component | Protocol / dependency |
 |-----------|---------------------|
-| Bar, launcher, notifications, OSD, logout, lock | `zwlr_layer_shell_v1` (wlroots layer shell) |
+| Bar, launcher, overview, notifications, OSD, logout, lock | `zwlr_layer_shell_v1` (wlroots layer shell) |
 | Lock screen | `ext-session-lock-v1` |
 | Screenshot, pick, shot | `ext_image_copy_capture_v1` |
 | Idle daemon | `ext-idle-notify-v1` (optional; compositor IPC fallbacks exist) |

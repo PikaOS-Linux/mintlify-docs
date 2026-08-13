@@ -42,6 +42,16 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     Type to search apps. Try `=2+3*4` (calculator), `:heart` (emoji), `clip` (clipboard), or `file invoice` / `grep TODO` (desktop search; needs `otter-search` running).
   </Step>
 
+  <Step title="Open the workspace overview">
+    Bind Super, or another spare key:
+
+    ```bash
+    otter-overview
+    ```
+
+    Workspace cards, window tiles, search, and an app grid. See [otter-overview](/desktop/otter-overview).
+  </Step>
+
   <Step title="Take a screenshot">
     ```bash
     otter-screenshot
@@ -98,6 +108,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
 
   ```ini
   bind = $mainMod, D, exec, otter-launcher
+  bind = SUPER, Super_L, exec, otter-overview
   bind = $mainMod, P, exec, otter-screenshot
   bind = $mainMod, R, exec, otter-rec
   bind = $mainMod, V, exec, otter-clip popup
@@ -109,6 +120,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
 
   ```
   bindsym $mod+d exec otter-launcher
+  bindsym $mod+o exec otter-overview
   bindsym $mod+p exec otter-screenshot
   bindsym $mod+v exec otter-clip popup
   ```
