@@ -1,10 +1,10 @@
 ---
 title: "otter-theme-gen"
 sidebarTitle: "Theme generator"
-description: "Wallpaper-reactive themes for Otter Shell. Extracts palette colors from your wallpaper and writes theme.conf."
+description: "Wallpaper-reactive themes for Otter Shell. Extracts palette colors from your wallpaper and writes generated-colors.conf."
 ---
 
-`otter-theme-gen` watches your wallpaper and rebuilds `theme.conf` to match. It ships in the `otter-shell` metapackage. Configure it from the **Theme Gen** tab in [otter-settings](/desktop/otter-settings), or edit `otter-theme-gen.conf` by hand.
+`otter-theme-gen` watches your wallpaper and writes matching colors to `generated-colors.conf`. It ships in the `otter-shell` metapackage. Configure it from the **Theme Gen** tab in [otter-settings](/desktop/otter-settings), or edit `otter-theme-gen.conf` by hand.
 
 ## Usage
 
@@ -24,14 +24,16 @@ See [Session setup](/desktop/session-setup).
 ## How it works
 
 1. [otter-wallpaper](/desktop/otter-wallpaper) writes the current image path per output to `wallpaper-state`.
-2. `otter-theme-gen` reads that file, extracts a palette, and updates `~/.config/otter-shell/theme.conf`.
-3. Running apps that watch `theme.conf` pick up the new colors. [otter-term](/apps/otter-term) hot-reloads shared theme changes without a restart.
+2. `otter-theme-gen` reads that file, extracts a palette, and updates `~/.config/otter-shell/generated-colors.conf`.
+3. Apps watching the theme import graph pick up the new colors. [otter-term](/apps/otter-term) hot-reloads shared theme changes without a restart.
 
 The daemon skips work when the wallpaper hash has not changed.
 
 ## Configuration
 
 Config file: `~/.config/otter-shell/otter-theme-gen.conf`
+
+Generated color layer: `~/.config/otter-shell/generated-colors.conf`
 
 ```conf
 enabled = true
@@ -47,13 +49,15 @@ global_opacity = 96
 |-----|---------|-------------|
 | `enabled` | `true` | Turn wallpaper-reactive theming on or off |
 | `mode` | `dark` | `dark` or `light` palette |
-| `islands_mode` | `false` | Use Otter Shell Islands surface styling |
+| `islands_mode` | `false` | Make the Bar rail transparent and give each section its own generated surface |
 | `strategy` | `material_you` | Palette extraction style |
 | `contrast` | `0.7` | Palette contrast (0.0 to 1.0) |
 | `vibrancy` | `0.6` | Palette vibrancy (0.0 to 1.0) |
 | `global_opacity` | `96` | Panel and surface opacity (0 to 100) |
 
 `strategy` options: `material_you`, `analogous`, `vibrant`, `monochromatic`, `direct`, `temperature`.
+
+With `islands_mode = true`, gaps between Bar sections stay clear. When blur is enabled, each section clips blur to its own surface.
 
 ## Template outputs
 
@@ -77,7 +81,7 @@ Enable `template_kcolorscheme_enabled` to write `~/.local/share/color-schemes/Ot
 Enable `template_papirus_colors_enabled` to create and select a user-owned `Otter-Papirus-*` icon theme for GTK and Qt. It inherits installed Papirus icons and points folder names at the closest Papirus color variant. No root and no writes under `/usr/share`. Papirus must already be installed.
 
 <Tip>
-  Only `otter-theme-gen` and otter-settings should normalize `theme.conf` on disk. Other apps load it read-only.
+  `otter-theme-gen` never rewrites root `theme.conf`. It reads the selected profile and root overrides, then writes color keys only to `generated-colors.conf`.
 </Tip>
 
 ## Templates on disk

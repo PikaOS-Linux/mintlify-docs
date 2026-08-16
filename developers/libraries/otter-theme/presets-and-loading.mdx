@@ -27,15 +27,17 @@ if (presets.findPreset("Nord")) |preset| {
 }
 ```
 
-`otter-theme-gen` and settings UI write preset selections into `theme.conf`.
+Settings writes built-in preset colors to `preset-colors.conf`. `otter-theme-gen` writes wallpaper colors to `generated-colors.conf`. Root `theme.conf` selects one of those layers with an ordered import and keeps explicit user overrides separate.
 
 ## Loading
 
-Fallback chain:
+Root file selection:
 
 1. `~/.config/otter-shell/theme.conf`
 2. `/etc/otter-shell/theme.conf`
-3. Compiled defaults
+3. No root file, so compiled Current defaults stand alone
+
+Once a root is selected, values resolve from compiled Current defaults, then profile and density imports, optional color layer, and finally explicit root fields.
 
 ```zig
 const theme = otter_theme.loadTheme(allocator);
@@ -51,16 +53,12 @@ if (otter_theme.getThemeConfigPath(&buf)) |path| {
 ## Example theme.conf
 
 ```conf
-colors_background = "#18182566"
-colors_foreground = "#ffffffff"
+import = "profiles/current.conf"
+import = "profiles/density-standard.conf"
+import = "generated-colors.conf"
+
+# Explicit root overrides load last.
 colors_accent = "#89b4faff"
-bar_height = 32
-spacing_icon_size = 18
-fonts_font_family = "Inter"
-transparency_global_alpha = 95
-decorations_prefered_decoration_type = "server"
-csd_button_layout = ":sbc"
-transparency_background_blur = true
 ```
 
-Apps reload on `IN_CLOSE_WRITE` and re-pass `Theme` to the next UI frame.
+`ThemeWatcher` watches the root file and every imported path. It also catches an imported `generated-colors.conf` created after startup. A failed reload keeps the previous valid theme.

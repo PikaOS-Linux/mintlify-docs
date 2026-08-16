@@ -13,6 +13,10 @@ if (otter_desktop.findIcon(allocator, "firefox")) |path| {
     defer allocator.free(path);
 }
 
+if (otter_desktop.findIconInTheme(allocator, "Papirus", "battery-3")) |path| {
+    defer allocator.free(path);
+}
+
 var cache = otter_desktop.IconCache.init(allocator);
 const path = cache.lookup("firefox");
 ```
@@ -25,6 +29,8 @@ Search order:
 4. `.desktop` `Icon=` fallback (exact filename, then directory scan for AppImages)
 
 Base paths include XDG data home, `/usr/share/icons`, and Flatpak export trees.
+
+Use `findIconInTheme` when a caller needs one named runtime theme or an absolute theme directory. It prefers SVG and leaves ownership of the returned path with the caller. Ordinary app icon lookup keeps the normal desktop theme order.
 
 ## Desktop entries
 

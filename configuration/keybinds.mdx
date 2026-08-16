@@ -55,6 +55,9 @@ bind = $mainMod, N, exec, otter-note new
 bind = $mainMod, V, exec, otter-clip popup
 bind = $mainMod SHIFT, C, exec, otter-pick
 bind = $mainMod SHIFT, A, exec, otter-clicker toggle
+bind = $mainMod, W, exec, otter-settings --wallpaper-picker
+bind = $mainMod SHIFT, W, exec, otter-wallpaper --random
+bind = $mainMod SHIFT, N, exec, otter-notifications dnd-toggle
 bind = $mainMod, L, exec, loginctl lock-session
 bind = $mainMod SHIFT, E, exec, otter-logout
 ```
@@ -77,6 +80,9 @@ bindsym $mod+n exec otter-note new
 bindsym $mod+v exec otter-clip popup
 bindsym $mod+Shift+c exec otter-pick
 bindsym $mod+Shift+a exec otter-clicker toggle
+bindsym $mod+w exec otter-settings --wallpaper-picker
+bindsym $mod+Shift+w exec otter-wallpaper --random
+bindsym $mod+Shift+n exec otter-notifications dnd-toggle
 bindsym $mod+l exec loginctl lock-session
 ```
 

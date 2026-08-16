@@ -34,7 +34,9 @@ const runtime = paths.otterRuntimePath(&buf, "wallpaper-state") orelse return er
 try paths.ensureOtterRuntimeDir(allocator);
 ```
 
-`runtime_state` reads and writes small JSON-ish state files here (for example lock screen wallpaper sync). `runtime_socket` builds bounded socket paths and can restrict socket FD permissions.
+`runtime_state` reads and writes small state files here. Wallpaper state keeps lock screens and generated themes in sync. Do Not Disturb uses `dnd-state` through `isDndEnabled`, `setDndEnabled`, and `toggleDnd`. Writes are locked and atomic so the bar and CLI can toggle it safely at the same time.
+
+`runtime_socket` builds bounded socket paths and can restrict socket FD permissions.
 
 ## Legacy migration
 

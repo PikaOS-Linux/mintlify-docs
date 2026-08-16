@@ -30,6 +30,8 @@ surface.drawRectOutline(rect, render.Color.white, 1);
 
 `subSurface` returns a clipped view into a parent buffer.
 
+`blitRowsVertical(dst_y, src_y, height)` moves full-width physical pixel rows inside a surface. It handles overlapping ranges, stride, and clipping. `otter-term` uses it to scroll existing pixels before redrawing exposed rows.
+
 ## HiDPI
 
 ```zig

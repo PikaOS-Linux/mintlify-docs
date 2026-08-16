@@ -18,7 +18,7 @@ const width = font.measureText("Hello", 16);
 
 Loading priority: explicit `font_path`, then `font_family` discovery, then bundled fallback (`IoskeleyMonoNerdFont-Regular.ttf`). Fallback faces mmap lazily on first missing glyph.
 
-Glyph cache evicts at 8192 entries and on allocation failure.
+Glyph cache evicts least-recently-used entries at 65,536 entries and on allocation failure. Color emoji glyphs share the cache, so their bitmap decode is not repeated every frame. Failed Fontconfig fallback lookups also use a small negative cache.
 
 ## TextSystem
 
@@ -39,6 +39,8 @@ Helpers:
 - `draw`: FreeType fast path or shaped glyph rasterization
 
 Pass `text_system` and `text_scratch` through `otter-ui` `FrameOptions`, or attach both to `CommandList` for direct rasterization.
+
+`TextSystem` reuses the latest shaped run when the text, font size, scale, direction, and scratch generation still match. Reuse the same scratch storage across measure and draw calls to take that fast path.
 
 ## HiDPI text
 

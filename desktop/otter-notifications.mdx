@@ -14,6 +14,17 @@ otter-notifications
 
 Autostart at login: see [Session setup](/desktop/session-setup).
 
+Control Do Not Disturb from a terminal, keybinding, or the `dnd` bar widget:
+
+```bash
+otter-notifications dnd-on
+otter-notifications dnd-off
+otter-notifications dnd-toggle
+otter-notifications dnd-status
+```
+
+DND hides popup surfaces but keeps incoming notifications queued. Their expiry timers pause, then continue with the time they had left when you turn DND off. The same setting also hides [otter-osd](/desktop/otter-osd) popups.
+
 ## Sending notifications
 
 ```bash

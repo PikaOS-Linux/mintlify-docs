@@ -18,7 +18,7 @@ bar-search_enabled = true
 snippet-provider_enabled = false
 ```
 
-A missing key means enabled. Bar and launcher read this file before they load a plugin.
+Bar and launcher read this file before loading plugins. Most plugins stay enabled when their key is missing. `snippet-provider` is opt-in and stays off until you set `snippet-provider_enabled = true`.
 
 ## Put it on the bar
 

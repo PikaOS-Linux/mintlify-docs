@@ -18,6 +18,7 @@ description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other
 - Volume via PipeWire with scroll-to-adjust and device popup
 - MPRIS media player with album art
 - System tray (StatusNotifierItem) with context menus
+- Do Not Disturb toggle shared with notifications and OSD
 - Custom button widgets with icon and command support
 - HiDPI scaling per output
 
@@ -30,6 +31,8 @@ otter-bar
 Add to compositor autostart: see [Session setup](/desktop/session-setup).
 
 The menu button runs `otter-launcher` by default. Change it with `button_menu_command`.
+
+The optional power button runs `otter-logout` by default. Set `button_power_enabled = true`, then add `button_power` to a layout.
 
 Third-party widgets load as `plugin:<id>` slots. Enable them in otter-settings **Plugins**, then drag the chip into the layout. See [Plugins](/desktop/plugins).
 
@@ -49,15 +52,22 @@ general_position = top
 general_padding = 8
 
 # Comma-separated widget layout (left to right)
-layout_left = workspaces, title
+layout_left = workspaces, active_window
 layout_center =
-layout_right = tray, mpris, volume, clock, battery, button_menu
+layout_right = system_tray, mpris, dnd, volume, clock, battery, button_menu
 
 # Launcher button
 button_menu_command = otter-launcher
+
+# Do Not Disturb
+dnd_enabled = true
 ```
 
 Widget color fields are optional. Omit them to inherit from [theme.conf](/configuration/themes). Saving `theme.conf` updates bar widget colors without editing `otter-bar.conf`.
+
+### Do Not Disturb
+
+Add `dnd` to any layout section. Click its bell icon to pause or resume notification and OSD popups. Notifications stay queued while DND is on.
 
 ### Weather widget
 

@@ -4,7 +4,7 @@ sidebarTitle: "Settings app"
 description: "Graphical editor for Otter Shell app configs, themes, and bar layout."
 ---
 
-**`otter-settings`** is the default way to configure Otter Shell. Tabs for every app, a theme browser, and drag-and-drop bar layout. Prefer `$EDITOR`? Same files either way.
+**`otter-settings`** is the default way to configure Otter Shell. It gives installed apps their own tabs, plus a theme browser and drag-and-drop bar layout. If you prefer `$EDITOR`, both routes change the same files.
 
 ## Usage
 
@@ -13,6 +13,8 @@ otter-settings
 ```
 
 Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotkey (for example `Super+Comma`).
+
+Settings only shows app tabs whose matching Otter executable is installed. **Theme** and **Plugins** always stay available. Restart Settings after installing or removing a component so it can refresh the sidebar.
 
 <Note>
   Writes to `~/.config/otter-shell/*.conf`. Running apps reload via inotify after **Apply**.
@@ -55,9 +57,19 @@ Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotke
 
 Also includes drag-and-drop bar layout, custom bar buttons, and clipboard paste (Ctrl+V) in text fields via Wayland data device.
 
+## Wallpaper picker
+
+Open the wallpaper grid directly from a keybinding:
+
+```bash
+otter-settings --wallpaper-picker
+```
+
+Click an image to apply it, or press Escape to close. See [otter-wallpaper](/desktop/otter-wallpaper).
+
 ## Theme Gen tab
 
-The **Theme Gen** tab edits `otter-theme-gen.conf`. The `otter-theme-gen` daemon ships with `otter-shell`. Autostart it with [otter-wallpaper](/desktop/otter-wallpaper) so it can read `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` and update `theme.conf`.
+The **Theme Gen** tab edits `otter-theme-gen.conf`. The `otter-theme-gen` daemon ships with `otter-shell`. Autostart it with [otter-wallpaper](/desktop/otter-wallpaper) so it can read `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` and update `generated-colors.conf`.
 
 On the tab:
 
@@ -103,7 +115,7 @@ Compositor hotkeys (launcher, overview, screenshot, lock) belong in your Wayland
 
 ## Theme presets
 
-Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, and One Dark. See [Themes](/configuration/themes) for color token details.
+Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, Tokyo Night, and One Dark. Settings writes the selected preset colors to `preset-colors.conf` and imports that file from root `theme.conf`. It does not flatten preset colors into your root overrides. See [Themes](/configuration/themes) for color token details.
 
 ## Plugins tab
 

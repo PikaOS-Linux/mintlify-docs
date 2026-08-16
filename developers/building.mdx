@@ -19,7 +19,7 @@ Extra packages by component:
 
 | Component | Extra packages |
 |-----------|---------------|
-| otter-term | `libghostty-vt-dev-git` |
+| otter-term | No extra terminal library. `ghostty-vt` is vendored. |
 | otter-rec | `libavcodec-dev`, `libavformat-dev`, `libavutil-dev`, `libswscale-dev`, `libdrm-dev`, `libegl-dev`, `libgles-dev` |
 | otter-lock, otter-greeter, otter-polkit | `libpam0g-dev` |
 
@@ -27,10 +27,10 @@ Extra packages by component:
 
 ```bash
 cd otter-bar    # or any component directory
-zig build       # compile
-zig build run   # build and run
-zig build test  # run unit tests
-zig build install  # install to prefix
+zig build -Doptimize=ReleaseFast          # compile
+zig build -Doptimize=ReleaseFast run      # build and run
+zig build -Doptimize=ReleaseFast test     # run unit tests
+zig build -Doptimize=ReleaseFast install  # install to prefix
 ```
 
 Libraries link through **path dependencies** in sibling `build.zig.zon` files (`../otter-render`, etc.) when you build from the monorepo checkout.
@@ -69,10 +69,10 @@ This clones tagged releases, assembles a source tree, and runs `dpkg-buildpackag
 ## Benchmarks
 
 ```bash
-cd otter-conf/benchmarks && zig build bench
-cd otter-render/benchmarks && zig build -Doptimize=ReleaseFast -Dcpu=x86_64_v3
+cd otter-conf/benchmarks && zig build -Doptimize=ReleaseFast bench
+cd otter-render/benchmarks && zig build -Doptimize=ReleaseFast -Dcpu=x86_64_v3 bench
 cd otter-ui/benchmarks && zig build -Doptimize=ReleaseFast -Dcpu=x86_64_v3 bench
-cd otter-desktop/benchmarks && zig build bench
+cd otter-desktop/benchmarks && zig build -Doptimize=ReleaseFast bench
 ```
 
 ## Per-component git workflow

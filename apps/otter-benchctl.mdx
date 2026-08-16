@@ -43,8 +43,8 @@ Use `--format json` when you want machine-readable output. JSON goes to stdout; 
 
 ## Tips
 
-- Run `otter-benchctl status` first if something looks dead — most failures mean the daemon is not up.
-- `metrics get` reads what the daemon already holds. It does not force a poll. If nothing subscribed yet, you get "No sample yet" — start `metrics watch` to create demand.
+- Run `otter-benchctl status` first if something looks dead. Most failures mean the daemon is not up.
+- `metrics get` reads what the daemon already holds. It does not force a poll. If nothing has subscribed yet, you get "No sample yet." Start `metrics watch` to create demand.
 - Capture sessions are crash-recoverable and immutable once finalised. Analysis and reports are regenerable.
 - Import MangoHud configs with the import family of commands, then review dispositions before anything is written.
 

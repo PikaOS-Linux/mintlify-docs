@@ -4,13 +4,13 @@ sidebarTitle: "Themes"
 description: "Change Otter Shell colors and spacing in otter-settings or theme.conf. Per-app overrides inherit from the shared theme when left blank."
 ---
 
-All Otter Shell apps share one theme via `otter-theme`. The **Theme** tab in [otter-settings](/desktop/otter-settings) previews all 12 built-in presets and writes changes on **Apply**.
+All Otter Shell apps share one theme via `otter-theme`. The **Theme** tab in [otter-settings](/desktop/otter-settings) lets you choose a visual profile, density, and color source. It also previews all 12 built-in presets.
 
 ```bash
 otter-settings
 ```
 
-Changes land in `~/.config/otter-shell/theme.conf`. Running apps that watch the file pick them up. [otter-term](/apps/otter-term) hot-reloads `theme.conf` without a restart. [otter-bar](/desktop/otter-bar) refreshes widget colors on `theme.conf` changes without reloading `otter-bar.conf`.
+Settings keeps those choices as ordered imports in `~/.config/otter-shell/theme.conf`. Built-in preset colors go in `preset-colors.conf`. Running apps watch the root file and every imported layer. [otter-term](/apps/otter-term) reloads without a restart, and [otter-bar](/desktop/otter-bar) refreshes widget colors without reloading `otter-bar.conf`.
 
 <Tip>
   Stick with otter-settings unless you need keys the UI does not expose. It keeps comments and field order on save.
@@ -19,6 +19,17 @@ Changes land in `~/.config/otter-shell/theme.conf`. Running apps that watch the 
 ## Theme config file
 
 Edit `~/.config/otter-shell/theme.conf` directly if you prefer. otter-bar, otter-transcribe, and otter-term read it at startup and on change.
+
+Theme layers load in this order:
+
+1. Compiled Current fallback
+2. Selected profile, `profiles/current.conf` or `profiles/bank.conf`
+3. Selected density profile
+4. Optional `preset-colors.conf` or `generated-colors.conf`
+5. Explicit fields in root `theme.conf`
+6. Per-app and per-widget overrides
+
+Color layers only change semantic colors. Profiles own geometry, spacing, fonts, radii, and layout. Root overrides always win over imported layers.
 
 ## Terminal colors
 
@@ -71,6 +82,16 @@ font_dpi_aware = true
 
 `font_dpi_aware = true` scales font and padding on high-DPI displays. Empty `font_family = ""` falls back to the bundled Nerd Font.
 
+## Icon theme
+
+Set one XDG icon theme for semantic Otter Shell icons:
+
+```conf
+icons_theme = "Papirus"
+```
+
+You can use a theme name or an absolute theme directory. Otter Shell checks it first, prefers SVG icons, then falls back to bundled icons when no match exists. Leave the value unset to use bundled defaults.
+
 ## Window decorations
 
 You can choose how Otter XDG toplevels ask for decorations, and how client-side titlebars look when CSD is on.
@@ -118,6 +139,6 @@ Otter Shell, Otter Shell Islands, Catppuccin (Mocha/Latte/Frappe/Macchiato), Nor
 
 Want colors that follow your wallpaper? Run [otter-theme-gen](/desktop/otter-theme-gen) with [otter-wallpaper](/desktop/otter-wallpaper), then use the **Theme Gen** tab in [otter-settings](/desktop/otter-settings). It edits `otter-theme-gen.conf`. The daemon ships in `otter-shell`.
 
-When enabled, `otter-theme-gen` watches `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` and updates `theme.conf`. You can sync colors to other apps through template outputs: terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), KDE color schemes, Papirus folder colors, `bottom`, btop, and more. Toggle each template in the Theme Gen tab, then click **Apply**.
+When enabled, `otter-theme-gen` watches `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` and writes `~/.config/otter-shell/generated-colors.conf`. It leaves root `theme.conf` alone. You can sync colors to other apps through template outputs: terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), KDE color schemes, Papirus folder colors, `bottom`, btop, and more. Toggle each template in the Theme Gen tab, then click **Apply**.
 
 Key options include **Islands mode** for Otter Shell Islands styling and an **Opacity** slider for panel transparency.

@@ -14,6 +14,17 @@ otter-wallpaper
 
 Autostart at login: see [Session setup](/desktop/session-setup).
 
+## Pick or randomize a wallpaper
+
+These commands work well as compositor keybindings:
+
+```bash
+otter-settings --wallpaper-picker
+otter-wallpaper --random
+```
+
+The picker shows images from the configured folder. Click one to apply it, or press Escape to close. `--random` chooses another image and respects `blocklist`. A running wallpaper daemon reloads the updated config immediately.
+
 ## Configuration
 
 Config file: `~/.config/otter-shell/otter-wallpaper.conf`

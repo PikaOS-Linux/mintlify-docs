@@ -28,6 +28,12 @@ otter-rec --dry-run --source screen --output out.mp4  # print resolved settings,
 
 `YYYY-MM-DD-HH-MM-SS` in a configured or CLI `--output` path expands to the local start time.
 
+## Audio
+
+Recordings include the default PipeWire capture source when it is available. `otter-rec` captures 48 kHz stereo audio and muxes 128 kbit/s AAC into the output file. It does this in process without calling `ffmpeg`.
+
+Portal recording uses separate PipeWire connections for video and audio because the ScreenCast portal only supplies video nodes. Audio currently follows your default capture source. There is no device or system-output selector. If audio cannot start, recording continues with video only.
+
 ## Hardware Encoding
 
 otter-rec probes your GPU at startup and selects the best available hardware encoder.

@@ -25,9 +25,13 @@ otter-osd brightness-down 5
 otter-osd caps-lock
 otter-osd num-lock
 otter-osd scroll-lock
+otter-osd message "Tea timer done"
 ```
 
 The optional step value (default `5`) applies to volume and brightness commands.
+Text messages are centered and wrap to fit the OSD.
+
+When Do Not Disturb is on, popup surfaces stay hidden. Hardware commands still change volume and brightness. Run `otter-notifications dnd-off` to show future OSD updates again.
 
 [otter-timer](/apps/otter-timer) and [otter-rec](/apps/otter-rec) also use `otter-osd` for completion notifications.
 

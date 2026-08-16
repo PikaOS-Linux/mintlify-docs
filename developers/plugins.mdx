@@ -34,7 +34,7 @@ Hosts search in this order. First match per id wins:
 
 Bar and launcher layout names are always `plugin:<id>`. The bare id lives in `plugin.conf`.
 
-Enable gates live in `~/.config/otter-shell/plugins.conf` as `<id>_enabled = true|false`. A missing key means enabled. Hosts read that file before `dlopen`. Per-plugin files under `~/.config/otter-shell/plugins/<id>.conf` are reserved for schemas with `provides_settings = true`. That settings UI is not in yet.
+Enable gates live in `~/.config/otter-shell/plugins.conf` as `<id>_enabled = true|false`. Hosts read that file before `dlopen`. Most plugins treat a missing key as enabled. The packaged `snippet-provider` is opt-in and defaults to disabled. Per-plugin files under `~/.config/otter-shell/plugins/<id>.conf` are reserved for schemas with `provides_settings = true`. That settings UI is not in yet.
 
 ## Manifest (`plugin.conf`)
 
@@ -142,10 +142,10 @@ export OTTER_PLUGIN_PATH="$PWD/zig-out/plugins"
 ABI smoke, no Wayland:
 
 ```bash
-zig build plugin-abi-smoke -- zig-out/plugins/hello-label/libotter_plugin_hello_label.so
+zig build -Doptimize=ReleaseFast plugin-abi-smoke -- zig-out/plugins/hello-label/libotter_plugin_hello_label.so
 ```
 
-Bar plugins: use `otter-bar`'s `zig build plugin-abi-smoke -- <so>`.
+Bar plugins: use `otter-bar`'s `zig build -Doptimize=ReleaseFast plugin-abi-smoke -- <so>`.
 
 ## Trust
 

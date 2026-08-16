@@ -42,7 +42,7 @@ const config_path = utils.config_paths.otterConfigPath(&path_buf, "myapp.conf") 
 
 | Module | Purpose |
 |--------|---------|
-| `process` / `command` | Spawn subprocesses with bounded argv |
+| `process` / `command` | Find executables through local build paths or `$PATH`, then spawn with bounded argv |
 | `SubscriberList` | Lightweight pub/sub for state changes |
 | `unix_socket` | Bounded Unix socket paths and FD hardening |
 | `app_id_match` | Match Wayland `app_id` strings |
