@@ -60,14 +60,16 @@ Apps read `~/.config/otter-shell/<app>.conf`. Shared styling is in `~/.config/ot
 
 In the source tree but **not packaged** in `otter-shell` or `otter-shell-extras`:
 
-- `otter-dock`: application dock with magnification
 - `otter-hypr`: Hyprland layout and titlebar companion
+- `otter-cue`: desktop interaction sound library (pinned in zenith for builds; no `debian/control` package yet)
 
-Otter Assistant packages (`otter-assist`, `otter-assistant`, `otter-assist-data`) ship in `otter-shell-extras`.
+Otter Assistant packages (`otter-assist`, `otter-assistant`, `otter-assist-data`, `otter-assist-model`) and speech model packages ship in `otter-shell-extras`.
+
+`otter-dock` and `otter-taskbar` ship in the base `otter-shell` metapackage.
 
 Otter Bench and Otter HUD ship in `otter-gaming-utils` (separate from `otter-shell`).
 
-## Next steps
+## Next
 
 - [Building from source](/developers/building): compile any component locally
 - [Creating an app](/developers/creating-an-app): start a new app with Otter libraries

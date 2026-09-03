@@ -4,7 +4,7 @@ sidebarTitle: "Nodes"
 description: "SurfaceNode content types, spec fields, hit kinds, and constructors in otter-ui."
 ---
 
-A `SurfaceNode` is one piece of the tree:
+A `SurfaceNode` is one piece of the tree. Leaf nodes draw one control. Containers hold children.
 
 - `kind`: container or `leaf`
 - `layout`: [LayoutSpec](/developers/libraries/otter-ui/layout)
@@ -15,7 +15,7 @@ A `SurfaceNode` is one piece of the tree:
 - `semantics`: optional accessibility metadata
 - `focus_scope`: keep keyboard focus inside this subtree
 
-Leaf nodes draw one control. Set `hit` (or use a constructor that sets it) on anything you want to click.
+Set `hit` (or use a constructor that sets it) on anything you want to click.
 
 ## Constructors vs manual nodes
 

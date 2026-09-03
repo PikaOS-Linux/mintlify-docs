@@ -4,7 +4,7 @@ sidebarTitle: "Terminal"
 description: "Native Wayland terminal for Otter Shell. Tabs, split panes, shell integration, URL handling, and IME support."
 ---
 
-`otter-term` is Otter Shell's built-in terminal emulator. It uses the vendored `ghostty-vt` Zig module for terminal emulation and Otter libraries for Wayland windowing, PTY handling, input, rendering, configuration, and clipboard. It supports tabs, horizontal and vertical splits, OSC shell integration, and IME input. No X11 dependency or installed `libghostty-vt` library is needed.
+`otter-term` is Otter Shell's built-in terminal emulator. Terminal emulation comes from the vendored `ghostty-vt` Zig module. Wayland windowing, PTY handling, input, rendering, configuration, and clipboard come from Otter libraries. Tabs, horizontal and vertical splits, OSC shell integration, and IME input are all there. You do not need X11, and you do not need an installed `libghostty-vt` library.
 
 ## Launching
 
@@ -92,7 +92,7 @@ bell_visual = false
   Set `shell_capture_output = true` to enable OSC 133 command-output capture. The right-click context menu then gets a **Copy Last Output** action that copies the full output of the most recent command. Off by default to keep large command output off the hot PTY path.
 </Tip>
 
-## Color Palette
+## Color palette
 
 The color palette uses `colors_*` keys in `otter-term.conf`, or inherits from `theme.conf` when those keys are unset. Palette changes hot-reload on save. Per-app keys in `otter-term.conf` override the shared theme.
 
@@ -100,7 +100,7 @@ The color palette uses `colors_*` keys in `otter-term.conf`, or inherits from `t
 
 Works on Hyprland, Sway, Niri, and other wlroots compositors. On Niri, scroll damage is tracked so scrollback redraws match the viewport.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Action | Shortcut |
 |---|---|

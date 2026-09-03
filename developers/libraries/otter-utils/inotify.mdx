@@ -4,7 +4,7 @@ sidebarTitle: "Inotify"
 description: "File and directory watching with otter-utils inotify.Watcher."
 ---
 
-`inotify.Watcher` wraps Linux inotify for config reloads and app-list updates. Poll `getFd()` next to your Wayland socket and timer FDs.
+`inotify.Watcher` wraps Linux inotify for config reloads and app-list updates. Poll `getFd()` next to your Wayland socket and timer FDs. That is the same pattern `otter-conf.Watcher` uses.
 
 ```zig
 const inotify = @import("otter_utils").inotify;

@@ -4,7 +4,7 @@ sidebarTitle: "Polkit agent"
 description: "Session polkit agent with a password dialog and optional fingerprint auth."
 ---
 
-`otter-polkit` is the session polkit agent. Elevated-privilege prompts (package installs, disk operations) show as a password dialog on a layer-shell overlay.
+`otter-polkit` is the session polkit agent. Package installs and disk operations that need extra privileges open a password dialog on a layer-shell overlay.
 
 ## Usage
 
@@ -53,4 +53,4 @@ Fingerprint auth works via fprintd when `enable_fingerprint = true` and fprintd 
 
 ## Dependencies
 
-Requires D-Bus (fprintd integration). Build with `-Denable_dbus=false` disables fingerprint support.
+Needs D-Bus for fprintd. Build with `-Denable_dbus=false` disables fingerprint support.

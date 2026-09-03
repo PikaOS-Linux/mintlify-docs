@@ -4,11 +4,11 @@ sidebarTitle: "Screenshot"
 description: "Capture regions, windows, or the full screen on Wayland. Drag to select, then copy to clipboard or save to a file."
 ---
 
-`otter-screenshot` is Otter Shell's Wayland screenshot tool. It captures through the `ext_image_copy_capture_v1` protocol. No X11 fallbacks, no `grim`, no external capture tool. By default you drag to select a region and the result goes to the clipboard as `image/png`. Pass `--output` to write a file instead.
+`otter-screenshot` captures your Wayland screen through `ext_image_copy_capture_v1`. It does not fall back to X11, `grim`, or another capture tool. By default you drag to select a region and the result goes to the clipboard as `image/png`. Pass `--output` to write a file instead.
 
-## Basic Usage
+## Basic usage
 
-Run `otter-screenshot` without arguments to enter region-selection mode. Drag with the left mouse button to define the area. Press <kbd>Esc</kbd> or <kbd>Ctrl+C</kbd> before selecting to cancel. [otter-rec](/apps/otter-rec) and [otter-shot](/apps/otter-shot) use the same drag-to-select UI for region capture.
+Run `otter-screenshot` with no arguments to enter region-selection mode. Drag with the left mouse button to define the area. Press <kbd>Esc</kbd> or <kbd>Ctrl+C</kbd> before selecting to cancel. [otter-rec](/apps/otter-rec) and [otter-shot](/apps/otter-shot) use the same drag-to-select UI for region capture.
 
 ```bash
 otter-screenshot                                       # drag to select a region
@@ -16,6 +16,7 @@ otter-screenshot --output screenshot.png               # save region to file
 otter-screenshot --fullscreen --output screenshot.png  # capture all outputs
 otter-screenshot --active --output active.png          # capture active window
 otter-screenshot --freeze --output region.png          # freeze before selecting
+otter-screenshot --annotate                            # freeze, select, then annotate
 ```
 
 ## Options
@@ -24,12 +25,23 @@ otter-screenshot --freeze --output region.png          # freeze before selecting
 |---|---|---|
 | `--output PATH` | `-o PATH` | Write the PNG to `PATH` instead of copying it to the clipboard. |
 | `--fullscreen` |: | Capture all outputs immediately, without opening the selection overlay. |
-| `--active` |: | Capture the compositor-reported active toplevel immediately. See [Compositor Requirements](#compositor-requirements) for the necessary protocol support. |
+| `--active` |: | Capture the compositor-reported active toplevel immediately. See [Compositor requirements](#compositor-requirements) for the necessary protocol support. |
 | `--freeze` |: | Capture the screen first, then display that frozen image behind the selection overlay. Useful when the content you want to capture would disappear while you drag. |
+| `--annotate` |: | Freeze the capture, select a region, then keep the same layer surfaces open for annotation. |
 | `--cursor` |: | Include the cursor in the captured image. The cursor is hidden by default. |
 | `--border` |: | Keep the selection border in the final image. By default the border is only a visual selection aid and is cropped out. |
 | `--tonemap-hdr` |: | Apply a simple SDR tonemap before encoding. Use this as a best-effort fallback when capturing HDR outputs. It is not color-managed output. |
 | `--help` | `-h` | Print usage and exit. |
+
+## Annotation
+
+`--annotate` freezes the screen, lets you select a region, then keeps that capture in place for editing. The pixels stay where they were. The desktop outside the selection goes live again. A toolbar sits above the rectangle when it fits, otherwise below it. Hover an icon for its name and shortcut.
+
+Tools cover selection, move, resize, arrows, spotlight, lines, freehand and highlighter strokes, rectangles, ellipses, numbered markers, mosaic or solid redaction, text, colors, widths, fill, undo, redo, and whole-image OCR. OCR copies recognized text to the clipboard. It uses the system `tesseract` CLI. Packaged installs depend on `tesseract-ocr`. If `tesseract` is missing, only the OCR button is disabled.
+
+<kbd>Enter</kbd> copies and saves. Toolbar buttons or <kbd>Ctrl+C</kbd> / <kbd>Ctrl+S</kbd> choose one output.
+
+[otter-shot](/apps/otter-shot) uses the same annotation tools after a capture.
 
 ## Clipboard
 
@@ -37,7 +49,7 @@ When no `--output` path is given, `otter-screenshot` pipes the PNG through `wl-c
 
 File output writes directly to disk and does not touch the clipboard.
 
-## Compositor Requirements
+## Compositor requirements
 
 <Warning>
   `otter-screenshot` requires the compositor to expose the `ext_image_copy_capture_v1` protocol for output capture. If the compositor does not support it, the tool exits with an error. It does not fall back to another capture path.
@@ -45,7 +57,7 @@ File output writes directly to disk and does not touch the clipboard.
   Active-window capture (`--active`) also requires `ext_foreign_toplevel_list_v1` and `ext_foreign_toplevel_image_capture_source_manager_v1`. If either protocol is missing, `--active` will not work.
 </Warning>
 
-## Binding a Shortcut
+## Binding a shortcut
 
 <Tip>
   Bind `otter-screenshot` to a hotkey in your compositor config. Examples:

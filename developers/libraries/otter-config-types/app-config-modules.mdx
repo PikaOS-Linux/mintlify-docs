@@ -4,19 +4,21 @@ sidebarTitle: "Modules"
 description: "Per-app config structs in otter-config-types."
 ---
 
-One `src/*.zig` file per app or daemon, each exporting a `Config` struct (plus nested widget configs).
+One `src/*.zig` file per app or daemon. Each exports a `Config` struct, plus nested widget configs when the app has them.
 
 | Module | Application | Notes |
 |--------|-------------|-------|
 | `bar` | `otter-bar` | `LayoutConfig`, `ClockConfig`, `WorkspacesConfig`, `BatteryConfig`, widgets |
 | `launcher` | `otter-launcher` | Appearance, sort order, keybinds |
-| `dock` | `otter-dock` | Workspace-only, not in metapackage |
 | `notifications` | `otter-notifications` | Timeout, position, styling |
 | `wallpaper` | `otter-wallpaper` | Mode, paths, transitions |
 | `osd` | `otter-osd` | Volume/brightness overlay |
 | `jade` | `otter-jade` | Layer-shell pet |
 | `logout` | `otter-logout` | Power menu overlay |
 | `overview` | `otter-overview` | Workspace overlay: axis, card scale, captures, empty-workspace policy |
+| `dock` | `otter-dock` | Position, auto-hide, magnification, pinned apps |
+| `taskbar` | `otter-taskbar` | Height, clock, tray, pinned apps, Start menu size |
+| `nightlight` | `otter-nightlight` | Schedule and color temperatures |
 | `polkit` | `otter-polkit` | Auth dialog chrome |
 | `lock` | `otter-lock` | Colors, layout, PAM, focus output |
 | `greeter` | `otter-greeter` | Login UI tokens |

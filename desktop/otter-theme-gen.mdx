@@ -27,7 +27,7 @@ See [Session setup](/desktop/session-setup).
 2. `otter-theme-gen` reads that file, extracts a palette, and updates `~/.config/otter-shell/generated-colors.conf`.
 3. Apps watching the theme import graph pick up the new colors. [otter-term](/apps/otter-term) hot-reloads shared theme changes without a restart.
 
-The daemon skips work when the wallpaper hash has not changed.
+If the wallpaper hash has not changed, the daemon skips the work.
 
 ## Configuration
 
@@ -61,7 +61,7 @@ With `islands_mode = true`, gaps between Bar sections stay clear. When blur is e
 
 ## Template outputs
 
-Optional template keys rewrite third-party config files when colors change. All templates start disabled. Enable only the apps you want synced.
+Optional template keys rewrite third-party config files when colors change. Templates start disabled. Turn on only the apps you want synced.
 
 ```conf
 template_gtk3_enabled = true

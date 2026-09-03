@@ -4,7 +4,7 @@ sidebarTitle: "otter-theme"
 description: "Semantic theme tokens, spacing, presets, and theme.conf loading."
 ---
 
-`otter-theme` is how Otter Shell looks: semantic colors, bar chrome, popup styles, spacing, fonts, surface roles. Plain data structs; the theme module itself does no I/O.
+`otter-theme` is how Otter Shell looks: semantic colors, bar chrome, popup styles, spacing, fonts, surface roles. Plain data structs. The theme module itself does no I/O.
 
 Load `~/.config/otter-shell/theme.conf` with `loadTheme` and pass `Theme` into `otter-ui` `FrameOptions`.
 
@@ -20,7 +20,7 @@ const bar_h = theme.bar.height;
 
 Color resolution at runtime: widget config field, then theme token, then the struct default (`?Color = null`).
 
-## Documentation map
+## Pages in this library
 
 <CardGroup cols={2}>
   <Card title="Tokens" icon="palette" href="/developers/libraries/otter-theme/tokens">

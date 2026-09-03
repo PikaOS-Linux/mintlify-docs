@@ -4,7 +4,7 @@ sidebarTitle: "Wallpaper"
 description: "Wallpaper daemon with per-monitor paths, rotation, and lock screen sync."
 ---
 
-`otter-wallpaper` draws backgrounds on the Wayland background layer via `zwlr_layer_shell_v1`. Each image is decoded to an SHM buffer, then freed to keep memory use low.
+`otter-wallpaper` draws backgrounds on the Wayland background layer through `zwlr_layer_shell_v1`. It decodes each image to an SHM buffer, then frees it to keep memory use low.
 
 ## Usage
 
@@ -16,7 +16,7 @@ Autostart at login: see [Session setup](/desktop/session-setup).
 
 ## Pick or randomize a wallpaper
 
-These commands work well as compositor keybindings:
+Use these as compositor keybindings:
 
 ```bash
 otter-settings --wallpaper-picker
@@ -63,7 +63,7 @@ Format: one `output_name=path` line per output. [otter-lock](/desktop/otter-lock
 
 ## Niri overview
 
-With `overview_enabled = true`, a blurred layer surface is created with namespace `otter-wallpaper-overview`. Add to your Niri config:
+With `overview_enabled = true`, it creates a blurred layer surface with namespace `otter-wallpaper-overview`. Add to your Niri config:
 
 ```kdl
 layer-rule {
@@ -72,8 +72,8 @@ layer-rule {
 }
 ```
 
-This is Niri's own overview backdrop. The Otter Shell overlay is a separate app: [otter-overview](/desktop/otter-overview).
+That surface is Niri's own overview backdrop. The Otter Shell overlay is a separate app: [otter-overview](/desktop/otter-overview).
 
 ## Hot reload
 
-Config and theme changes apply via inotify without restart. Reload keeps the current wallpaper.
+Config and theme changes apply through inotify, with no restart. Reload keeps the current wallpaper.

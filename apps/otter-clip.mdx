@@ -4,9 +4,11 @@ sidebarTitle: "Clipboard"
 description: "Clipboard manager with searchable history. Access entries via Super+V popup or CLI commands."
 ---
 
-otter-clip is Otter Shell's clipboard manager. A long-lived daemon watches the Wayland data-control protocol and keeps a bounded history of text and image entries. Press Super+V to open the launcher popup. The package also ships `otter-copy` and `otter-paste`, native utilities that talk to data-control directly. In packaged installs they shadow `wl-copy` and `wl-paste`, so existing apps and scripts route through Otter's implementation without changes.
+`otter-clip` keeps a bounded history of text and images from the Wayland data-control protocol. Press Super+V for the launcher popup.
 
-## Starting the Daemon
+The same package ships `otter-copy` and `otter-paste`, which talk to data-control directly. In packaged installs they shadow `wl-copy` and `wl-paste`, so existing apps and scripts keep working.
+
+## Starting the daemon
 
 Run the daemon once per session.
 
@@ -18,7 +20,7 @@ otter-clip daemon    # start monitoring clipboard selections
   Add `otter-clip daemon` to your compositor's autostart list so history is ready at login. Without the daemon, `otter-clip list`, `search`, and the Super+V popup have nothing to show.
 </Tip>
 
-## CLI Commands
+## CLI commands
 
 | Command | Description |
 |---|---|
@@ -34,7 +36,7 @@ otter-clip daemon    # start monitoring clipboard selections
 
 The `popup` command opens `otter-launcher --query "clip ..."`. Selecting a row calls `otter-clip select INDEX` to copy that item back to the clipboard. Pressing Enter in the popup is the same as running `otter-clip select` on the highlighted entry.
 
-## Copying and Pasting
+## Copying and pasting
 
 `otter-copy` and `otter-paste` replace `wl-copy` and `wl-paste`. They communicate with Wayland data-control directly.
 
@@ -48,25 +50,33 @@ wl-copy text    # resolved to otter-copy in packaged installs
 wl-paste        # resolved to otter-paste in packaged installs
 ```
 
-Point `otter-copy` and `otter-paste` at a custom history file with `--file /path/to/store` when you want an isolated clipboard store for scripting.
+Point `otter-clip`, `otter-copy`, and `otter-paste` at a custom history file with `--file /path/to/store` when you want an isolated clipboard store for scripting.
+
+```bash
+otter-clip --file /tmp/history list
+otter-copy --file /tmp/store text
+otter-paste --file /tmp/store
+```
+
+The daemon caches accepted representations and reoffers them byte-for-byte in the source-advertised order. Ownership is taken only after reads complete, so GTK image and rich-text formats still paste after a short-lived source exits.
 
 ## Configuration
 
-otter-clip reads `~/.config/otter-shell/otter-clip.conf` at daemon startup.
+`otter-clip` reads `~/.config/otter-shell/otter-clip.conf` at daemon startup.
 
 ```conf
 # Optional; empty uses $XDG_CACHE_HOME/otter-shell/otter-clip-history
 history_path = ""
 ```
 
-- `history_path`: absolute path for history storage. Empty uses `$XDG_CACHE_HOME/otter-shell/otter-clip-history`
+- `history_path`: absolute path for history storage. Empty uses `$XDG_CACHE_HOME/otter-shell/otter-clip-history`. A legacy `/tmp/otter-clip-history` is still read when configured.
 
-## Privacy and Password Managers
+## Privacy and password managers
 
 <Note>
   otter-clip skips clipboard entries that carry password manager or secret MIME hints before reading their data. Credentials copied from password managers do not end up in plain text history. Wayland data-control does not expose the source application ID for copied data, so app-ID filtering only applies when a source ID is available to the caller.
 </Note>
 
-## Image Support
+## Image support
 
-otter-clip accepts text offers and common image MIME types from the clipboard. Images are stored as bounded blob files with MIME type and path metadata, not decoded and re-encoded. The otter-launcher popup can show image thumbnails inline when you open clipboard history with Super+V.
+`otter-clip` accepts text offers and common image MIME types from the clipboard. Images are stored as bounded blob files with MIME type and path metadata, not decoded and re-encoded. The otter-launcher popup can show image thumbnails inline when you open clipboard history with Super+V.

@@ -4,7 +4,7 @@ sidebarTitle: "Desktop pet"
 description: "Desktop pet otter with growth stages, care mechanics, and saved state."
 ---
 
-`otter-jade` is a desktop pet otter. Jade hatches from an egg, grows through pup and teen to adult, walks screen edges, and reacts to pointer input.
+`otter-jade` is a desktop pet otter. Jade hatches from an egg, then grows through pup and teen to adult. Jade walks the screen edges and reacts to pointer input.
 
 ## Usage
 
@@ -12,13 +12,13 @@ description: "Desktop pet otter with growth stages, care mechanics, and saved st
 otter-jade
 ```
 
-Optional autostart. Add to compositor autostart if you want Jade at login.
+Optional autostart. Add it to compositor autostart if you want Jade at login.
 
 ```bash
 # Reset persisted state on launch
 otter-jade --reset
 
-# Non-persistent showcase mode
+# Non-persistent demo mode
 otter-jade --demo
 ```
 
@@ -33,7 +33,7 @@ otter-jade --demo
 
 - Four stages: egg, pup, teen, adult
 - Sprite animations for idle, walk, sleep, happy, hungry, dirty, eating, cleaning, petting, and more
-- Hunger, cleanliness, and mood affect behavior, not meters
+- Hunger, cleanliness, and mood change how Jade behaves. They are not shown as meters.
 - Random color and rare shiny rolls when the egg hatches
 - State stored at `$XDG_STATE_HOME/otter-shell/otter-jade.state` (fallback: `$HOME/.local/state/otter-shell/`)
 
@@ -51,4 +51,4 @@ margin = 24
 shiny_odds = 4096
 ```
 
-Edit via [otter-settings](/desktop/otter-settings) or directly in the config file.
+Edit this in [otter-settings](/desktop/otter-settings) or in the config file.

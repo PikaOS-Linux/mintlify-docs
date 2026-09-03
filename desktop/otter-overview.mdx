@@ -6,7 +6,9 @@ description: "Workspace and window overlay with cards, thumbnails, search, and a
 
 `otter-overview` is a one-shot overlay. Bind it to a hotkey. Workspace cards, window thumbnails, search, and an app grid. Click a tile to jump there. Type to launch an app. Escape closes.
 
-It sits on `zwlr_layer_shell_v1` overlay, on the output under the cursor. It is not a compositor.
+The same package ships [`otter-switcher`](/desktop/otter-switcher), an Alt-Tab strip for the current workspace only. See that page for binds and input.
+
+The overlay uses `zwlr_layer_shell_v1` on the output under the cursor. It is not a compositor.
 
 Niri has its own overview. That one uses [otter-wallpaper](/desktop/otter-wallpaper) `overview_enabled` for a blurred backdrop. `otter-overview` is a separate app.
 
@@ -22,16 +24,20 @@ Typical Hyprland bind:
 bind = SUPER, Super_L, exec, otter-overview
 ```
 
-Do not autostart it. Same pattern as [otter-launcher](/desktop/otter-launcher): run on a hotkey, it exits when you dismiss.
+Do not autostart it. Same pattern as [otter-launcher](/desktop/otter-launcher): run it from a hotkey. It exits when you dismiss.
 
 ## What you can do
 
 - Click a window tile to focus it. The overlay closes first so it cannot steal focus back.
 - Click a workspace card to switch to it.
+- Click a mini workspace in the bottom strip to scroll that card to the center without closing.
+- While the overlay is open, Ctrl+1 through Ctrl+9 jump to workspaces 1 to 9. Ctrl+0 is the tenth. Same as the mini strip. Digit keys without Ctrl still type into search.
 - Drag a tile onto another card to move that window. Drag onto another tile in the same card to swap them. Drop on empty space snaps back.
 - Hover a tile and click the close chip to close that window.
-- Click the search bar, or just type, for the application grid. Enter launches. Escape clears search, then closes.
+- Click the search bar, or type, for the application grid. Enter launches. Escape clears search, then closes.
 - Wheel or trackpad scrolls the card strip, or pages the app grid. Page Up / Page Down and the `< n / m >` chips change pages. Arrows and Tab move between tiles or app cells.
+
+On compositors that advertise `zwp_pointer_gestures_v1`, a three-finger vertical swipe tracks overlay progress 1:1 while it is open. Touchpad motion on the card strip stays 1:1 until you lift, then snaps to the nearest card.
 
 Only that output's workspaces show.
 
@@ -70,7 +76,7 @@ Omit color keys (`overlay_color`, `card_color`, `card_active_color`, `card_borde
 
 ## Thumbnails
 
-Startup captures every window before the first paint, active workspace first. If capture is missing, tiles use a stable per-app tint.
+On startup it captures every window before the first paint, active workspace first. If capture is missing, tiles use a stable per-app tint.
 
 Hyprland can also use `hyprland_toplevel_export`. Other compositors use `ext-image-copy-capture` when present.
 
@@ -78,6 +84,7 @@ Hyprland can also use `hyprland_toplevel_export`. Other compositors use `ext-ima
 
 | Compositor | Workspaces and windows | Thumbnails |
 |------------|------------------------|------------|
+| Sway | IPC (`get_workspaces`, `get_tree`) for `otter-switcher` | `ext-image-copy-capture` when available |
 | Hyprland | IPC (`j/workspaces`, `j/clients`, `j/monitors`) | `hyprland_toplevel_export` |
 | niri | IPC (`Workspaces`, `Windows`, `FocusWindow`, `MoveWindowToWorkspace`) | `ext-image-copy-capture` when available |
 | mango/dwl | `zdwl_ipc_output_v2` + wlr-foreign-toplevel (tag cards; no otter-tag) | `ext-image-copy-capture` when available |
@@ -93,6 +100,8 @@ Needs `zwlr_layer_shell_v1`.
 | Enter | Launch selected app |
 | Arrows / Tab | Move between tiles or app cells |
 | Page Up / Page Down | Change app-grid pages |
+| Ctrl+1 .. Ctrl+9 | Jump to workspace 1 to 9 (mini strip) |
+| Ctrl+0 | Jump to workspace 10 |
 
 ## Dependencies
 

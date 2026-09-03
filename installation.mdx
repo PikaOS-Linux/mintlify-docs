@@ -4,13 +4,15 @@ sidebarTitle: "Installation"
 description: "Install Otter Shell with pikman. Add otter-shell-extras for speech and Assistant, or otter-gaming-utils for Otter Bench and HUD."
 ---
 
-Otter Shell ships as native packages on PikaOS, built and versioned together in [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith). Gaming tools ship from [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils). Install with **pikman**.
+Otter Shell ships as native packages on PikaOS. They are built and versioned together in [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith). Gaming tools ship from [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils). Install with **pikman**.
+
+Current packaging train in zenith pins is **0.11.104**. A few apps pin higher. otter-clip is at 0.11.107.
 
 ## System requirements
 
 - **PikaOS**: Otter Shell packages target PikaOS repositories.
-- **Wayland compositor**: Otter Shell is Wayland-only. Pick a compositor that supports the protocols your apps need (for example `zwlr_layer_shell_v1` for the bar, launcher, and most overlays).
-- **No Zig runtime needed**: Apps ship as native binaries. Zig is not required.
+- **Wayland compositor**: Otter Shell is Wayland-only. Pick a compositor that supports the protocols your apps need. The bar, launcher, and most overlays want `zwlr_layer_shell_v1`.
+- **No Zig runtime needed**: Apps ship as native binaries. You do not need Zig.
 
 <Note>
   Otter Shell does **not** install a compositor. You pick and configure your own Wayland session. Hyprland, Sway, and Niri are common on PikaOS. The display manager (`otter-greeter`) uses Hyprland only for the login screen. Your user session compositor is separate.
@@ -36,7 +38,7 @@ Otter Shell ships as native packages on PikaOS, built and versioned together in 
     pikman install otter-shell
     ```
 
-    Pulls every component at the same version. See the package table below.
+    That pulls every component on the same packaging train. See the package table below.
 
     For speech tools and Otter Assistant:
 
@@ -44,7 +46,7 @@ Otter Shell ships as native packages on PikaOS, built and versioned together in 
     pikman install otter-shell-extras
     ```
 
-    `otter-shell` **recommends** `otter-shell-extras` but does not require it. Transcription, voice synthesis, and Otter Assistant stay out of the base metapackage.
+    `otter-shell` **recommends** `otter-shell-extras` but does not require it. Transcription, voice synthesis, Assistant, and their model packages stay out of the base metapackage.
 
     For Otter Bench and the in-game HUD:
 
@@ -68,8 +70,8 @@ Otter Shell ships as native packages on PikaOS, built and versioned together in 
 
 | Metapackage | Contents |
 |-------------|----------|
-| `otter-shell` | Full desktop shell: bar, launcher, workspace overview, notifications, wallpaper, theme generator, OSD, logout, settings, polkit, lock, idle, greeter, terminal, system monitor, Jade pet, screenshot tools, clipboard, notes, timer, weather, example plugins, plugin factory, and other core helpers. Includes `otter-shell-fonts`. |
-| `otter-shell-extras` | Speech tools (`otter-transcribe`, `otter-vox`) and Otter Assistant (`otter-assist`, `otter-assistant`, `otter-assist-data`). |
+| `otter-shell` | Full desktop shell: bar, launcher, dock, taskbar, file manager, package manager, workspace overview, keybind help, night light, notifications, wallpaper, theme generator, OSD, logout, settings, polkit, lock, idle, greeter, terminal, system monitor, Jade pet, screenshot tools, clipboard, notes, timer, weather, example plugins, plugin factory, and other core helpers. Includes `otter-shell-fonts`. |
+| `otter-shell-extras` | Speech tools (`otter-transcribe`, `otter-vox`), Otter Assistant (`otter-assist`, `otter-assistant`, `otter-assist-data`), and model packages (`otter-assist-model`, `otter-transcribe-model`, `otter-vox-model`). |
 | `otter-gaming-utils` | Otter Bench suite: `otter-bench`, `otter-benchd`, `otter-benchctl`, `otter-hud`, `otter-bench-hardwared`. |
 
 ## Packages in `otter-shell`
@@ -80,7 +82,11 @@ Installed by `pikman install otter-shell`:
 |---------|-------------|
 | `otter-bar` | Status bar with widgets, system tray, and MPRIS |
 | `otter-launcher` | Application launcher overlay |
-| `otter-overview` | Workspace and window overview overlay |
+| `otter-files` | File manager (local, SFTP, SMB) |
+| `otter-dock` | Application dock with magnification |
+| `otter-taskbar` | Windows-style taskbar with Start and tray |
+| `otter-overview` | Workspace overview overlay. Also ships `otter-switcher` |
+| `otter-keybindhelp` | Searchable compositor shortcut overlay |
 | `otter-search` | Desktop search daemon (launcher `file` / `grep` modes) |
 | `otter-notifications` | Notification daemon (freedesktop.org spec) |
 | `otter-wallpaper` | Wallpaper daemon |
@@ -88,17 +94,19 @@ Installed by `pikman install otter-shell`:
 | `otter-osd` | On-screen display for volume, brightness, and lock keys |
 | `otter-logout` | Power menu overlay |
 | `otter-settings` | Graphical settings editor |
+| `otter-pkg` | Graphical apt package manager |
 | `otter-polkit` | Polkit authentication agent |
 | `otter-lock` | Session lockscreen |
 | `otter-idle` | Idle management daemon |
+| `otter-nightlight` | Color-temperature / night-light daemon |
 | `otter-greeter` | Display manager (login screen) |
 | `otter-term` | Terminal emulator |
 | `otter-monitor` | System monitor with process tables and resource graphs |
 | `otter-jade` | Desktop pet |
-| `otter-screenshot` | Region and fullscreen screenshots |
+| `otter-screenshot` | Region and fullscreen screenshots with annotation |
 | `otter-shot` | Product-shot composer |
 | `otter-rec` | Screen recorder |
-| `otter-clip` | Clipboard manager |
+| `otter-clip` | Clipboard manager (`otter-copy` / `otter-paste`, shadows `wl-copy` / `wl-paste`) |
 | `otter-note` | Sticky notes |
 | `otter-cal` | Calendar helper for the bar |
 | `otter-calc` | Calculator helper |
@@ -109,13 +117,14 @@ Installed by `pikman install otter-shell`:
 | `otter-weather` | Weather fetcher and bar widget |
 | `otter-shell-fonts` | Bundled fallback fonts |
 | `otter-shell-plugins` | Example bar and launcher `.so` plugins |
+| `otter-bluetooth-plugin` | Bluetooth applet for the bar (pulled by `otter-shell-plugins`) |
 | `otter-plugin-factory` | `opf` CLI to scaffold and pack plugins |
 
-**Not in the base metapackage** (install via `otter-shell-extras`): `otter-transcribe`, `otter-vox`, `otter-assist`, `otter-assistant`, and `otter-assist-data`.
+**Not in the base metapackage** (install via `otter-shell-extras`): `otter-transcribe`, `otter-vox`, `otter-assist`, `otter-assistant`, `otter-assist-data`, `otter-assist-model`, `otter-transcribe-model`, and `otter-vox-model`.
 
 ## Packages in `otter-gaming-utils`
 
-Installed by `pikman install otter-gaming-utils` (built from [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils), not otter-zenith):
+Installed by `pikman install otter-gaming-utils`. Built from [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils), not otter-zenith.
 
 | Package | Description |
 |---------|-------------|

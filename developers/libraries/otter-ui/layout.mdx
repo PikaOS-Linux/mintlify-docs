@@ -4,7 +4,7 @@ sidebarTitle: "Layout"
 description: "How otter-ui measures and places SurfaceNode trees: NodeKind, SizeRule, flex, and alignment."
 ---
 
-Layout is all integers. No heap during measure or place. Every node has a `LayoutSpec`. Containers (`row`, `column`, `stack`, `grid`, `scroll_area`) place children inside the rect the parent got.
+Layout is all integers. No heap during measure or place. Every node has a `LayoutSpec`. Containers (`row`, `column`, `stack`, `grid`, `scroll_area`) place children inside the rect the parent already got.
 
 ## Node kinds (`NodeKind`)
 

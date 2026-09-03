@@ -1,0 +1,44 @@
+---
+title: "otter-pkg"
+sidebarTitle: "Packages"
+description: "Graphical package manager for Debian systems. Browse without a lock, preview changes, then elevate with pkexec."
+---
+
+`otter-pkg` is a graphical package manager for Debian-family systems. It talks to apt through the `zapt` API. You can browse, search, and inspect packages without taking the apt lock or asking for a password. Elevation happens only when a system change starts.
+
+## Usage
+
+```bash
+otter-pkg
+```
+
+Launch from [otter-launcher](/desktop/otter-launcher) or the **Otter Packages** desktop entry.
+
+Search names and descriptions from an in-memory index. Start a query with `?` for apt patterns. You can filter installed, upgradable, automatic, held, broken, and selected packages. Detail views show versions, repositories, dependencies, reverse dependencies, installed files, reasons, and change notes. In-app **Help** covers the UI.
+
+## Changing packages
+
+You can install, update, reinstall, remove, purge, hold, and switch automatic/manual state. Chosen versions are allowed, including downgrades when apt permits them.
+
+Updates can be direct, pull in needed software, or run as a full update that permits removals. There is also unused-package cleanup and interrupted-install repair.
+
+Before you authenticate, the change preview lists package, download, disk-space, dependency, held-package, and essential-package effects. Optional add-ons and no-longer-needed packages stay separate from required changes. Neither is silently installed or removed.
+
+`pkexec` and polkit run only when a system change begins. After elevation, `otter-pkg` rechecks a cryptographic summary so the approved set cannot silently become a different set.
+
+Live progress shows speed, time remaining, file counts, fetched bytes, and per-package status. Open **Details** for package setup, settings-file choices, and software-source or installation-media questions. You can cancel safely.
+
+Package work holds a logind idle inhibitor and releases it afterward, including failure and cancel paths.
+
+## Safety
+
+The GUI sends a bounded binary request to its own elevated helper. No shell command is assembled from package names. Browsing, detail lookup, local search, saved changes, and history stay unprivileged.
+
+Essential removals require the exact phrase `REMOVE ESSENTIAL` before elevation.
+
+## State files
+
+`$XDG_STATE_HOME/otter-pkg/` (or `~/.local/state/otter-pkg/`) holds:
+
+- `changes`: package choices and update/cleanup options
+- `history`: the newest 100 completed or failed operations

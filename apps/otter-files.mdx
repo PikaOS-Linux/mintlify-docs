@@ -1,0 +1,66 @@
+---
+title: "otter-files"
+sidebarTitle: "File manager"
+description: "Native Wayland file manager for local paths, SFTP, and SMB. Tabs, splits, thumbnails, archives, and trash."
+---
+
+`otter-files` is a native Wayland file manager. Browse local disks, SFTP, and SMB. Tabs, split panes, thumbnails, archives, trash, and bulk rename come with it.
+
+## Usage
+
+```bash
+otter-files
+otter-files ~/Documents
+otter-files --new-tab sftp://host/home
+```
+
+Launch from [otter-launcher](/desktop/otter-launcher) or the **Otter Files** desktop entry. Locations accept local paths plus `file://`, `sftp://`, `smb://`, and `archive://` URIs.
+
+Archive URIs look like `archive:///path/file.zip!/member`. Opening a supported archive shows a read-only virtual folder. Back and Up work as usual.
+
+| Flag | Description |
+|------|-------------|
+| `--new-window` | Open locations in a new window |
+| `--new-tab` | Open locations as tabs in an existing window |
+| `--select` | Select item locations in their parent folder |
+| `--properties` | Show properties for item locations |
+| `--help` | Print usage and exit |
+
+## Remote locations
+
+Press <kbd>Ctrl+K</kbd> or use the blank-area context menu to open **Connect to Server** for SFTP and SMB. Leave the SMB credential form empty to request anonymous access. The dialog does not store credentials. Bookmark a remote location yourself with <kbd>Ctrl+B</kbd> or the context menu if you want it saved.
+
+UDisks2 mount, unmount, and eject go through the running desktop polkit agent.
+
+## File operations
+
+Copy, move, rename, create, trash, delete, undo/redo, and conflict handling. Bulk Rename supports find/replace and templates (`{name}`, `{ext}`, `{n}`, `%n`, `###`). It preserves extensions by default, previews four entries, and will not overwrite existing names.
+
+Create a symbolic link from the selected-item context menu or <kbd>Ctrl+Shift+L</kbd>. Links are relative to the current folder and work locally or over native SFTP.
+
+Open in Terminal follows `xdg-terminal-exec`, keeps the selected folder as the child working directory, and falls back to [otter-term](/apps/otter-term) when that helper is missing.
+
+## Archives and thumbnails
+
+Create and extract tar (gzip/bzip2/xz/zstd), zip, 7z, and RAR/CBR. Archive members are browsable but not launched directly. Use **Extract Here** on the containing archive to open them.
+
+`bsdtar`, `tar`, `zip`, and `unzip` are detected at runtime. Install `7z` and `unrar`/`rar` for 7z and RAR. RAR creation needs `rar`.
+
+Image thumbnails decode natively. Video and other formats use bounded thumbnailers, including remote SFTP/SMB files by default.
+
+## Configuration
+
+Config file: `~/.config/otter-shell/otter-files.conf`
+
+Edit it in [otter-settings](/desktop/otter-settings) on the **Files** tab (shown when `otter-files` is installed), or by hand.
+
+Remote thumbnails are on by default and capped by `remote_thumbnail_limit_mb` (16 MiB). Set `thumbnail_policy` to `local_only` or `never` to opt out.
+
+```conf
+thumbnail_policy = always
+remote_thumbnail_limit_mb = 16
+```
+
+## Dependencies
+
+The packaged `otter-files` depends on `desktop-file-utils`, `shared-mime-info`, and `ffmpegthumbnailer` (video thumbnails), plus Otter shared libraries and fonts.

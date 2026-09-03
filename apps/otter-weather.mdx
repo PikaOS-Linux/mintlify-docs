@@ -4,11 +4,11 @@ sidebarTitle: "Weather"
 description: "Fetch current conditions and a 7-day forecast from Open-Meteo. Feed the bar widget, open a popup, or print to stdout."
 ---
 
-otter-weather fetches current conditions and a 7-day forecast from Open-Meteo. It feeds the bar weather widget or opens a popup. Set your latitude and longitude, run it as a watch daemon, and weather shows up on your desktop.
+`otter-weather` fetches current conditions and a 7-day forecast from Open-Meteo. It feeds the bar weather widget or opens a popup. Set latitude and longitude, then run it as a watch daemon if you want the bar to stay current.
 
 ## Usage
 
-Run `otter-weather` without arguments to fetch and print a forecast for the configured location. Pass coordinates to override the config.
+Run `otter-weather` with no arguments to fetch and print a forecast for the configured location. Pass coordinates to override the config.
 
 ```bash
 otter-weather                             # fetch and print (default: London)
@@ -20,7 +20,7 @@ otter-weather --cache                     # print cached forecast without HTTP
 otter-weather --layer                     # open 7-day popup from cache
 ```
 
-## Bar Widget Integration
+## Bar widget integration
 
 The otter-bar weather widget reads from a bounded local cache file. Use `--write-cache` to refresh that cache after a fetch. Add `--watch SECONDS` to keep it updated in the background. A typical autostart line:
 
@@ -36,7 +36,7 @@ The `--layer` flag opens the cached forecast in a small layer-shell popup that c
 
 ## Configuration
 
-otter-weather reads `~/.config/otter-shell/otter-weather.conf`.
+`otter-weather` reads `~/.config/otter-shell/otter-weather.conf`.
 
 ```conf
 latitude = 51.5072

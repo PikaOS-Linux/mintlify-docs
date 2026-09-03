@@ -4,7 +4,7 @@ sidebarTitle: "Overview"
 description: "Configure Otter Shell in otter-settings or by editing ~/.config/otter-shell/. Most changes hot-reload on save."
 ---
 
-**`otter-settings`** is the main config UI: one tab per app, a theme browser, and drag-and-drop bar layout. It writes the same `~/.config/otter-shell/*.conf` files as manual edits, so GUI and text stay in sync.
+**`otter-settings`** is the main config UI. One tab per app, a theme browser, and drag-and-drop bar layout. It writes the same `~/.config/otter-shell/*.conf` files you would edit by hand, so the GUI and text stay in sync.
 
 ```bash
 otter-settings
@@ -23,6 +23,8 @@ Launch from [otter-launcher](/desktop/otter-launcher), bind a compositor hotkey,
 | Bar | Widget layout, clock, volume, tray, custom buttons |
 | Launcher | Size, colors, placeholder text |
 | Plugins | Enable or disable installed `.so` plugins |
+| Dock | Magnification dock layout and pinned apps |
+| Taskbar | Taskbar height, clock, tray, pinned apps |
 | Overview | Workspace overview card size, axis, captures |
 | Notifications | Position, timeouts, margins |
 | Wallpaper | Path, rotation, scale mode |
@@ -31,6 +33,8 @@ Launch from [otter-launcher](/desktop/otter-launcher), bind a compositor hotkey,
 | Theme | Colors, spacing, presets (12 built-in themes) |
 | Theme Gen | Wallpaper-reactive themes, opacity, template outputs |
 | Monitor | System monitor refresh interval |
+| Files | File manager view, sort, thumbnails, confirms |
+| Night Light | Schedule and color temperature |
 | Assist | `otter-assist` backend (`otter-shell-extras`) |
 | Clicker | Auto-clicker interval, button, and fixed-position mode |
 | Lock / Logout / Idle / Polkit / Jade | Session and overlay settings |
@@ -40,7 +44,7 @@ Compositor hotkeys (screenshot, launcher, overview, lock) are **not** in otter-s
 
 ## Manual config files
 
-Each app has a plain-text file in `~/.config/otter-shell/`. Edit by hand to script changes or keep custom comments the UI might not show.
+Each app has a plain-text file in `~/.config/otter-shell/`. Edit by hand when you want to script changes, or keep comments the UI might not show.
 
 | App | Config file |
 |-----|-------------|
@@ -49,6 +53,8 @@ Each app has a plain-text file in `~/.config/otter-shell/`. Edit by hand to scri
 | otter-launcher | `~/.config/otter-shell/otter-launcher.conf` |
 | Plugins | `~/.config/otter-shell/plugins.conf` |
 | otter-overview | `~/.config/otter-shell/otter-overview.conf` |
+| otter-dock | `~/.config/otter-shell/otter-dock.conf` |
+| otter-taskbar | `~/.config/otter-shell/otter-taskbar.conf` |
 | otter-notifications | `~/.config/otter-shell/notifications.conf` |
 | otter-wallpaper | `~/.config/otter-shell/otter-wallpaper.conf` |
 | otter-theme-gen | `~/.config/otter-shell/otter-theme-gen.conf` |
@@ -57,9 +63,11 @@ Each app has a plain-text file in `~/.config/otter-shell/`. Edit by hand to scri
 | otter-polkit | `~/.config/otter-shell/otter-polkit.conf` |
 | otter-lock | `~/.config/otter-shell/otter-lock.conf` |
 | otter-idle | `~/.config/otter-shell/otter-idle.conf` |
+| otter-nightlight | `~/.config/otter-shell/otter-nightlight.conf` |
 | otter-jade | `~/.config/otter-shell/otter-jade.conf` |
 | otter-term | `~/.config/otter-shell/otter-term.conf` |
 | otter-monitor | `~/.config/otter-shell/otter-monitor.conf` |
+| otter-files | `~/.config/otter-shell/otter-files.conf` |
 | otter-assist | `~/.config/otter-shell/otter-assist.conf` *(via `otter-shell-extras`)* |
 | otter-assistant | `~/.config/otter-shell/otter-assistant.conf` *(via `otter-shell-extras`)* |
 | otter-rec | `~/.config/otter-shell/otter-rec.conf` |
@@ -75,6 +83,8 @@ Each app has a plain-text file in `~/.config/otter-shell/`. Edit by hand to scri
 | otter-vox | `~/.config/otter-shell/otter-vox.conf` |
 | otter-weather | `~/.config/otter-shell/otter-weather.conf` |
 | otter-screenshot | *(no persistent config: CLI flags only)* |
+| otter-pkg | *(app state under `$XDG_STATE_HOME/otter-pkg/`, not otter-conf)* |
+| otter-keybindhelp | *(reads compositor configs; no otter-conf file)* |
 
 System defaults may live under `/etc/otter-shell/`. User configs always win.
 

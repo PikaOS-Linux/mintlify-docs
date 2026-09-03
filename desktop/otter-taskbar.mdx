@@ -1,0 +1,84 @@
+---
+title: "otter-taskbar"
+sidebarTitle: "Taskbar"
+description: "Windows-style taskbar with grouped windows, Start, clock, tray, and hover previews."
+---
+
+`otter-taskbar` is a bottom taskbar. Windows group by application. Start, the clock, and the tray sit on one layer-shell strip. The bar reserves space so tiled windows stop above it. Part of the `otter-shell` metapackage.
+
+## Features
+
+- Grouped running windows, plus pinned apps
+- Start control (Otter icon) with keyboard search. Escape or a click outside dismisses it
+- Task view in Start launches [otter-overview](/desktop/otter-overview)
+- Clock and date. Left-click the clock for a calendar above the bar
+- System tray (StatusNotifierItem). Tray menus support Escape, arrows, Tab, Home/End, and Enter or Space
+- Twelve-pixel Show Desktop strip. First click minimizes live windows; the next click restores those same handles
+- Hover previews, content-sized and centered on the app button. They use `ext-image-copy-capture-v1` when the compositor has it. Otherwise you get a placeholder.
+- Drop a `text/uri-list` or GNOME copied-files payload on an app button to launch that app with those URIs
+- Middle-click a pinned button to launch a new instance. Right-click for Launch, New Window, desktop actions, per-window focus, Close, and Pin/Unpin
+- Drag pinned buttons to reorder them. Only the user taskbar config is rewritten
+
+On compositors that only expose `ext-foreign-toplevel-list-v1`, groups and previews still show, but window actions are missing. Show Desktop and focused-window minimize need wlr foreign-toplevel.
+
+## Usage
+
+```bash
+otter-taskbar
+```
+
+Run it as a session daemon. Autostart it the same way you start [otter-bar](/desktop/otter-bar). See [Session setup](/desktop/session-setup) for spawn examples.
+
+Needs `zwlr_layer_shell_v1`. Auto-hide is off by default. When you turn it on, the bar leaves a two-pixel edge target while hidden.
+
+## Configuration
+
+Config: `~/.config/otter-shell/otter-taskbar.conf`
+
+<Tip>
+  The **Taskbar** tab in [otter-settings](/desktop/otter-settings) writes the same file.
+</Tip>
+
+Key settings:
+
+```conf
+height = 48
+auto_hide = false
+auto_hide_delay = 500
+button_width = 160
+icon_size = 24
+pinned_apps =
+show_labels = true
+clock_enabled = true
+clock_time_format = %H:%M
+clock_date_format = %d/%m/%Y
+system_tray_enabled = true
+system_tray_icon_size = 18
+preview_refresh_ms = 1000
+start_menu_width = 420
+start_menu_height = 560
+```
+
+| Key | Meaning |
+|-----|---------|
+| `height` | Bar height in pixels. Default 48 |
+| `auto_hide` | Opt-in. Default `false` |
+| `auto_hide_delay` | Hide delay in milliseconds. Default 500 |
+| `button_width` | Task button width. Default 160 |
+| `icon_size` | App icon size. Default 24 |
+| `pinned_apps` | Comma-separated desktop ids. Empty by default |
+| `show_labels` | Show window titles on buttons. Default on |
+| `clock_enabled` | Show the clock. Default on |
+| `clock_time_format` / `clock_date_format` | strftime formats |
+| `system_tray_enabled` | Show the tray. Default on. Needs D-Bus at build time |
+| `system_tray_icon_size` | Tray icon size. Default 18 |
+| `preview_refresh_ms` | Hover preview refresh interval. Default 1000 |
+| `start_menu_width` / `start_menu_height` | Start panel size. Defaults 420 and 560 |
+
+Omit color keys to inherit from [theme.conf](/configuration/themes).
+
+## Dependencies
+
+- Wayland compositor with `zwlr_layer_shell_v1`
+- Hover previews use `ext-image-copy-capture-v1` when available
+- System tray needs D-Bus

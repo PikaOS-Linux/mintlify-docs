@@ -4,7 +4,7 @@ sidebarTitle: "Session setup"
 description: "What to autostart at login, how to bind hotkeys, and where otter-greeter fits in."
 ---
 
-Otter Shell runs on your Wayland compositor. The metapackage installs apps; it does not configure your compositor. This page covers autostart and hotkeys.
+Otter Shell runs on your Wayland compositor. The metapackage installs the apps. It does not configure the compositor. Use this page for autostart and hotkeys.
 
 ## What runs at login
 
@@ -19,6 +19,9 @@ Autostart these for a working desktop:
 | `otter-osd` | Recommended | Volume/brightness/lock-key overlays |
 | `otter-idle` | Recommended | Screen lock and DPMS on idle |
 | `otter-polkit` | Recommended | Authentication for privileged actions |
+| `otter-nightlight` | Optional | Night light / color temperature (bar widget needs the daemon) |
+| `otter-dock` | Optional | Magnifying application dock |
+| `otter-taskbar` | Optional | Windows-style taskbar (Start, tray, calendar) |
 | `otter-clip daemon` | Optional | Clipboard history |
 | `otter-search` | Optional | File and content search (launcher `file` / `grep` modes) |
 | `otter-weather --watch 900 --write-cache` | Optional | Bar weather widget data |
@@ -26,7 +29,9 @@ Autostart these for a working desktop:
 | `otter-transcribe` | Optional | Speech transcription (needs `otter-shell-extras`) |
 | `otter-assist` | Optional | Local AI backend for Otter Assistant (`otter-shell-extras`) |
 
-Do not autostart one-shot apps: `otter-launcher`, `otter-overview`, `otter-logout`, `otter-screenshot`. Bind hotkeys instead.
+Do not autostart one-shot apps: `otter-launcher`, `otter-overview`, `otter-switcher`, `otter-keybindhelp`, `otter-logout`, `otter-screenshot`, `otter-pkg`, `otter-files`. Bind hotkeys or launch from the menu instead.
+
+If you want one bottom launcher, run **either** `otter-dock` **or** `otter-taskbar`. Both packages install. You choose which to start.
 
 ## Compositor autostart examples
 
@@ -42,9 +47,13 @@ exec-once = otter-notifications
 exec-once = otter-osd
 exec-once = otter-idle
 exec-once = otter-polkit
+exec-once = otter-nightlight
 exec-once = otter-clip daemon
 exec-once = otter-search
 exec-once = otter-weather --watch 900 --write-cache
+# Pick one bottom launcher if you want it:
+# exec-once = otter-dock
+# exec-once = otter-taskbar
 # Optional: otter-shell-extras
 # exec-once = otter-assist
 # exec-once = otter-transcribe
@@ -62,8 +71,11 @@ exec otter-notifications
 exec otter-osd
 exec otter-idle
 exec otter-polkit
+exec otter-nightlight
 exec otter-clip daemon
 exec otter-weather --watch 900 --write-cache
+# exec otter-dock
+# exec otter-taskbar
 ```
 
 ### Niri
@@ -78,6 +90,7 @@ spawn-at-startup "otter-notifications"
 spawn-at-startup "otter-osd"
 spawn-at-startup "otter-idle"
 spawn-at-startup "otter-polkit"
+spawn-at-startup "otter-nightlight"
 spawn-at-startup "otter-clip" "daemon"
 spawn-at-startup "otter-weather" "--watch" "900" "--write-cache"
 ```
@@ -113,7 +126,8 @@ Config: `/etc/otter-shell/otter-greeter.conf`. See [otter-greeter](/desktop/otte
 
 | Component | Protocol / dependency |
 |-----------|---------------------|
-| Bar, launcher, overview, notifications, OSD, logout, lock | `zwlr_layer_shell_v1` (wlroots layer shell) |
+| Bar, launcher, overview, dock, taskbar, night light UI, notifications, OSD, logout, lock, keybind help | `zwlr_layer_shell_v1` (wlroots layer shell) |
+| Night light gamma | `wlr-gamma-control-unstable-v1` |
 | Lock screen | `ext-session-lock-v1` |
 | Screenshot, pick, shot | `ext_image_copy_capture_v1` |
 | Idle daemon | `ext-idle-notify-v1` (optional; compositor IPC fallbacks exist) |

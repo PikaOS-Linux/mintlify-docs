@@ -4,7 +4,7 @@ sidebarTitle: "Creating an app"
 description: "Start a Wayland app on the Otter stack: dependencies, UI patterns, and config."
 ---
 
-Build a new Wayland app on the Otter Shell stack.
+You can build a new Wayland app on the Otter Shell stack. Same libraries, same config format.
 
 ## 1. Create the project
 
@@ -90,7 +90,7 @@ Use `otter-wayland` layer shell when the compositor should anchor your surface t
 | `.overlay` (fullscreen) | Daemon while greeter runs | `otter-greeter-ui` |
 | `.top` popup | Optional CLI flag | `otter-weather --layer`, `otter-note popup` |
 
-Common overlay pattern: `DimOverlay` (fullscreen dim on `.overlay`) plus a second layer surface for the panel. See `otter-launcher` and `otter-logout`. Overlay sessions that exit after one action often use `ArenaAllocator`.
+A common overlay pattern is `DimOverlay` (fullscreen dim on `.overlay`) plus a second layer surface for the panel. See `otter-launcher` and `otter-logout`. Overlay sessions that exit after one action often use `ArenaAllocator`.
 
 Layer-shell daemons typically poll Wayland plus D-Bus, inotify config watchers, and timer FDs. Use `GeneralPurposeAllocator` and `otter-conf.Watcher` for hot reload.
 

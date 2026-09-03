@@ -4,7 +4,7 @@ sidebarTitle: "Plugins"
 description: "Enable bar and launcher plugins, then add them to the bar as plugin:<id>."
 ---
 
-Otter Shell can load extra bar widgets and launcher result providers as `.so` plugins. The `otter-shell` metapackage already installs the examples (`otter-shell-plugins`) and the scaffold CLI (`otter-plugin-factory`).
+Otter Shell loads extra bar widgets and launcher result providers as `.so` plugins. The `otter-shell` metapackage installs the examples (`otter-shell-plugins`) and the scaffold CLI (`otter-plugin-factory`).
 
 A loaded plugin is native code inside the bar or launcher. Only enable plugins you installed and trust.
 
@@ -45,6 +45,9 @@ These land under `/usr/lib/otter-shell/plugins/<id>/` with `otter-shell-plugins`
 | `plugin:disk-free` | bar | Free space from `statfs`, plus a usage bar. |
 | `plugin:idle-inhibit` | bar | logind idle inhibit. Click to toggle. |
 | `plugin:snippet-provider` | launcher | Extra launcher results with custom rows. |
+| `plugin:bluetooth-applet` | bar | Bluetooth status and device controls. Use Blueman for extra device management. |
+
+`plugin:bluetooth-applet` comes from the `otter-bluetooth-plugin` package, which `otter-shell-plugins` depends on. A normal plugins install includes it under `/usr/lib/otter-shell/plugins/bluetooth-applet/`.
 
 ## Install path
 
@@ -64,7 +67,7 @@ To try a local build without installing:
 export OTTER_PLUGIN_PATH="$PWD/zig-out/plugins"
 ```
 
-You can also install the examples on their own:
+Install the examples on their own:
 
 ```bash
 pikman install otter-shell-plugins

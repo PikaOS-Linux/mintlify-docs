@@ -4,7 +4,7 @@ sidebarTitle: "Display manager"
 description: "Wayland display manager with PAM login, fingerprint auth, and AccountsService user list."
 ---
 
-`otter-greeter` runs before your user compositor session starts.
+`otter-greeter` is the display manager. It runs before your user compositor session starts.
 
 ## Components
 
@@ -23,7 +23,7 @@ After `pikman install otter-shell`, enable the systemd service:
 sudo systemctl enable otter-greeter.service
 ```
 
-System files installed:
+The package installs:
 
 - `/etc/otter-shell/otter-greeter.conf`
 - `/etc/otter-shell/otter-greeter-hyprland.conf`
@@ -31,7 +31,7 @@ System files installed:
 - `/etc/pam.d/otter-greeter-autologin`
 - `/usr/lib/systemd/system/otter-greeter.service`
 
-A dedicated system user `otter-greeter` is created during package installation.
+Package install creates a dedicated system user named `otter-greeter`.
 
 ## Configuration
 
@@ -44,7 +44,7 @@ Main config: `/etc/otter-shell/otter-greeter.conf`
 | State path | `/var/lib/otter-greeter/state.conf` |
 | Runtime sockets | `/run/otter-greeter/<seat>.sock` |
 
-Wayland sessions are discovered from configured `.desktop` directories. X11 sessions are ignored.
+The greeter discovers Wayland sessions from configured `.desktop` directories. X11 sessions are ignored.
 
 ## Authentication
 

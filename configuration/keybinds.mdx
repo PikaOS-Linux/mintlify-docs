@@ -18,11 +18,19 @@ In-app shortcuts live in each app's config file. Edit them in [otter-settings](/
 | otter-screenshot | Cancel region selection | `Esc` or `Ctrl+C` |
 | otter-launcher | Close | `Escape` |
 | otter-launcher | Launch selected | `Enter` |
-| otter-launcher | Navigate | `Up` / `Down`, `Tab`, `Page Up/Down` |
+| otter-launcher | Move through results | `Up` / `Down`, `Tab`, `Page Up/Down` |
 | otter-launcher | Clear search | `Ctrl+U` |
 | otter-overview | Close / clear search | `Escape` |
 | otter-overview | Launch selected app | `Enter` |
-| otter-overview | Navigate tiles or apps | Arrows / `Tab`, `Page Up/Down` |
+| otter-overview | Move through tiles or apps | Arrows / `Tab`, `Page Up/Down` |
+| otter-overview | Jump to workspace card | `Ctrl+1` ... `Ctrl+9` (`Ctrl+0` = tenth) |
+| otter-switcher | Advance selection | Run `otter-switcher` again |
+| otter-switcher | Focus selected | Release Alt, or Enter |
+| otter-switcher | Cancel | `Escape` |
+| otter-keybindhelp | Close | `Escape` |
+| otter-keybindhelp | Search / clear | Type, `Ctrl+U` |
+| otter-keybindhelp | Change context / page | `Tab` / `Shift+Tab`, `Page Up` / `Page Down` |
+| otter-files | Connect to Server | `Ctrl+K` |
 | otter-lock | Submit password | `Enter` |
 | otter-polkit | Submit password | `Enter` |
 | otter-polkit | Cancel | `Escape` |
@@ -40,7 +48,7 @@ Use lowercase key names with `+` as the separator.
 
 ## Recommended global hotkeys
 
-Bind in your compositor config. Adjust modifiers to match your setup.
+Bind these in your compositor config. Change modifiers to match your setup.
 
 ### Hyprland
 
@@ -48,8 +56,10 @@ Bind in your compositor config. Adjust modifiers to match your setup.
 # ~/.config/hypr/hyprland.conf
 bind = $mainMod, D, exec, otter-launcher
 bind = SUPER, Super_L, exec, otter-overview
+bind = ALT, Tab, exec, otter-switcher
+bind = $mainMod SHIFT, slash, exec, otter-keybindhelp
 bind = $mainMod, P, exec, otter-screenshot
-bind = $mainMod SHIFT, P, exec, otter-screenshot --fullscreen --output ~/Pictures/screenshot.png
+bind = $mainMod SHIFT, P, exec, otter-screenshot --annotate
 bind = $mainMod, R, exec, otter-rec
 bind = $mainMod, N, exec, otter-note new
 bind = $mainMod, V, exec, otter-clip popup
@@ -73,8 +83,10 @@ bind = $mainMod, T, exec, otter-transcribectl toggle
 ```
 bindsym $mod+d exec otter-launcher
 bindsym $mod+o exec otter-overview
+bindsym Mod1+Tab exec otter-switcher
+bindsym $mod+Shift+slash exec otter-keybindhelp
 bindsym $mod+p exec otter-screenshot
-bindsym $mod+Shift+p exec otter-screenshot --fullscreen --output ~/Pictures/screenshot.png
+bindsym $mod+Shift+p exec otter-screenshot --annotate
 bindsym $mod+r exec otter-rec
 bindsym $mod+n exec otter-note new
 bindsym $mod+v exec otter-clip popup
@@ -88,7 +100,7 @@ bindsym $mod+l exec loginctl lock-session
 
 ## Recommended autostart
 
-Add to compositor autostart so the shell is ready at login. See [Session setup](/desktop/session-setup) for compositor-specific syntax.
+Add these to compositor autostart so the shell is ready at login. See [Session setup](/desktop/session-setup) for compositor-specific syntax.
 
 ```bash
 # Core shell daemons

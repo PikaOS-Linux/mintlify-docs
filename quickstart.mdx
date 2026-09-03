@@ -23,11 +23,14 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     otter-wallpaper &
     otter-notifications &
     otter-osd &
+    otter-nightlight &
     otter-clip daemon &
     otter-search &
     otter-idle &
     otter-polkit &
     ```
+
+    Optional: `otter-dock &` or `otter-taskbar &` for a bottom app strip.
 
     For a permanent setup, add them to compositor autostart. See [Session setup](/desktop/session-setup).
   </Step>
@@ -50,6 +53,16 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     ```
 
     Workspace cards, window tiles, search, and an app grid. See [otter-overview](/desktop/otter-overview).
+  </Step>
+
+  <Step title="Bind Alt-Tab">
+    The same package ships `otter-switcher`:
+
+    ```bash
+    otter-switcher
+    ```
+
+    Bind Alt-Tab to it. Each press advances. Release Alt to focus. See [otter-switcher](/desktop/otter-switcher).
   </Step>
 
   <Step title="Take a screenshot">
@@ -109,6 +122,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
   ```ini
   bind = $mainMod, D, exec, otter-launcher
   bind = SUPER, Super_L, exec, otter-overview
+  bind = ALT, Tab, exec, otter-switcher
   bind = $mainMod, P, exec, otter-screenshot
   bind = $mainMod, R, exec, otter-rec
   bind = $mainMod, V, exec, otter-clip popup
@@ -121,6 +135,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
   ```
   bindsym $mod+d exec otter-launcher
   bindsym $mod+o exec otter-overview
+  bindsym Mod1+Tab exec otter-switcher
   bindsym $mod+p exec otter-screenshot
   bindsym $mod+v exec otter-clip popup
   ```
@@ -128,7 +143,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
   See [Keybinds](/configuration/keybinds) for the full reference.
 </Tip>
 
-## What's next
+## Next
 
 <CardGroup cols={2}>
   <Card title="Session setup" icon="desktop" href="/desktop/session-setup">

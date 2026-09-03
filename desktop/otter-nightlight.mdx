@@ -1,0 +1,74 @@
+---
+title: "otter-nightlight"
+sidebarTitle: "Night Light"
+description: "Color-temperature daemon using wlr-gamma-control. Bar widget and CLI talk to it."
+---
+
+`otter-nightlight` applies a warm gamma table through `wlr-gamma-control-unstable-v1`. That works on Hyprland, Sway, and other wlroots compositors. One binary: no arguments starts the daemon. Any other argument is a client command.
+
+Only one client can own gamma per output. Stop `wlsunset` or `hyprsunset` while this runs.
+
+## Usage
+
+Start the daemon (autostart at login):
+
+```bash
+otter-nightlight
+```
+
+Add it to compositor autostart. On Niri: `spawn-at-startup "otter-nightlight"`. On Hyprland, use `exec-once`. See [Session setup](/desktop/session-setup) for the same pattern.
+
+Client commands:
+
+```bash
+otter-nightlight toggle
+otter-nightlight temp 4000
+otter-nightlight schedule-on
+otter-nightlight start 20 0
+otter-nightlight end 6 0
+otter-nightlight suspend 60
+otter-nightlight resume
+```
+
+| Command | Meaning |
+|---------|---------|
+| `toggle` | Enable or disable night light |
+| `enable` / `disable` | Set the state directly |
+| `temp KELVIN` | Night temperature (1000 to 10000) |
+| `schedule-on` / `schedule-off` | Follow or ignore the schedule window |
+| `start HOUR MIN` / `end HOUR MIN` | Schedule bounds, local 24-hour clock |
+| `suspend MINUTES` | Pause until then |
+| `resume` | Clear a suspend |
+
+A start later than end wraps midnight.
+
+## Bar widget
+
+Add `nightlight` to an [otter-bar](/desktop/otter-bar) layout. Left-click enables or disables. Right-click opens temperature presets, the schedule window, and a one-hour suspend.
+
+The widget is a client. It does nothing if the daemon is not running.
+
+## Configuration
+
+Config: `~/.config/otter-shell/otter-nightlight.conf`
+
+<Tip>
+  The **Night Light** tab in [otter-settings](/desktop/otter-settings) writes the same file.
+</Tip>
+
+```conf
+enabled = true
+schedule = true
+temperature = 4000
+day_temperature = 6500
+start_hour = 20
+start_minute = 0
+end_hour = 6
+end_minute = 0
+```
+
+Times are local 24-hour clock.
+
+## Dependencies
+
+- Wayland compositor with `wlr-gamma-control-unstable-v1`

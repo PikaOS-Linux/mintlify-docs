@@ -4,7 +4,7 @@ sidebarTitle: "Introduction"
 description: "Native Wayland apps for a lightweight PikaOS desktop: shell daemons, utilities, and shared libraries."
 ---
 
-Otter Shell is a lightweight Wayland desktop for PikaOS. Small native apps, one job each, backed by shared Zig libraries.
+Otter Shell is a lightweight Wayland desktop for PikaOS. Apps are small native binaries. Each one does one job. They share Zig libraries so they look and behave the same.
 
 ## Desktop shell
 
@@ -18,10 +18,22 @@ Background daemons and overlays on your compositor:
     Fuzzy app search with calculator, emoji, and clipboard modes.
   </Card>
   <Card title="Workspace overview" icon="table-cells" href="/desktop/otter-overview">
-    Workspace cards, window tiles, search, and an application grid.
+    Workspace cards, window tiles, search, and an app grid.
+  </Card>
+  <Card title="Alt-Tab switcher" icon="window-restore" href="/desktop/otter-switcher">
+    Window strip for the current workspace (`otter-switcher`).
+  </Card>
+  <Card title="Dock" icon="table-columns" href="/desktop/otter-dock">
+    Magnifying dock with pinned apps and window previews.
+  </Card>
+  <Card title="Taskbar" icon="window-maximize" href="/desktop/otter-taskbar">
+    Windows-style taskbar with Start, tray, and calendar.
   </Card>
   <Card title="Plugins" icon="puzzle-piece" href="/desktop/plugins">
     Extra bar widgets and launcher providers as `.so` plugins.
+  </Card>
+  <Card title="Night light" icon="moon" href="/desktop/otter-nightlight">
+    Color-temperature daemon with schedule and bar widget.
   </Card>
   <Card title="Wallpaper" icon="image" href="/desktop/otter-wallpaper">
     Per-display wallpapers with rotation and lockscreen support.
@@ -30,7 +42,7 @@ Background daemons and overlays on your compositor:
     Wallpaper-reactive colors in `generated-colors.conf`, plus optional app templates.
   </Card>
   <Card title="Notifications" icon="bell" href="/desktop/otter-notifications">
-    freedesktop.org notification daemon; drop-in for mako or dunst.
+    freedesktop.org notification daemon. Drop-in for mako or dunst.
   </Card>
   <Card title="On-screen display" icon="volume-high" href="/desktop/otter-osd">
     Volume, brightness, and lock-key overlays.
@@ -52,11 +64,17 @@ Background daemons and overlays on your compositor:
   <Card title="Otter Terminal" icon="terminal" href="/apps/otter-term">
     Wayland terminal with tabs, splits, shell integration, and URL handling.
   </Card>
+  <Card title="File manager" icon="folder" href="/apps/otter-files">
+    Local, SFTP, and SMB browsing with tabs, splits, and thumbnails.
+  </Card>
+  <Card title="Package manager" icon="box" href="/apps/otter-pkg">
+    Native apt GUI with change previews and live progress.
+  </Card>
   <Card title="System monitor" icon="chart-line" href="/apps/otter-monitor">
     CPU, memory, GPU, disk, and network views with sortable process tables.
   </Card>
   <Card title="Screenshot & recording" icon="camera" href="/apps/otter-screenshot">
-    Region, window, and fullscreen capture plus hardware-accelerated recording.
+    Region capture, annotation, OCR, plus hardware-accelerated recording.
   </Card>
   <Card title="Clipboard manager" icon="clipboard" href="/apps/otter-clip">
     Persistent history with search, pinning, and Super+V popup.

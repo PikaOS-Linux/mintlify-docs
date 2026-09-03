@@ -4,7 +4,7 @@ sidebarTitle: "Power menu"
 description: "Power menu overlay for lock, logout, suspend, reboot, and shutdown."
 ---
 
-`otter-logout` is the power menu: lock, logout, suspend, reboot, shutdown. Bind it to a hotkey or the bar menu. One process when open; it exits after you pick an action or dismiss.
+`otter-logout` is the power menu. Lock, logout, suspend, reboot, shutdown. Bind it to a hotkey or the bar menu. It runs while the menu is open, then exits when you pick an action or dismiss.
 
 ## Usage
 
@@ -12,7 +12,7 @@ description: "Power menu overlay for lock, logout, suspend, reboot, and shutdown
 otter-logout
 ```
 
-Bind to a compositor hotkey. For example `Super+Shift+E`:
+Bind it to a compositor hotkey, for example `Super+Shift+E`:
 
 ```ini
 # Hyprland
@@ -50,7 +50,7 @@ shutdown_icon = "system-shutdown"
 shutdown_exec = "systemctl poweroff"
 ```
 
-Each button's label, XDG icon name, and shell command are configurable. Colors inherit from [theme.conf](/configuration/themes) when omitted.
+You can change each button's label, XDG icon name, and shell command. Colors inherit from [theme.conf](/configuration/themes) when omitted.
 
 ## Keybindings
 

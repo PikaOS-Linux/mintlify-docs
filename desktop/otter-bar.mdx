@@ -4,7 +4,7 @@ sidebarTitle: "Status bar"
 description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other widgets."
 ---
 
-`otter-bar` is the Otter Shell status bar. Anchors to the top or bottom of each output via `zwlr_layer_shell_v1`. Reloads config and theme without a restart.
+`otter-bar` is the Otter Shell status bar. It anchors to the top or bottom of each output through `zwlr_layer_shell_v1`. Config and theme reload without a restart.
 
 ## Features
 
@@ -19,7 +19,8 @@ description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other
 - MPRIS media player with album art
 - System tray (StatusNotifierItem) with context menus
 - Do Not Disturb toggle shared with notifications and OSD
-- Custom button widgets with icon and command support
+- Night Light toggle (`nightlight`) for [otter-nightlight](/desktop/otter-nightlight)
+- Custom button widgets with an icon and a command
 - HiDPI scaling per output
 
 ## Usage
@@ -28,13 +29,15 @@ description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other
 otter-bar
 ```
 
-Add to compositor autostart: see [Session setup](/desktop/session-setup).
+Add it to compositor autostart: see [Session setup](/desktop/session-setup).
 
 The menu button runs `otter-launcher` by default. Change it with `button_menu_command`.
 
 The optional power button runs `otter-logout` by default. Set `button_power_enabled = true`, then add `button_power` to a layout.
 
 Third-party widgets load as `plugin:<id>` slots. Enable them in otter-settings **Plugins**, then drag the chip into the layout. See [Plugins](/desktop/plugins).
+
+`otter-bluetooth-plugin` installs `plugin:bluetooth-applet` and depends on `blueman`. Enable it under **Plugins**, then add `plugin:bluetooth-applet` to a layout. Click the chip for status and device controls. The applet menu can open `blueman-manager`.
 
 ## Configuration
 
@@ -54,7 +57,7 @@ general_padding = 8
 # Comma-separated widget layout (left to right)
 layout_left = workspaces, active_window
 layout_center =
-layout_right = system_tray, mpris, dnd, volume, clock, battery, button_menu
+layout_right = system_tray, mpris, dnd, nightlight, volume, clock, battery, button_menu
 
 # Launcher button
 button_menu_command = otter-launcher
@@ -68,6 +71,10 @@ Widget color fields are optional. Omit them to inherit from [theme.conf](/config
 ### Do Not Disturb
 
 Add `dnd` to any layout section. Click its bell icon to pause or resume notification and OSD popups. Notifications stay queued while DND is on.
+
+### Night Light
+
+Add `nightlight` to any layout section. Left-click enables or disables [otter-nightlight](/desktop/otter-nightlight). Right-click for temperature presets, the schedule window, and a one-hour suspend. The widget does nothing if the daemon is not running.
 
 ### Weather widget
 

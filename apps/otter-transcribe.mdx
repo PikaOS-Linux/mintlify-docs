@@ -4,19 +4,19 @@ sidebarTitle: "Transcription"
 description: "Transcribe microphone audio on-device via PipeWire. Requires the otter-shell-extras metapackage."
 ---
 
-otter-transcribe is Otter Shell's on-device speech-to-text tool. It runs as a background daemon, records your microphone through PipeWire, and transcribes with a locally embedded Parakeet model. No network or cloud service involved.
+`otter-transcribe` turns microphone audio into text on your machine. It runs as a daemon, records through PipeWire, and transcribes with a local Parakeet GGUF. No network involved.
 
 <Note>
-  `otter-transcribe` is part of **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.
+  `otter-transcribe` ships in **`otter-shell-extras`**, not the base `otter-shell` metapackage. Extras also pulls `otter-transcribe-model`, the GGUF under `/usr/share/otter-shell/models/transcribe`. Install with `pikman install otter-shell-extras`.
 </Note>
 
-## Starting the Daemon
+## Starting the daemon
 
 ```bash
 otter-transcribe    # start the transcription daemon
 ```
 
-To use an alternate GGUF model file instead of the default embedded model, pass the `--model` flag:
+To use a different GGUF instead of the packaged model, pass `--model`:
 
 ```bash
 otter-transcribe --model /path/to/model.gguf
@@ -26,9 +26,9 @@ otter-transcribe --model /path/to/model.gguf
 The daemon hot-reloads config changes via inotify. You do not need to restart it after editing `otter-transcribe.conf`. Theme colors and transcription settings apply immediately. After a model unload, the daemon restarts itself once recording is idle.
 </Note>
 
-## Controlling with Hotkeys
+## Controlling with hotkeys
 
-Use `otter-transcribectl` to send commands to the running daemon:
+Send commands to the running daemon with `otter-transcribectl`:
 
 ```bash
 otter-transcribectl toggle  # start or stop recording
@@ -38,12 +38,12 @@ otter-transcribectl status  # check daemon status
 ```
 
 <Tip>
-Bind `otter-transcribectl toggle` in your compositor config. Wayland clients cannot grab global hotkeys directly, so compositor-level binding is required for reliable capture from any focused window.
+Bind `otter-transcribectl toggle` in your compositor config. Wayland clients cannot grab global hotkeys, so compositor-level binding is what you need for capture from any focused window.
 </Tip>
 
-## Output Modes
+## Output modes
 
-otter-transcribe supports three output modes that control where transcribed text goes after each utterance:
+Where transcribed text goes after each utterance:
 
 | Mode | Behaviour |
 |---|---|
@@ -52,12 +52,12 @@ otter-transcribe supports three output modes that control where transcribed text
 | `stdout` | Prints the transcript from the daemon process |
 
 <Note>
-Use `clipboard` or `stdout` if virtual keyboard injection is blocked by your compositor or application. Chromium and Electron apps use physical evdev keycodes, which `focused` mode handles for better compatibility.
+Use `clipboard` or `stdout` if virtual keyboard injection is blocked by your compositor or application. Chromium and Electron apps use physical evdev keycodes, which `focused` mode handles.
 </Note>
 
-## Recording Indicator
+## Recording indicator
 
-While recording is active, a bottom-center layer-shell indicator shows live PCM level bars so you know when the microphone is open. Set `show_indicator = false` in the config file to hide it.
+While you record, a bottom-center layer-shell indicator shows live PCM level bars so you can see the microphone is open. Set `show_indicator = false` in the config file to hide it.
 
 ## Configuration
 

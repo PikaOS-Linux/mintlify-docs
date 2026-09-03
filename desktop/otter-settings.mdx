@@ -4,7 +4,7 @@ sidebarTitle: "Settings app"
 description: "Graphical editor for Otter Shell app configs, themes, and bar layout."
 ---
 
-**`otter-settings`** is the default way to configure Otter Shell. It gives installed apps their own tabs, plus a theme browser and drag-and-drop bar layout. If you prefer `$EDITOR`, both routes change the same files.
+`otter-settings` is the GUI for Otter Shell config. Installed apps get their own tabs. You get a theme browser and drag-and-drop bar layout. If you prefer `$EDITOR`, both routes write the same files.
 
 ## Usage
 
@@ -20,15 +20,15 @@ Settings only shows app tabs whose matching Otter executable is installed. **The
   Writes to `~/.config/otter-shell/*.conf`. Running apps reload via inotify after **Apply**.
 </Note>
 
-## Why use otter-settings
+## What otter-settings handles
 
-| Benefit | Detail |
-|---------|--------|
-| No syntax | Toggles, dropdowns, color swatches, and steppers instead of key-value files |
+| Area | Detail |
+|------|--------|
+| Controls | Toggles, dropdowns, color swatches, and steppers instead of key-value files |
 | Search | Find fields by key, label, value, or section |
 | Bar layout | Drag widget chips instead of editing `layout_left` strings |
 | Themes | Preview all 12 presets before applying |
-| Safe saves | Keeps comments, field order, and custom fields |
+| File writes | Keeps comments, field order, and custom fields |
 
 ## Config files managed
 
@@ -37,6 +37,8 @@ Settings only shows app tabs whose matching Otter executable is installed. **The
 | Bar | `otter-bar.conf` |
 | Launcher | `otter-launcher.conf` |
 | Plugins | `plugins.conf` |
+| Dock | `otter-dock.conf` |
+| Taskbar | `otter-taskbar.conf` |
 | Overview | `otter-overview.conf` |
 | Notifications | `notifications.conf` |
 | Wallpaper | `otter-wallpaper.conf` |
@@ -46,16 +48,18 @@ Settings only shows app tabs whose matching Otter executable is installed. **The
 | Polkit | `otter-polkit.conf` |
 | Lock | `otter-lock.conf` |
 | Idle | `otter-idle.conf` |
+| Night Light | `otter-nightlight.conf` |
 | Terminal | `otter-term.conf` |
 | Theme Gen | `otter-theme-gen.conf` |
 | Recorder | `otter-rec.conf` |
 | Voice | `otter-vox.conf` |
 | Theme | `theme.conf` |
 | Monitor | `otter-monitor.conf` |
+| Files | `otter-files.conf` |
 | Assist | `otter-assist.conf` |
 | Clicker | `otter-clicker.conf` |
 
-Also includes drag-and-drop bar layout, custom bar buttons, and clipboard paste (Ctrl+V) in text fields via Wayland data device.
+Bar layout is drag-and-drop. You can add custom bar buttons. Text fields accept clipboard paste (Ctrl+V) through the Wayland data device.
 
 ## Wallpaper picker
 
@@ -124,3 +128,15 @@ The **Plugins** tab lists installed `.so` plugins and writes `plugins.conf` enab
 ## Overview tab
 
 The **Overview** tab edits `otter-overview.conf` for [otter-overview](/desktop/otter-overview): card axis and scale, empty-workspace policy, thumbnail capture, and optional colors.
+
+## Dock and Taskbar tabs
+
+**Dock** edits `otter-dock.conf`. **Taskbar** edits `otter-taskbar.conf`. Both are optional session components. See [otter-dock](/desktop/otter-dock) and [otter-taskbar](/desktop/otter-taskbar).
+
+## Night Light tab
+
+The **Night Light** tab edits `otter-nightlight.conf`. Autostart the [otter-nightlight](/desktop/otter-nightlight) daemon so the bar widget and Settings can talk to it.
+
+## Files tab
+
+The **Files** tab edits `otter-files.conf` when `otter-files` is on `PATH`. View mode, sort, thumbnails, and confirm dialogs. See [otter-files](/apps/otter-files).

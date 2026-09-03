@@ -4,7 +4,7 @@ sidebarTitle: "Bar widgets"
 description: "Widget structs, FieldRegistry, and bar specs in otter-ui for otter-bar-style daemons."
 ---
 
-`otter-bar` and similar daemons use **widget structs**, not Surface Description trees. Each widget is a Zig struct with `draw`, `setArea`, `getWidth`, and optional input hooks. Layout code lines them up in a row and calls those methods directly.
+`otter-bar` and similar daemons use **widget structs**, not Surface Description trees. Each widget is a Zig struct with `draw`, `setArea`, `getWidth`, and optional input hooks. Layout code lines them up in a row and calls those methods.
 
 Stick to this path for config-driven status bar rows. New windows and forms should use [Surface Description](/developers/libraries/otter-ui/surface-description).
 

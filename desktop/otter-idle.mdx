@@ -67,12 +67,12 @@ DPMS backend selection:
 
 Three layers can block idle actions:
 
-1. **Wayland-native** (`zwp_idle_inhibit_manager_v1`): handled by compositor
-2. **D-Bus** (`org.freedesktop.ScreenSaver`): tracked by otter-idle (video players, etc.)
+1. **Wayland-native** (`zwp_idle_inhibit_manager_v1`): the compositor handles this
+2. **D-Bus** (`org.freedesktop.ScreenSaver`): otter-idle tracks this (video players, etc.)
 3. **systemd** (`loginctl inhibit`): checked via logind ListInhibitors
 
 Set `ignore_dbus_inhibit = true` or `ignore_systemd_inhibit = true` to skip those checks.
 
 ## Logind integration
 
-Responds to logind `Lock`, `Unlock`, and `PrepareForSleep` signals. Default `lock_cmd` keeps [otter-lock](/desktop/otter-lock) available when a lock is requested.
+`otter-idle` responds to logind `Lock`, `Unlock`, and `PrepareForSleep` signals. Default `lock_cmd` keeps [otter-lock](/desktop/otter-lock) available when a lock is requested.

@@ -4,11 +4,11 @@ sidebarTitle: "Desktop Search"
 description: "Fast file and content search for your desktop. Fuzzy path search and live grep over documents, downloads, and home directories."
 ---
 
-`otter-search` is the desktop search daemon for Otter Shell. It indexes personal files and answers fuzzy path queries plus content (grep-style) search. Indexing and scoring run in pure Zig (`otter_tools_search` in otter-tools-core). No Rust or vendored fuzzy engines.
+`otter-search` indexes personal files and answers fuzzy path queries plus grep-style content search. Indexing and scoring run in pure Zig (`otter_tools_search` in otter-tools-core). It does not use Rust or a vendored fuzzy engine.
 
 A companion CLI, `otter-searchctl`, queries the indexes, checks status, lists roots, or triggers a reindex. **The daemon must be running** for `otter-searchctl` to work.
 
-The daemon watches the filesystem and reindexes on changes (debounced and throttled so bursts of writes do not thrash the index).
+The daemon watches the filesystem and reindexes on changes. Writes are debounced and throttled so a burst of activity does not thrash the index.
 
 ## Binaries
 

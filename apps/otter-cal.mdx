@@ -4,7 +4,7 @@ sidebarTitle: "Calendar"
 description: "Print a month grid and agenda list to stdout. Works with bar clock popovers and plain-text agenda files."
 ---
 
-otter-cal powers the calendar popover on Otter Shell's status bar clock. It prints a month grid and a bounded agenda list to stdout. Left-click the clock widget and that output shows up as a popover. Today's date uses your theme accent color. Pipe it into any bar or launcher that displays text, or run it in a terminal.
+`otter-cal` prints a month grid and a bounded agenda list to stdout. That is what the status bar clock shows when you left-click it. Today's date uses your theme accent color. You can also pipe the output into any bar or launcher that displays text, or run it in a terminal.
 
 ## Usage
 
@@ -15,7 +15,7 @@ otter-cal --today 2026-06-05 --agenda ~/.config/otter-shell/agenda  # with agend
 otter-cal --next 1                                     # next month
 ```
 
-## Agenda File Format
+## Agenda file format
 
 Each line has a date in `YYYY-MM-DD` format, a space, and the event description. One event per line:
 
@@ -26,7 +26,7 @@ Each line has a date in `YYYY-MM-DD` format, a space, and the event description.
 
 Pass the file path with `--agenda`, or set `agenda_path` in the config file.
 
-## Bar Integration
+## Bar integration
 
 The Otter Shell status bar clock runs a command on left-click. The default is `otter-cal`, which opens the calendar popover inline. Override it with `clock_calendar_command` in your bar configuration:
 
@@ -38,7 +38,7 @@ Replace the value with any command whose stdout the bar should display. A wrappe
 
 ## Configuration
 
-otter-cal reads `~/.config/otter-shell/otter-cal.conf`:
+`otter-cal` reads `~/.config/otter-shell/otter-cal.conf`:
 
 ```conf
 agenda_path = ""

@@ -4,11 +4,11 @@ sidebarTitle: "Color Picker"
 description: "Pick screen colors in hex, RGB, and OKLCH. Click to copy, or pass coordinates for scripted sampling."
 ---
 
-otter-pick is Otter Shell's screen color picker. It opens a frozen overlay with a magnifying loupe. Click a pixel to copy its hex, RGB, and OKLCH values. Pass `--x` and `--y` for scripted sampling.
+`otter-pick` samples a pixel from the screen. It opens a frozen overlay with a magnifying loupe. Click to copy hex, RGB, and OKLCH. Pass `--x` and `--y` when you want scripted sampling instead.
 
 ## Usage
 
-Run `otter-pick` without arguments for the interactive overlay, or pass `--x` and `--y` to sample a screen coordinate.
+Run `otter-pick` with no arguments for the interactive overlay. Pass `--x` and `--y` to sample a screen coordinate.
 
 ```bash
 otter-pick                       # frozen overlay, loupe: click to copy hex
@@ -21,7 +21,7 @@ otter-pick --hex '#336699'       # offline conversion / test
 
 ## Output
 
-otter-pick prints the sampled color in three formats, one per line.
+`otter-pick` prints the sampled color in three formats, one per line.
 
 ```
 #336699
@@ -31,7 +31,7 @@ oklch(44.9% 0.083 249.1)
 
 ## Configuration
 
-otter-pick reads `~/.config/otter-shell/otter-pick.conf`.
+`otter-pick` reads `~/.config/otter-shell/otter-pick.conf`.
 
 ```conf
 copy = true

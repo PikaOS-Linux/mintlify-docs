@@ -39,7 +39,7 @@ When Do Not Disturb is on, popup surfaces stay hidden. Hardware commands still c
 
 One binary, two roles:
 
-- **Daemon** (no args): Connects to Wayland, opens a UNIX datagram socket, renders overlays on demand. Surfaces are created lazily and destroyed after timeout so idle RAM stays near zero.
+- **Daemon** (no args): Connects to Wayland, opens a UNIX datagram socket, and renders overlays. Surfaces appear when needed and go away after timeout, so idle RAM stays near zero.
 - **Client** (with args): Sends a command to the daemon and exits.
 
 Socket path: `$XDG_RUNTIME_DIR/otter-shell/osd-{WAYLAND_DISPLAY}.sock`

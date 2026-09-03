@@ -1,0 +1,66 @@
+---
+title: "otter-switcher"
+sidebarTitle: "Alt-Tab switcher"
+description: "Current-workspace Alt-Tab strip. Ships in the otter-overview package."
+---
+
+`otter-switcher` is the Alt-Tab window strip for the current workspace. Same package as [otter-overview](/desktop/otter-overview). Separate binary, separate runtime socket. Bind it to Alt-Tab. Do not autostart it.
+
+```bash
+otter-switcher
+```
+
+First launch opens the strip. Each later invocation while it is open advances the selection. Release Alt to focus the selected window. Escape cancels. Enter confirms.
+
+## Suggested binds
+
+**Sway** (`~/.config/sway/config`):
+
+```
+bindsym Mod1+Tab exec otter-switcher
+```
+
+**Hyprland** (`~/.config/hypr/hyprland.conf`):
+
+```ini
+bind = ALT, Tab, exec, otter-switcher
+```
+
+**Niri** (`~/.config/niri/config.kdl`):
+
+```kdl
+Alt+Tab { spawn "otter-switcher"; }
+```
+
+## Input
+
+| Input | Action |
+|-------|--------|
+| Repeated `otter-switcher` | Advance selection |
+| Release Alt | Focus selected window |
+| Enter | Confirm / focus |
+| Escape | Cancel |
+| Mouse hover | Select tile |
+| Left click | Activate |
+| Wheel | Cycle |
+| Click outside | Cancel |
+
+## What it shows
+
+Only windows on the current workspace. On Sway it reads the workspace and tree through `swaymsg`. Other compositors reuse the same window sources as [otter-overview](/desktop/otter-overview) (Hyprland IPC, niri IPC, mango/dwl, or ext-workspace plus foreign-toplevel).
+
+Thumbnails follow overview capture settings when available. Missing capture falls back to a per-app tint.
+
+## Configuration
+
+Shares `~/.config/otter-shell/otter-overview.conf` with the overview. Colors and capture keys apply. Edit in otter-settings under **Overview**, or by hand. See [otter-overview](/desktop/otter-overview).
+
+## Package
+
+Installed by `otter-overview` (`usr/bin/otter-switcher`). Comes with `pikman install otter-shell`.
+
+## Dependencies
+
+- Wayland compositor with `zwlr_layer_shell_v1`
+- Sway: `swaymsg` for the current-workspace list
+- Other compositors: same IPC / foreign-toplevel stack as otter-overview

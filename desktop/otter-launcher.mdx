@@ -4,7 +4,7 @@ sidebarTitle: "Launcher"
 description: "App launcher with fuzzy search, IME, and calculator, emoji, clipboard, and desktop file search modes."
 ---
 
-`otter-launcher` is a centered search overlay. Like fuzzel, rofi, or wofi, on the shared Otter UI stack.
+`otter-launcher` is a centered search overlay. Same job as fuzzel, rofi, or wofi, on the shared Otter UI stack.
 
 ## Usage
 
@@ -12,14 +12,14 @@ description: "App launcher with fuzzy search, IME, and calculator, emoji, clipbo
 otter-launcher
 ```
 
-Bind to a compositor hotkey, for example `Super+D`:
+Bind it to a compositor hotkey, for example `Super+D`:
 
 ```ini
 # Hyprland
 bind = $mainMod, D, exec, otter-launcher
 ```
 
-One shot per run: open, search, launch (or Escape), exit. A socket prevents duplicate overlays. Launch again to close the open one.
+One shot per run: open, search, launch (or Escape), then exit. A socket prevents duplicate overlays. Launch again to close the open one.
 
 ## Launcher extensions
 
@@ -33,7 +33,7 @@ Extensions appear above app matches:
 | `file invoice` or `f invoice` | Fuzzy path search via [otter-search](/apps/otter-search) |
 | `grep TODO` or `g TODO` | Content (grep) search via [otter-search](/apps/otter-search) |
 
-File and grep modes talk to the `otter-search` daemon over its runtime socket. Start the daemon first (session autostart is enough). Queries are debounced so typing does not flood the daemon. Selecting a path opens it with `xdg-open` (or a matching handler).
+File and grep modes talk to the `otter-search` daemon over its runtime socket. Start that daemon first. Session autostart is enough. Queries are debounced so typing does not flood the daemon. Selecting a path opens it with `xdg-open` (or a matching handler).
 
 Launcher plugins can add extra result providers. Enable them in otter-settings **Plugins**. See [Plugins](/desktop/plugins).
 

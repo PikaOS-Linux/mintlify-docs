@@ -4,7 +4,7 @@ sidebarTitle: "Product Shot"
 description: "Frame window screenshots with gradients, shadows, corner radius, and custom chrome. Export PNG to file or clipboard."
 ---
 
-otter-shot frames window screenshots with a gradient background, drop shadow, rounded corners, padding, and optional synthetic window chrome. Capture a live window, a hand-drawn region, or your entire desktop. Export as PNG through the portal save picker or to the clipboard.
+`otter-shot` frames a window screenshot with a gradient background, drop shadow, rounded corners, and padding. You can add synthetic window chrome if you want. Capture a live window, a hand-drawn region, or the full desktop, then export PNG through the portal save picker or to the clipboard.
 
 ## Launching
 
@@ -14,15 +14,13 @@ Run `otter-shot` from the app launcher or a terminal. The composer window opens 
 otter-shot
 ```
 
-otter-shot ships a `.desktop` file so it appears in the app launcher. Bind it to a compositor shortcut if you use it often.
+It ships a `.desktop` file, so it shows up in the app launcher. Bind it to a compositor shortcut if you use it often.
 
 <Note>
   otter-shot appears in your application launcher through its installed `.desktop` entry. No manual PATH setup needed.
 </Note>
 
-## Capture Sources
-
-Four ways to bring content into the composer.
+## Capture sources
 
 <CardGroup cols={2}>
   <Card title="Focused Window" icon="window-maximize">
@@ -43,7 +41,7 @@ Four ways to bring content into the composer.
   If your compositor exposes `ext_foreign_toplevel_list_v1` metadata but not the full capture protocol, the window list still appears in the inspector. Those rows are marked metadata-only instead of failing silently when you try to capture them.
 </Note>
 
-## Composer Controls
+## Composer controls
 
 After capture, the right-hand inspector panel controls the framing. Scroll the inspector if the controls exceed the visible height.
 
@@ -53,6 +51,12 @@ After capture, the right-hand inspector panel controls the framing. Scroll the i
 - **Options** toggles synthetic window chrome to add a mock title bar or control buttons.
 - **Size** sets the output canvas dimensions. Controls update the preview in real time.
 - **Export** saves to a file or copies to clipboard (see [Exporting](#exporting) below).
+
+## Annotation and OCR
+
+After capture, click **Annotate** above the preview. That opens the same vector tools as [otter-screenshot](/apps/otter-screenshot) `--annotate`: arrows, spotlight, lines, strokes, shapes, markers, redaction, text, colors, fill, and undo/redo. Hover a toolbar icon for its name and shortcut. **Done** returns you to product-shot composition. Export flattens the annotations before scaling.
+
+Whole-image OCR copies recognized text to the clipboard. It uses the system `tesseract` CLI. Packaged installs depend on `tesseract-ocr`. If `tesseract` is missing, the GUI disables OCR.
 
 ## Exporting
 
@@ -67,7 +71,7 @@ Two export paths once the composition looks right.
   </Step>
 </Steps>
 
-## Compositor Requirements
+## Compositor requirements
 
 <Warning>
   otter-shot requires the `ext_image_copy_capture_v1` protocol for all capture operations. Screen and dragged-selection capture also require output capture source support from the compositor. Window capture requires both `ext_image_copy_capture_v1` and `ext_foreign_toplevel_list_v1`. If your compositor does not expose these protocols, the affected capture sources will be unavailable.

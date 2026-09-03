@@ -109,6 +109,8 @@ Headers and Zig mirrors live in `otter-bar`, `otter-launcher`, and `otter-shell-
 | `plugin:idle-inhibit` | bar | logind idle inhibit toggle on click |
 | `plugin:snippet-provider` | launcher | Results provider plus custom SD rows |
 
+`otter-shell-plugins` Depends on `otter-bluetooth-plugin`. That separate package installs `plugin:bluetooth-applet` under `/usr/lib/otter-shell/plugins/bluetooth-applet/` (`provides_bar_widget`). Advanced device management uses Blueman. Source repo is [bluetooth-applet-plugin](https://git.pika-os.com/otter-shell/bluetooth-applet-plugin); the Debian binary is `otter-bluetooth-plugin`.
+
 ### hello-label
 
 Smallest SD chip that gets a real click from the host:
@@ -154,6 +156,7 @@ Installed `.so` plugins are fully trusted and share the host process. Ship examp
 ## Related repos
 
 - [otter-shell-plugins](https://git.pika-os.com/otter-shell/otter-shell-plugins): examples package source
+- [bluetooth-applet-plugin](https://git.pika-os.com/otter-shell/bluetooth-applet-plugin): source for Debian `otter-bluetooth-plugin` (`plugin:bluetooth-applet`)
 - [otter-plugin-factory](https://git.pika-os.com/otter-shell/otter-plugin-factory): `opf` CLI and agent skills
 - [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith): Debian packaging
 - [otter-bar](https://git.pika-os.com/otter-shell/otter-bar) / [otter-launcher](https://git.pika-os.com/otter-shell/otter-launcher): host runtimes

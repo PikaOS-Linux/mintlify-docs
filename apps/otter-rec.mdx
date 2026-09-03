@@ -4,9 +4,9 @@ sidebarTitle: "Screen Recorder"
 description: "Record your Wayland screen with hardware acceleration. Toggle with a hotkey, capture regions or windows, encode with NVENC, QSV, or VAAPI."
 ---
 
-otter-rec is Otter Shell's screen recorder. Run it once to start, run it again to stop and save. At startup it probes your GPU and picks the fastest hardware encoder: NVENC on NVIDIA, Quick Sync on Intel, VAAPI on AMD. It falls back to software when needed. Default output is `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`. Override with `--output` or the config file.
+`otter-rec` records your Wayland screen. Run it once to start, run it again to stop and save. At startup it probes your GPU and picks the fastest hardware encoder: NVENC on NVIDIA, Quick Sync on Intel, VAAPI on AMD. It falls back to software when it has to. Default output is `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`. Override with `--output` or the config file.
 
-## Basic Usage
+## Basic usage
 
 `otter-rec` is a toggle. One invocation starts recording, the next stops it.
 
@@ -34,9 +34,9 @@ Recordings include the default PipeWire capture source when it is available. `ot
 
 Portal recording uses separate PipeWire connections for video and audio because the ScreenCast portal only supplies video nodes. Audio currently follows your default capture source. There is no device or system-output selector. If audio cannot start, recording continues with video only.
 
-## Hardware Encoding
+## Hardware encoding
 
-otter-rec probes your GPU at startup and selects the best available hardware encoder.
+`otter-rec` probes your GPU at startup and selects the best available hardware encoder.
 
 | GPU vendor | Primary encoder family |
 |------------|----------------------|
@@ -52,7 +52,7 @@ Within whichever family is selected, **H.264 is preferred by default**. Pass `--
 
 ## Configuration
 
-otter-rec reads `~/.config/otter-shell/otter-rec.conf` on startup.
+`otter-rec` reads `~/.config/otter-shell/otter-rec.conf` on startup.
 
 ```conf
 output = ""
@@ -74,13 +74,13 @@ bitrate = 12000000
 - `seconds`: fixed duration in seconds; `0` records until stopped
 - `bitrate`: target bitrate in bits per second (default `12000000`, 12 Mbps)
 
-## Hotkey Setup
+## Hotkey setup
 
 <Tip>
   Bind `otter-rec` to a compositor keyboard shortcut for a global recording toggle. Press once to start, press again to stop. No UI required. Most Wayland compositors let you assign any shell command to a key combination in their shortcuts settings.
 </Tip>
 
-## Portal Mode
+## Portal mode
 
 Pass `--portal` to force an xdg-desktop-portal ScreenCast session before recording. The portal presents its own source picker (screen, window, or region, depending on your compositor). otter-rec records through its own in-process capture and encoder path once the session is established.
 

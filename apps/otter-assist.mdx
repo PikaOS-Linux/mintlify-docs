@@ -4,10 +4,10 @@ sidebarTitle: "Assist backend"
 description: "Local text-generation daemon for Otter Shell. Ships in otter-shell-extras with knowledge, web, weather, and desktop search tools."
 ---
 
-`otter-assist` runs the local model behind Otter Assistant. It listens on a Unix socket tied to your Wayland display, does inference on-device, and can call out for knowledge lookup, web search, weather, or desktop search. The chat window is [otter-assistant](/apps/otter-assistant).
+`otter-assist` runs the local model behind Otter Assistant. It listens on a Unix socket tied to your Wayland display and does inference on-device. It can also look up packaged knowledge, search the web, fetch weather, or query desktop search. The chat window is [otter-assistant](/apps/otter-assistant).
 
 <Note>
-  `otter-assist`, `otter-assistant`, and `otter-assist-data` ship in **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.
+  `otter-assist`, `otter-assistant`, `otter-assist-data`, and `otter-assist-model` ship in **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.
 </Note>
 
 ## Packages
@@ -15,10 +15,11 @@ description: "Local text-generation daemon for Otter Shell. Ships in otter-shell
 | Package | Role |
 |---------|------|
 | `otter-assist` | Daemon (`otter-assist`) and control CLI (`otter-assistctl`) |
-| `otter-assist-data` | GGUF model plus packaged knowledge indexes under `/usr/lib/otter-assist/` |
+| `otter-assist-data` | Packaged knowledge indexes under `/usr/lib/otter-assist/` |
+| `otter-assist-model` | GGUF weights under `/usr/share/otter-shell/models/assist` |
 | `otter-assistant` | XDG toplevel chat client |
 
-Packaged builds load the model from `/usr/lib/otter-assist/models/` (from `otter-assist-data`). Indexes land under `/usr/lib/otter-assist/indexes/`.
+Packaged builds load the model from `/usr/share/otter-shell/models/assist` (`otter-assist-model`). Indexes land under `/usr/lib/otter-assist/indexes/` (`otter-assist-data`).
 
 ## Start the daemon
 
