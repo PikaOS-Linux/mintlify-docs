@@ -1,0 +1,32 @@
+---
+title: "otter-welcome"
+sidebarTitle: "Welcome"
+description: "PikaOS welcome app for updates, drivers, optional software, tips, and desktop-shell selection."
+---
+
+`otter-welcome` provides PikaOS setup actions after installation. It is a separate package, not part of the `otter-shell` metapackage.
+
+## Usage
+
+```bash
+otter-welcome
+otter-welcome --list-tiles
+otter-welcome --list-tips
+otter-welcome --driver-status
+```
+
+The packaged login entry runs `otter-welcome --at-login`. That mode exits on live media, while First Setup tasks remain, or when the installed manifest cannot be queried. It opens after [First Setup](/apps/otter-first-setup) completes.
+
+## Updates and software
+
+Updates, driver selection, and optional package installs use the native [Packages](/apps/otter-pkg) transaction panel. Review changes before committing them. The panel shows progress, cancellation, and package questions. Navigation and closing are disabled while a transaction is active.
+
+Pages support scrolling, <kbd>Tab</kbd>/<kbd>Shift+Tab</kbd>, <kbd>Enter</kbd>/<kbd>Space</kbd>, and <kbd>Page Up</kbd>/<kbd>Page Down</kbd>.
+
+## Switch desktop shell
+
+On Hyprland, Niri, and Mango sessions, **Switch desktop shell** opens a native profile picker. Welcome first reviews and installs the selected concrete profile. **Use selected shell** then applies it to your account with `pika-shell-apply`. Log out and back in to start the selected shell.
+
+<Warning>Package changes are system-wide. Applying a shell profile replaces existing shell startup and binding fragments only after confirmation. Review the changes before proceeding.</Warning>
+
+Shell switching needs `pika-shell-profile-common` version 0.1.12 or later and the selected Otter, Noctalia, or Dank profile package. These are PikaOS profile packages; Otter Shell itself does not ship a compositor. Shell-specific documentation and tips appear only in the supported sessions.

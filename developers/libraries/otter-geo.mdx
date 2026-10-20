@@ -1,41 +1,32 @@
 ---
 title: "otter-geo"
 sidebarTitle: "otter-geo"
-description: "Integer geometry types for Otter Shell layout: Point, Rect, Padding, Transform, Align."
+description: "Integer geometry, fixed-point transforms, and colors for otr applications."
 ---
 
-`otter-geo` is 2D geometry for layout and hit testing. Integer math on hot paths, no render deps.
+`otter-geo` provides dependency-free layout and pixel value types. Import `otter_geo.rect`, `otter_geo.transform`, or `otter_geo.color`.
 
-`otter-ui`, `otter-render`, `otter-wayland`, and `otter-config-types` all pull types from here.
+Positions are signed `i32`; geometry extents are `u16`. Colors belong to this package and do not require the renderer.
 
-## Quick example
+```otr
+import otter_geo.rect as geo
 
-```zig
-const geo = @import("otter_geo");
-
-const rect = geo.Rect{ .x = 0, .y = 0, .width = 100, .height = 40 };
-const inner = geo.Point{ .x = 20, .y = 10 };
-
-if (rect.containsPoint(inner)) {
-    const shrunk = rect.removePadding(geo.Padding.uniform(8)) orelse return;
-    _ = shrunk;
+pub fn main() void {
+    bounds := geo.Rect{ x: 0, y: 0, width: 100, height: 40 }
+    point := geo.Point{ x: 20, y: 10 }
+    if bounds.contains_point(point) {
+        inner := bounds.remove_padding(geo.Padding.uniform(8)) orelse return
+        _ = inner
+    }
 }
 ```
 
-## Pages in this library
+`Transform` stores a 2×2 matrix in signed 16.16 fixed point. Use `Color.parse` for configuration colors and `Color.from_rgba` for packed RGBA literals.
 
-<CardGroup cols={2}>
-  <Card title="Types and operations" icon="ruler-combined" href="/developers/libraries/otter-geo/types-and-operations">
-    `Point`, `Rect`, `Circle`, `Padding`, `Align`, and `Transform`.
-  </Card>
-</CardGroup>
+## Reference pages
 
-## Design rules
+- [Types and operations](/developers/libraries/otter-geo/types-and-operations)
 
-- Coordinates are `u16` or `u31` depending on type. No floats in layout.
-- `Rect` helpers cover intersection, union, inset, and centering.
-- `Transform` uses 16.16 fixed-point rotation for integer-safe transforms.
+## Source reference
 
-## Dependencies
-
-None.
+`otr/otr.toml`, `otr/` in the component repository.

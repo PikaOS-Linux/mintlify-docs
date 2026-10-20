@@ -1,0 +1,43 @@
+---
+title: "otter-cue"
+sidebarTitle: "otter-cue"
+description: "Workspace-only otr interaction-sound synthesis and optional Lua/audio integration."
+---
+
+`otter-cue` is a workspace interaction-sound library, not a packaged end-user app. It supplies synthesized cues and binding policy for hosts that opt in.
+
+Import leaves such as `otter_cue.sound`, `recipe`, `engine`, `bind`, and `playback`. There is no installed global engine API.
+
+## Synthesis and binding
+
+`engine.Engine` is caller-owned. Use `init`, `set_enabled`, `set_volume`, `play`, `play_named`, `busy`, `pull`, and `render`. Play methods return false when a cue is dropped, including mute, zero volume, unknown name, or exhausted voices.
+
+The engine has eight voices. `bind.Bind.init()` keeps interaction/hover state and dispatches to a borrowed engine. `choose` selects a sound without owning playback.
+
+`recipe` contains cue synthesis recipes. Lower-level DSP, filter, noise, shimmer, compressor, and voice modules support deterministic rendering.
+
+## Playback
+
+`playback.Session` owns synchronized engine/stream state. It opens the stream and worker lazily on first play. Its idle mixer sleeps until work arrives rather than polling in a millisecond loop.
+
+`play`, `play_named`, and `drain` take explicit I/O where required. The `enable_pipewire` build option defaults true; disabling it uses the no-stream path. Pure rendering does not require a live audio server.
+
+## Lua
+
+`otter_cue_lua` registers `otter.cue`:
+
+| Functions                                                  | Capability |
+| ---------------------------------------------------------- | ---------- |
+| `names`, `is_name`, `duration`, `render`                   | None       |
+| `play`, `bind`                                             | `audio`    |
+| `set_enabled`, `set_volume`, `enabled`, `volume`, `status` | None       |
+
+`render(name, volume?)` returns frame count and peak, not a PCM buffer. `status()` returns `idle`, `live`, or `failed`.
+
+Plugins share one playback session and process-wide hover throttle. Hover cues within 150 ms are suppressed. Plugin mute/volume settings remain per instance and are released on unload.
+
+Verify synthesis with offline fixtures. Live playback tests must use an isolated audio server rather than the developer's session.
+
+## Source reference
+
+`otr/engine.otr`, `otr/bind.otr`, `otr/playback.otr`, `otr/lua/cue.otr`, `otr/API.md` in the component repository.

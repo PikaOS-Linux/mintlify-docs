@@ -1,47 +1,37 @@
 ---
 title: "Config and runtime paths"
-sidebarTitle: "Paths"
-description: "XDG config, data, cache, runtime paths, and runtime_state in otter-utils."
+sidebarTitle: "Config and runtime paths"
+description: "Build XDG-aware Otter Shell paths and read shared session state."
 ---
 
-`config_paths` is where Otter Shell XDG locations live. Do not hardcode `~/.config/otter-shell/` in app code.
+## XDG paths
 
-## Config and data
+Import `otter_utils.xdg_paths`. Builders take `env: std.Env` and an output `&mut Buf`; they return `?str` when a base is missing or the result does not fit.
 
-```zig
-const paths = @import("otter_utils").config_paths;
+| Function                                 | Location                                                              |
+| ---------------------------------------- | --------------------------------------------------------------------- |
+| `otter_config_path` / `otter_config_dir` | `$XDG_CONFIG_HOME/otter-shell/`, else `$HOME/.config/otter-shell/`    |
+| `otter_data_path` / `otter_data_dir`     | `$XDG_DATA_HOME/otter-shell/`, else `$HOME/.local/share/otter-shell/` |
+| `otter_cache_path` / `otter_cache_dir`   | `$XDG_CACHE_HOME/otter-shell/`, else `$HOME/.cache/otter-shell/`      |
 
-var buf: [std.fs.max_path_bytes]u8 = undefined;
+Empty or relative XDG base variables are ignored. Runtime paths require an absolute `XDG_RUNTIME_DIR`; there is no HOME fallback for that variable.
 
-// ~/.config/otter-shell/myapp.conf
-const conf = paths.otterConfigPath(&buf, "myapp.conf") orelse return error.NoHome;
+`ensure_dir_path` creates missing parents. `make_private_dir` and `ensure_otter_cache_dir` provide private-directory helpers.
 
-// ~/.config/otter-shell/ (trailing slash)
-const dir = paths.otterConfigDir(&buf) orelse return error.NoHome;
+## Session state
 
-// ~/.local/share/otter-shell/...
-const data = paths.otterDataPath(&buf, "clip-history.json") orelse return error.NoHome;
-```
+Import `otter_utils.runtime_state` for Do Not Disturb and wallpaper state:
 
-Helpers exist for cache dirs, paths from an explicit home directory (tests), and ensuring cache directories exist.
+- `dnd_state_path`, `is_dnd_enabled`, `set_dnd_enabled`, `toggle_dnd`.
+- `wallpaper_state_path`, `open_wallpaper_state_file`, `wallpaper_state_watch_path`.
+- `WallpaperStateIterator`, `first_wallpaper_path`, `wallpaper_path_for_output`.
 
-## Runtime directory
+DND changes use a lock and atomic replacement. Wallpaper state uses `output_name=absolute_path` lines. The reader retains support for the legacy `/tmp/<uid>/otter-wallpaper-state` file.
 
-State under `$XDG_RUNTIME_DIR/otter-shell/`:
+Only the wallpaper daemon publishes wallpaper state. Consumers read it; they must not write their own competing copy.
 
-```zig
-const runtime = paths.otterRuntimePath(&buf, "wallpaper-state") orelse return error.NoRuntime;
-try paths.ensureOtterRuntimeDir(allocator);
-```
+Set `XDG_CONFIG_HOME` and `XDG_RUNTIME_DIR` to temporary directories in tests.
 
-`runtime_state` reads and writes small state files here. Wallpaper state keeps lock screens and generated themes in sync. Do Not Disturb uses `dnd-state` through `isDndEnabled`, `setDndEnabled`, and `toggleDnd`. Writes are locked and atomic so the bar and CLI can toggle it safely at the same time.
+## Source reference
 
-`runtime_socket` builds bounded socket paths and can restrict socket FD permissions.
-
-## Legacy migration
-
-`legacy_paths` migrates old `/tmp/otter-*` clip and weather cache files into XDG data dirs on first access. Call the `resolve*` helpers rather than opening legacy paths directly.
-
-## Assist helpers
-
-`assist` parses JSON chat requests and formats ChatML prompts. Used by `otter-assist` (packaged in `otter-shell-extras`).
+`otr/xdg_paths.otr`, `otr/runtime_paths.otr`, `otr/runtime_state.otr` in the component repository.

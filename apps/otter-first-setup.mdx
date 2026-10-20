@@ -1,0 +1,25 @@
+---
+title: "otter-first-setup"
+sidebarTitle: "First Setup"
+description: "Complete account creation and remaining PikaOS setup tasks after installation."
+---
+
+`otter-first-setup` is the native PikaOS first-run wizard. It is packaged separately from `otter-shell`, with a login autostart entry and a privilege helper.
+
+## When it opens
+
+The graphical [installer](/apps/otter-installer) defers account creation until the first installed-system login. First Setup reads the installed manifest and setup state to choose the remaining tasks. It does not autostart on live media.
+
+A runtime lock prevents duplicate startup requests from opening multiple windows. Minimal installations with an existing account skip automatic onboarding. Opening the app manually with no pending tasks shows the completed state rather than restarting account creation.
+
+```bash
+otter-first-setup
+```
+
+## Account and packages
+
+Account creation applies the installed shell profile to the new home and preserves the selected login session. Account and completion steps use a privileged helper; a missing helper is an error, not a successful setup.
+
+Driver selection and optional package pages use the shared [Packages](/apps/otter-pkg) transaction UI. Review the proposed changes before installing. The UI shows progress and package questions. A network status check does not by itself disable package actions.
+
+After setup finishes, [Welcome](/apps/otter-welcome) provides updates, optional software, tips, and desktop-shell selection on supported sessions.

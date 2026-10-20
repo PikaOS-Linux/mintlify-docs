@@ -1,0 +1,94 @@
+---
+title: "Lua bindings and capabilities"
+sidebarTitle: "Bindings and capabilities"
+description: "Use native services through checked Lua modules and narrowly scoped permissions."
+---
+
+Lua plugins call native services through `require("otter.…")`. The host decides which binding modules exist. A capability permits access to a module or operation; it does not install that module in every host.
+
+## Built-in modules
+
+The plugin host supplies these modules:
+
+| Module          | API                                                                                                               | Permission                                                        |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `otter.timer`   | `after(ms, callback)`, `every(ms, callback)`, `cancel(handle)`, `now_ms()`                                        | None                                                              |
+| `otter.process` | `spawn(argv, on_exit)`, `launch(argv)`, `kill(handle)`                                                            | `spawn` for spawn/launch                                          |
+| `otter.fs`      | `read(path)`, `list(path)`, `watch(dir, callback [, options])`, `unwatch(handle)`, `roots()`, `write(path, data)` | A granted `fs:` or `fs-write:` root; writing requires `fs-write:` |
+| `otter.log`     | `debug(...)`, `info(...)`, `warn(...)`, `error(...)`                                                              | None                                                              |
+| `otter.host`    | `redraw()`, `quit()`, `name()`, `env(name)`                                                                       | `env:<NAME>` or `env:<PREFIX>*` for environment reads             |
+
+Timer callbacks receive the expiration count. `spawn` invokes `on_exit(code, stdout, stderr)`, where a signal termination uses a negative signal number. `launch` starts a detached process without captured output. `argv` is a string list, executed with PATH lookup **without a shell**.
+
+File-watch callbacks receive `(name, change)`. Pass `{ name = "entry" }` to filter to one directory entry. File reads/listing and writes report failures as `nil, message` where applicable.
+
+## Request only what you need
+
+In `plugin.toml`:
+
+```toml
+capabilities = ["spawn", "fs:$XDG_CONFIG_HOME/my-plugin", "env:OTTER_MY_PLUGIN_*"]
+```
+
+In `$XDG_CONFIG_HOME/otter-shell/plugins.conf`:
+
+```conf
+my-plugin_enabled = true
+my-plugin_capabilities = "fs:$XDG_CONFIG_HOME/my-plugin, env:OTTER_MY_PLUGIN_*"
+```
+
+This policy withholds `spawn`, even though the plugin requests it. A gated operation raises if permission is missing. Removing the capabilities line allows all declared capabilities; setting it to an empty string grants none.
+
+Policy accepts exact capability names, `*`, and supported prefixes such as `fs:*` and `env:OTTER_*`. An `fs:<root>` policy entry permits requested readable roots at or beneath it. An `fs-write:<root>` grant also permits reading within that root.
+
+Filesystem roots can start with `~/` or `$XDG_RUNTIME_DIR`, `$XDG_CACHE_HOME`, `$XDG_CONFIG_HOME`, `$XDG_DATA_HOME`, or `$XDG_STATE_HOME`. Unset/relative XDG values fall back to their home-directory defaults, except the runtime directory, which has no fallback. Roots are canonicalized. Directory roots must exist; a single-file root can name a missing file when its parent exists.
+
+<Warning>`spawn` allows external programs to run with the host user's OS permissions. Lua filesystem and environment allow-lists do not confine child processes. Grant it only to plugins you trust.</Warning>
+
+## Bounded file and process work
+
+Per plugin instance, built-ins allow up to 64 timers, 16 programs, and 16 file watches. Captured process output is bounded to 1 MiB per stream. `fs.read` returns at most 4 MiB; `fs.write` accepts at most 1 MiB.
+
+File paths must be absolute or start with `~/`. The implementation canonicalizes them and checks opened descriptors through `/proc/self/fd` against the granted roots. Writes use a temporary file beside the target and rename it into place. New files use mode `0600`; replacements retain the existing regular file's mode. Non-regular targets, including symlinks, are refused.
+
+## Native library bindings
+
+Available library modules depend on what the host registers. Examples include:
+
+| Module                  | Examples                                                            | Gated actions                                                                             |
+| ----------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `otter.theme`           | `get`, `color`, `surface`, `presets`, `subscribe`                   | `use_preset` needs `theme-write`                                                          |
+| `otter.desktop.sysinfo` | `memory`, `cpu`, `temperature`, `disk`, `load`, `uptime`, `sensors` | These reads need no capability                                                            |
+| `otter.desktop.logind`  | `idle_inhibited`, `subscribe`                                       | `suspend`, `reboot`, `poweroff` need `power`; inhibitor take/release needs `idle-inhibit` |
+| `otter.desktop.volume`  | `sinks`, `sources`, defaults, `subscribe`                           | Volume, mute, default-device, and scroll actions need `audio`                             |
+| `otter.desktop.apps`    | `list`, `find`, `search`, `actions`, `subscribe`                    | `launch` needs `spawn`                                                                    |
+| `otter.ui.widgets`      | Shared widget metrics, measurement, drawing, and formatting         | Host registration required                                                                |
+
+For theme-aware widgets, read resolved colors and metrics rather than branching on theme names. With `otter.theme` registered:
+
+```lua
+local theme = require("otter.theme")
+local host = require("otter.host")
+theme.subscribe(function() host.redraw() end)
+```
+
+Read `theme.get()` when drawing. A failed theme reload retains the previous valid theme and does not notify subscribers. `theme.use_preset(name, on_done)` requires `theme-write`; it writes asynchronously and reports `(ok, reason)` to its callback.
+
+## Write a native binding
+
+Native libraries expose `binding.Module` from their `otr/lua/` tree. The host passes its module list to `plugins.Host.init`. Use `binding.Open.add(name, function, capability)` to gate operations. `Module.cap` can gate an entire module. Duplicate module names and names colliding with built-ins are rejected.
+
+Keep native resources in per-instance generational handle tables. Lua receives checked integer handles, not raw pointers. Implement `Module.release(instance)` to release subscriptions and resources on reload or unload.
+
+Callbacks must be delivered through the host loop:
+
+1. Keep a Lua callback with `binding.keep_callback`.
+2. Register native descriptors through `binding.watch` where needed.
+3. Post scalar callback arguments with `binding.post` on the host thread.
+4. Let the plugin host deliver the batch in a guarded call.
+
+Never call Lua directly from a C callback or worker thread. Events accept up to six scalar arguments. Read and validate arguments before acquiring resources. Do not keep a pending `defer` across a LuaJIT call that can raise; Lua error unwinding skips native cleanup.
+
+UI-script `host.Ui` has no plugin event loop. Although hosts can register modules with `Ui.open_with`, bindings that post events need `plugins.Host` integration.
+
+Source references: `otter-lua/otr/services.otr`, `caps.otr`, `binding.otr`, and `handles.otr`; native exports live in each library's `otr/lua/` directory.

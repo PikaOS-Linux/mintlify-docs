@@ -4,7 +4,7 @@ sidebarTitle: "Screen Recorder"
 description: "Record your Wayland screen with hardware acceleration. Toggle with a hotkey, capture regions or windows, encode with NVENC, QSV, or VAAPI."
 ---
 
-`otter-rec` records your Wayland screen. Run it once to start, run it again to stop and save. At startup it probes your GPU and picks the fastest hardware encoder: NVENC on NVIDIA, Quick Sync on Intel, VAAPI on AMD. It falls back to software when it has to. Default output is `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`. Override with `--output` or the config file.
+`otter-rec` records your Wayland screen. Run it once to start, then again to stop and save. At startup it probes your GPU and picks the fastest hardware encoder: NVENC on NVIDIA, Quick Sync on Intel, VAAPI on AMD. It falls back to software when hardware encoding is unavailable. The default output is `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`. Override it with `--output` or the config file.
 
 ## Basic usage
 
@@ -30,25 +30,27 @@ otter-rec --dry-run --source screen --output out.mp4  # print resolved settings,
 
 ## Audio
 
-Recordings include the default PipeWire capture source when it is available. `otter-rec` captures 48 kHz stereo audio and muxes 128 kbit/s AAC into the output file. It does this in process without calling `ffmpeg`.
+Recordings include system output by default, using the PipeWire default sink monitor. `otter-rec` captures 48 kHz stereo audio and muxes 128 kbit/s AAC into the output file in process, without calling `ffmpeg`.
 
-Portal recording uses separate PipeWire connections for video and audio because the ScreenCast portal only supplies video nodes. Audio currently follows your default capture source. There is no device or system-output selector. If audio cannot start, recording continues with video only.
+Use `--audio-source microphone` to record the default input instead, `--no-audio` for video only, or `--audio` to override a disabled audio config. There is no individual device selector.
+
+Portal recording uses separate PipeWire connections for video and audio because the ScreenCast portal only supplies video nodes. If audio cannot start, recording continues with video only.
 
 ## Hardware encoding
 
 `otter-rec` probes your GPU at startup and selects the best available hardware encoder.
 
-| GPU vendor | Primary encoder family |
-|------------|----------------------|
-| NVIDIA     | NVENC (`h264_nvenc`, `hevc_nvenc`, `av1_nvenc`) |
+| GPU vendor | Primary encoder family                               |
+| ---------- | ---------------------------------------------------- |
+| NVIDIA     | NVENC (`h264_nvenc`, `hevc_nvenc`, `av1_nvenc`)      |
 | Intel      | Quick Sync / QSV (`h264_qsv`, `hevc_qsv`, `av1_qsv`) |
-| AMD        | VAAPI (`h264_vaapi`, `hevc_vaapi`, `av1_vaapi`) |
+| AMD        | VAAPI (`h264_vaapi`, `hevc_vaapi`, `av1_vaapi`)      |
 
 Within whichever family is selected, **H.264 is preferred by default**. Pass `--hevc` for HEVC, or `--av1` for AV1. Both flags work for any vendor.
 
-<Note>
-  Hardware encoders come from your distribution's FFmpeg packages. Make sure `libavcodec`, `libavformat`, `libavutil`, and `libswscale` are installed and built with the encoder backends you need.
-</Note>
+Native output and region capture converts PQ HDR to SDR when the capture metadata identifies it. NVIDIA's KMS path performs the conversion on the GPU. Portal and window streams without HDR metadata are not automatically treated as HDR.
+
+<Note>Hardware encoders come from your distribution's FFmpeg packages. Make sure `libavcodec`, `libavformat`, `libavutil`, and `libswscale` are installed and built with the encoder backends you need.</Note>
 
 ## Configuration
 
@@ -62,7 +64,11 @@ codec = "h264"
 force_portal = false
 fps = 30
 seconds = 0
-bitrate = 12000000
+rate_control = "crf"
+crf = 20
+bitrate = 8500000
+audio = true
+audio_source = "system"
 ```
 
 - `output`: destination file path. Empty writes to `~/Videos/YYYY-MM-DD-HH-MM-SS.mp4`. The `YYYY-MM-DD-HH-MM-SS` token expands to the local start time
@@ -72,22 +78,24 @@ bitrate = 12000000
 - `force_portal`: `true` always uses xdg-desktop-portal source selection (same as `--portal`)
 - `fps`: target frame rate (default `30`)
 - `seconds`: fixed duration in seconds; `0` records until stopped
-- `bitrate`: target bitrate in bits per second (default `12000000`, 12 Mbps)
+- `rate_control`: `crf` for constant quality (default), or `bitrate` for a target bitrate
+- `crf`: quality from 0 to 51; lower is higher quality (default `20`). Settings shows a **Quality** slider
+- `bitrate`: ceiling in CRF mode or target in bitrate mode, in bits per second (default `8500000`, 8.5 Mbps)
+- `audio`: include audio (default `true`)
+- `audio_source`: `system` for desktop output (default), or `microphone` for the default input
+
+CLI quality controls are `--rate-control crf|bitrate`, `--crf N`, and `--bitrate N`.
 
 ## Hotkey setup
 
-<Tip>
-  Bind `otter-rec` to a compositor keyboard shortcut for a global recording toggle. Press once to start, press again to stop. No UI required. Most Wayland compositors let you assign any shell command to a key combination in their shortcuts settings.
-</Tip>
+<Tip>Bind `otter-rec` to a compositor keyboard shortcut for a global recording toggle. Press once to start, press again to stop. No UI required. Most Wayland compositors let you assign any shell command to a key combination in their shortcuts settings.</Tip>
 
 ## Portal mode
 
-Pass `--portal` to force an xdg-desktop-portal ScreenCast session before recording. The portal presents its own source picker (screen, window, or region, depending on your compositor). otter-rec records through its own in-process capture and encoder path once the session is established.
+Pass `--portal` to record the PipeWire video stream selected through an xdg-desktop-portal ScreenCast session. The portal presents its own source picker, depending on the backend and compositor. Otter's in-process encoder records that stream; the recorder itself does not need image-copy-capture protocols in portal mode.
 
 Portal detection checks for a live Wayland socket, PipeWire and session bus sockets in the runtime directory, then verifies `org.freedesktop.portal.ScreenCast.version` before proceeding.
 
 Set `force_portal = true` in the config file to make portal mode the default.
 
-<Note>
-  otter-rec uses only Wayland capture paths. X11 is not supported. If you are running under XWayland, make sure your compositor exposes the required Wayland protocols.
-</Note>
+<Note>otter-rec uses only Wayland capture paths. X11 is not supported. If you are running under XWayland, make sure your compositor exposes the required Wayland protocols.</Note>

@@ -4,7 +4,7 @@ sidebarTitle: "Shortcut overlay"
 description: "One-shot searchable shortcut overlay for Niri, Hyprland, and Mango."
 ---
 
-`otter-keybindhelp` reads your compositor config and shows the shortcuts in a centered overlay. Commands get readable action names. Key modes and submaps stay as contexts. Part of the `otter-shell` metapackage.
+`otter-keybindhelp` reads your compositor config and shows shortcuts in a centered overlay. It displays readable action names for commands and groups shortcuts by key mode or submap. The app is part of the `otter-shell` metapackage.
 
 Do not autostart it. Bind a hotkey, or launch **Otter Keyboard Shortcuts** from [otter-launcher](/desktop/otter-launcher). It exits when you dismiss it.
 
@@ -23,12 +23,12 @@ otter-keybindhelp --compositor mango --config ~/.config/mango/config.conf
 otter-keybindhelp --dump
 ```
 
-| Flag | Meaning |
-|------|---------|
-| `--compositor niri\|hyprland\|mango` | Skip automatic detection |
-| `--config PATH` | Read a non-default root config |
-| `--dump` | Print normalized shortcuts to the terminal instead of opening the overlay |
-| `-h`, `--help` | Usage |
+| Flag                                 | Meaning                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| `--compositor niri\|hyprland\|mango` | Skip automatic detection                                                  |
+| `--config PATH`                      | Read a non-default root config                                            |
+| `--dump`                             | Print normalized shortcuts to the terminal instead of opening the overlay |
+| `-h`, `--help`                       | Usage                                                                     |
 
 `--dump` is useful when you want to check what it parsed without a GUI.
 
@@ -55,9 +55,9 @@ bind=SUPER+SHIFT,slash,spawn,otter-keybindhelp
 
 ## Keyboard
 
-Type to search. Backspace or Ctrl+Backspace edits. Ctrl+U clears. Tab / Shift+Tab changes context. Page Up / Page Down pages. Escape closes.
+Type to search. Press **Backspace** or **Ctrl+Backspace** to edit the query, or **Ctrl+U** to clear it. Use **Tab** / **Shift+Tab** to change context and **Page Up** / **Page Down** or the mouse wheel to change pages.
 
-Mouse wheel pages. Click outside or right-click to close.
+Press **Escape**, click outside, or right-click to close.
 
 ## What it reads
 

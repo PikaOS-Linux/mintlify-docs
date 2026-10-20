@@ -1,47 +1,44 @@
 ---
 title: "Format and types"
-sidebarTitle: "Format"
-description: "otter-conf file syntax and supported Zig types."
+sidebarTitle: "Format and types"
+description: "Flat configuration syntax and supported otr field types."
 ---
 
-Config files use one assignment per line. Comments start with `#`. Whitespace around `=` is ignored. That is the whole syntax.
+## File syntax
 
-## Basic syntax
-
-```conf
-# Comments on their own line
-key = value
-name = "my-application"
-port = 8080
+```ini
+# Values not present keep their schema defaults.
+name = "example"
+width = 800
 enabled = true
-log_level = Info
+position = bottom
 ```
 
-## Supported types
+Use `#` comments, quoted strings, and unquoted boolean, number, or enum values. Nested structs flatten: `clock_time_format` addresses `config.clock.time_format`.
 
-| Zig type | Example |
-|----------|---------|
-| `bool` | `debug = true` |
-| Integers (`i8`..`u64`) | `port = 8080`, `negative = -42` |
-| `f32` / `f64` | `timeout = 30.5` |
-| `[]const u8` | `host = "127.0.0.1"` |
-| Enum | `mode = Production` (exact field name) |
-| Fixed array | `rgb = [255, 128, 0]` |
-| Slice | `hosts = ["a", "b"]` (heap allocated) |
-| Optional | Omit key to keep default `null` |
+## Field types
 
-### String escapes
+| otr field                           | Use                                                |
+| ----------------------------------- | -------------------------------------------------- |
+| `bool`, integers, floats            | Scalar settings                                    |
+| Enum                                | Unquoted tag name                                  |
+| Fixed arrays                        | Fixed-size settings                                |
+| `text.Text`                         | Static default or owned parsed text                |
+| `?text.Text`                        | Optional text; an empty parsed string becomes null |
+| `text.TextList`                     | List of strings                                    |
+| `list.List(i64)` / `list.List(f64)` | Variable-length numeric lists                      |
+| Nested struct                       | Flattened sections                                 |
+| Custom `parse` / `to_str` type      | Colors and other string-valued types               |
+| `dynamic.Dynamic(Elem, prefix)`     | Indexed entries                                    |
 
-Inside quoted strings: `\"`, `\\`, `\n`, `\r`, `\t`.
+All parser-visible fields must be `pub` and have defaults. Configuration strings are not raw `str` fields: parsed text must remain owned after the input buffer goes away.
 
-## Struct rules
+## Ownership and serialization details
 
-- All fields must have defaults.
-- Partial configs are valid: only changed keys need to appear on disk.
-- Field names must be ASCII identifiers.
+A struct with `Text`, `TextList`, or `Dynamic` fields declares `deinit(self)` and delegates to `support.free_config`. Read `Text` with `as_str()`; clone it when another owner needs an independent value.
 
-## Limitations
+Null non-string optionals are omitted from serialization. A null optional string serializes as an empty quoted string. A `[N]u8` field parses as text but serializes as a numeric list; use `Text` for ordinary string settings.
 
-- No inline comments (comment lines only).
-- No multiline strings (use `\n`).
-- Nested structs support one level of flattening (no deep paths).
+## Source reference
+
+`otr/parser.otr`, `otr/support.otr`, `otr/text.otr`, `otr/serializer.otr` in the component repository.

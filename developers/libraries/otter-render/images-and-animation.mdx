@@ -1,52 +1,37 @@
 ---
 title: "Images and animation"
-sidebarTitle: "Images"
-description: "Image loading, sprites, and Animation in otter-render."
+sidebarTitle: "Images and animation"
+description: "Supported image codecs, owned image stores, sprites, and integer animation."
 ---
 
-Load images, crop sprites, and tick integer animations. No internal clocks. Your app supplies elapsed time.
+## Images
 
-## Image loading
+Import `otter_render.image`. `Image` owns RGBA bytes and has consuming `deinit()`. File loaders take allocator and explicit `std.Io`; memory loaders consume encoded bytes only for the call.
 
-```zig
-var image = try render.Image.loadFromFile(allocator, "icon.png");
-defer image.deinit();
+| API family                                                   | Use                                               |
+| ------------------------------------------------------------ | ------------------------------------------------- |
+| `load_from_file`, `load_from_memory`                         | Decode at source size                             |
+| `load_from_file_at_size`, `load_from_memory_at_size`         | Decode and fit target dimensions                  |
+| `load_from_file_downsampled`, `load_from_memory_downsampled` | Reduce large source images                        |
+| `load_from_file_sampled`, `load_from_memory_sampled`         | Bounded statistical sampling for color extraction |
+| Foreground-aware SVG loaders                                 | Resolve symbolic `currentColor`                   |
 
-image.draw(&surface, .{ .x = 0, .y = 0, .width = 32, .height = 32 });
-```
+Supported formats are PNG, JPEG, SVG, ICO, BMP, and WebP. Support does not extend to every zigimg format.
 
-Formats via zigimg: PNG, JPG, BMP, GIF, and more. Decoded RGBA is capped separately from compressed file size (up to 256 MiB decoded).
+JPEG and WebP runtime decoders load lazily. Missing decoder libraries fail that format; PNG/BMP/ICO remain available. Statistical JPEG sampling uses its own native decoder. Build options can disable text, SVG, JPEG, or WebP support.
 
-| API | Use |
-|-----|-----|
-| `loadFromFileAtSize` | Raster or SVG at target pixel size |
-| `loadFromFileDownsampled` | Large wallpapers with box filter |
-| `drawCover` | Fill area, crop overflow |
-| `drawRegionScaledClipped` | Source rect with optional flip |
+## Stores and handles
 
-## Sprites
+`ImageStore` owns images in generational slots. `insert` returns `ImageHandle`; `remove` transfers the image out. `image` and `image_mut` lend scoped access. Commands and UI specs keep handles, not image addresses.
 
-```zig
-const sheet = render.SpriteSheet.init(image.width, image.height, 32, 32, 16);
-const frame = sheet.frameRect(3).?;
-cmds.sprite(dest_rect, &image, frame, .{ .flip_x = true });
-```
+## Sprites and animation
 
-`SpriteAnim` maps elapsed time to frame indices. No internal timer; apps tick it.
+`otter_render.sprite` provides `SpriteSheet.frame_rect` and `SpriteAnim.frame_at`.
 
-## Animation
+`otter_render.animation.Animation` provides integer `tick`, `lerp`, and `lerp_i32`. Custom curves live in a caller-owned `CurveTable`, not mutable module globals. `AnimBatch` borrows column slices, and `tick_batch` updates them using that table and a supplied timestamp.
 
-Integer-only ease-out quadratic progress (0..256):
+Lua `otter.render.image_size(bytes)` returns dimensions and format from encoded headers. Pixel drawing uses SD/UI bindings.
 
-```zig
-var anim = render.Animation.init(750, 144); // 750ms at 144 Hz
-while (anim.tick(true)) {
-    const w = anim.lerp(collapsed_w, expanded_w);
-}
-```
+## Source reference
 
-No floats or heap allocation.
-
-## CommandList.graph
-
-`CommandList.graph()` draws filled area plus line chart for time-series samples. Used by `otter-monitor` history graphs.
+`otr/image.otr`, `otr/codecs.otr`, `otr/sprite.otr`, `otr/animation.otr` in the component repository.

@@ -16,19 +16,17 @@ That pulls `otter-bench`, `otter-benchd`, `otter-benchctl`, `otter-hud`, and `ot
 
 ## Packages
 
-| Package | Role |
-|---------|------|
-| `otter-bench` | Desktop app, `.desktop` entry, icons |
-| `otter-benchd` | Per-user metrics and session daemon (socket-activated) |
-| `otter-benchctl` | CLI for config, capture, benchmarks, reports |
-| `otter-hud` | Vulkan layer, OpenGL hook, and `otter-hud` launcher |
-| `otter-bench-hardwared` | Optional privileged hardware helper (polkit) |
+| Package                 | Role                                                   |
+| ----------------------- | ------------------------------------------------------ |
+| `otter-bench`           | Desktop app, `.desktop` entry, icons                   |
+| `otter-benchd`          | Per-user metrics and session daemon (socket-activated) |
+| `otter-benchctl`        | CLI for config, capture, benchmarks, reports           |
+| `otter-hud`             | Vulkan layer, OpenGL hook, and `otter-hud` launcher    |
+| `otter-bench-hardwared` | Optional privileged hardware helper (polkit)           |
 
 `otter-bench` depends on the daemon, CLI, and HUD. The hardware helper is recommended; without it, those readings show as unavailable instead of zero.
 
-<Note>
-  **`otter-benchd` must be running** for full use of the desktop app, [otter-benchctl](/apps/otter-benchctl), and [otter-hud](/apps/otter-hud). The daemon owns metrics, layouts, captures, and sessions. Without it, the GUI and CLI cannot do useful work, and the in-game HUD only shows a diagnostic banner.
-</Note>
+<Note>**`otter-benchd` must be running** for full use of the desktop app, [otter-benchctl](/apps/otter-benchctl), and [otter-hud](/apps/otter-hud). The daemon owns metrics, layouts, captures, and sessions. Without it, the GUI and CLI cannot do useful work, and the in-game HUD only shows a diagnostic banner.</Note>
 
 ## Launch
 
@@ -61,7 +59,7 @@ otter-bench/profiles/*.conf      per-game bindings and launch overrides
 otter-bench/benchmarks/*.conf    warm-up, measured region, repetitions
 ```
 
-Unknown and duplicate keys are **errors** here (unlike most Otter Shell apps). A typo in a benchmark plan should fail loudly.
+Unlike most Otter Shell apps, Otter Bench rejects unknown and duplicate keys, including typos in benchmark plans.
 
 ## Related
 

@@ -8,7 +8,7 @@ description: "Pick screen colors in hex, RGB, and OKLCH. Click to copy, or pass 
 
 ## Usage
 
-Run `otter-pick` with no arguments for the interactive overlay. Pass `--x` and `--y` to sample a screen coordinate.
+Run `otter-pick` with no arguments for the interactive overlay. Pass `--x` and `--y` to sample a screen coordinate. If you pass only one, the other defaults to the center of the captured area.
 
 ```bash
 otter-pick                       # frozen overlay, loupe: click to copy hex
@@ -39,9 +39,6 @@ loupe = false
 ```
 
 - `copy`: set to `false` to skip clipboard writes by default
-- `loupe`: set to `true` to always render the ANSI loupe instead of opening the overlay
+- `loupe`: set to `true` to always print the ANSI loupe when you sample with `--x` and `--y`
 
-<Note>
-  Requires `ext-image-copy-capture-v1` from the compositor. The loupe uses the
-  same capture path as otter-screenshot.
-</Note>
+<Note>Requires `ext-image-copy-capture-v1` from the compositor, with wlr screencopy as a fallback. The loupe uses the same capture path as otter-screenshot.</Note>

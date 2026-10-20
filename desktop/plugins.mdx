@@ -1,78 +1,80 @@
 ---
 title: "Plugins"
 sidebarTitle: "Plugins"
-description: "Enable bar and launcher plugins, then add them to the bar as plugin:<id>."
+description: "Manage Lua widgets, launcher providers, permissions, and reloads in Settings."
 ---
 
-Otter Shell loads extra bar widgets and launcher result providers as `.so` plugins. The `otter-shell` metapackage installs the examples (`otter-shell-plugins`) and the scaffold CLI (`otter-plugin-factory`).
+Otter Shell uses LuaJIT plugins for extra widgets and launcher providers. Plugins contain `plugin.toml` and Lua scripts; compiled `.so` plugins are not supported. Each plugin runs in its own sandboxed Lua state with a memory cap and CPU watchdog.
 
-A loaded plugin is native code inside the bar or launcher. Only enable plugins you installed and trust.
-
-## Enable a plugin
-
-Open [otter-settings](/desktop/otter-settings) and go to the **Plugins** tab. Each installed plugin has a toggle. That writes `~/.config/otter-shell/plugins.conf`:
-
-```conf
-hello-label_enabled = true
-bar-search_enabled = true
-snippet-provider_enabled = false
-```
-
-Bar and launcher read this file before loading plugins. Most plugins stay enabled when their key is missing. `snippet-provider` is opt-in and stays off until you set `snippet-provider_enabled = true`.
-
-## Put it on the bar
-
-Layout names always use `plugin:<id>`. The id is the `id` field in `plugin.conf`, not the package name.
-
-In otter-settings, drag an enabled plugin chip into the bar layout. Or edit `otter-bar.conf`:
-
-```conf
-layout_right = plugin:disk-free, tray, clock, battery, button_menu
-layout_center = plugin:bar-search
-```
-
-See [otter-bar](/desktop/otter-bar).
-
-## Example plugins
-
-These land under `/usr/lib/otter-shell/plugins/<id>/` with `otter-shell-plugins`:
-
-| Layout name | Host | What it does |
-|-------------|------|----------------|
-| `plugin:hello-label` | bar | Small chip. Click toggles the label between Hello and Clicked. |
-| `plugin:bar-search` | bar | Search field on the bar. Enter or blur opens [otter-launcher](/desktop/otter-launcher) with that query. |
-| `plugin:cmd-watch` | bar | Runs a command on an interval and shows the output. |
-| `plugin:disk-free` | bar | Free space from `statfs`, plus a usage bar. |
-| `plugin:idle-inhibit` | bar | logind idle inhibit. Click to toggle. |
-| `plugin:snippet-provider` | launcher | Extra launcher results with custom rows. |
-| `plugin:bluetooth-applet` | bar | Bluetooth status and device controls. Use Blueman for extra device management. |
-
-`plugin:bluetooth-applet` comes from the `otter-bluetooth-plugin` package, which `otter-shell-plugins` depends on. A normal plugins install includes it under `/usr/lib/otter-shell/plugins/bluetooth-applet/`.
-
-## Install path
-
-Hosts look for plugins in this order. First match per id wins:
-
-1. `OTTER_PLUGIN_PATH` (colon-separated roots)
-2. `$XDG_DATA_HOME/otter-shell/plugins`
-3. `~/.local/share/otter-shell/plugins`
-4. `/usr/lib/otter-shell/plugins`
-5. `/usr/share/otter-shell/plugins`
-
-Each plugin directory needs `plugin.conf` and the matching `.so`.
-
-To try a local build without installing:
-
-```bash
-export OTTER_PLUGIN_PATH="$PWD/zig-out/plugins"
-```
-
-Install the examples on their own:
+The `otter-shell` metapackage includes `otter-shell-plugins` and `otter-plugin-factory`. You can install the examples separately:
 
 ```bash
 pikman install otter-shell-plugins
 ```
 
-## Trust
+## Enable a plugin
 
-Prefer the packaged examples, or plugins you built yourself. Writing your own: [Plugins for developers](/developers/plugins).
+Open [Settings](/desktop/otter-settings) and select **Plugins**. Select a plugin to inspect its manifest, host status, requested and granted permissions, heap use, reload/failure counts, and recent logs. Enable it, review its capabilities, then click **Apply**. Use **Reload** to request a fresh instance.
+
+Settings writes `$XDG_CONFIG_HOME/otter-shell/plugins.conf`, defaulting to `~/.config/otter-shell/plugins.conf`:
+
+```conf
+hello-label_enabled = true
+bar-search_enabled = true
+snippet-provider_enabled = false
+cmd-watch_capabilities = spawn
+```
+
+Most plugins default to enabled. The launcher Lua providers `calc`, `emoji`, `clip`, and `search` default to disabled to avoid duplicating native launcher results. `snippet-provider` is also disabled until explicitly enabled. Other custom providers may default to enabled.
+
+A missing capabilities line allows all permissions declared by that plugin. An empty line grants none. Review permissions before enabling third-party code: `spawn`, for example, allows launching external programs, which do not inherit Lua's sandbox.
+
+## Put a widget on the bar
+
+Layout names use `plugin:<id>`, where `<id>` is the plugin directory name. In Settings, add the plugin chip to the bar layout, or edit `otter-bar.conf`:
+
+```conf
+layout_right = plugin:disk-free, system_tray, clock
+layout_center = plugin:bar-search
+```
+
+See [otter-bar](/desktop/otter-bar). Launcher providers contribute search results, not bar layout chips.
+
+## Example plugins
+
+| Plugin             | Host     | Purpose                                                                                  |
+| ------------------ | -------- | ---------------------------------------------------------------------------------------- |
+| `hello-label`      | Bar      | Clickable chip that switches between Hello and Clicked.                                  |
+| `bar-search`       | Bar      | Text field that sends its query to the launcher.                                         |
+| `cmd-watch`        | Bar      | Runs a command periodically and shows its output.                                        |
+| `disk-free`        | Bar      | Shows available filesystem space through the native system-info binding.                 |
+| `idle-inhibit`     | Bar      | Click to take or release a logind idle inhibitor.                                        |
+| `snippet-provider` | Launcher | Opt-in example results provider with custom rows.                                        |
+| `bluetooth-applet` | Bar      | Bluetooth status and device controls from the separate `otter-bluetooth-plugin` package. |
+
+`otter-shell-plugins` depends on `otter-bluetooth-plugin`. Use Blueman for additional device management.
+
+## Install locations
+
+Each plugin is a directory containing `plugin.toml`, its entry script (normally `init.lua`), and any local Lua modules.
+
+Hosts search in this order. The first directory with a given id wins:
+
+1. `OTTER_PLUGIN_PATH`, a colon-separated list of development roots.
+2. `$XDG_DATA_HOME/otter-shell/plugins`, or `~/.local/share/otter-shell/plugins` by default.
+3. `/usr/lib/otter-shell/plugins`.
+4. `otter-shell/plugins` under `$XDG_DATA_DIRS`, defaulting to `/usr/local/share` and `/usr/share`.
+
+For a factory-built plugin, copy `dist/plugins/<id>/` into your user plugin directory. Keep code out of `~/.config/otter-shell/`; that directory contains policy files, not scripts.
+
+## Reload and troubleshoot
+
+Saving a plugin's Lua source or manifest triggers reload in a watching host. A valid candidate replaces the old instance. A broken edit keeps the previous working instance and reports its error.
+
+If a running plugin fails or exceeds its limits, the host unloads that plugin without unloading others. Check **Plugins** in Settings for the failure and logs. Fix the files, then reload.
+
+Supported applications also expose **UI Scripts** in Settings. This is separate from plugin policy: `ui.conf` selects an app's native/Lua UI mode and hot reload. UI scripts live in `$XDG_DATA_HOME/otter-shell/ui`, defaulting to `~/.local/share/otter-shell/ui`.
+
+## Write your own
+
+Start with [Writing plugins](/developers/plugins). The developer guide covers `opf`, manifests, permissions, widget/provider exports, and [UI scripts](/developers/lua/ui-scripts).

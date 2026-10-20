@@ -1,100 +1,109 @@
 ---
 title: "Build Otter Shell from source"
 sidebarTitle: "Building"
-description: "Compile Otter Shell components locally with Zig 0.16.0 and run tests."
+description: "Build the v0.13.0 release with otr 0.2.0, package-root build runners, and pinned native dependencies."
 ---
 
-Each component is its own Zig project. Apps and libraries use the same build commands.
+Otter Shell v0.13.0 uses otr 0.2.0 for native applications and libraries. Each component has its own repository and `otr/build.otr` runner. Run it from the component's repository root, not from its `otr/` directory.
 
 ## Prerequisites
 
-Install Zig 0.16.0 and system dependencies:
+- Install **otr 0.2.0**. The packaging pin is `otter-zenith/otr-toolchain.pin`.
+- Keep sibling library repositories at the matching **v0.13.0** release. Package manifests in `otr/otr.toml` refer to sibling packages.
+- Install system development headers required by the component. Common dependencies include Wayland, Fontconfig, FreeType, and xkbcommon. `otter-zenith/debian/control` contains the complete packaging build dependencies.
+- Keep **Zig 0.17.0** available for the intentional Zig dependencies below and differential test baselines. Zig is not the primary application build tool.
+- Use an isolated headless compositor for visual E2E tests. Do not capture your running desktop session.
+
+For common development headers on PikaOS:
 
 ```bash
-# PikaOS / Debian
-sudo apt install libwayland-dev libfontconfig-dev libfreetype-dev libxkbcommon-dev
+pikman install libwayland-dev libfontconfig-dev libfreetype-dev libxkbcommon-dev
 ```
 
-Extra packages by component:
+Additional dependencies vary: PAM headers for authentication, FFmpeg/DRM/EGL/GLES headers for recording, and libapt-pkg headers for the package manager. The browser has a separate engine build.
 
-| Component | Extra packages |
-|-----------|---------------|
-| otter-term | No extra terminal library. `ghostty-vt` is vendored. |
-| otter-rec | `libavcodec-dev`, `libavformat-dev`, `libavutil-dev`, `libswscale-dev`, `libdrm-dev`, `libegl-dev`, `libgles-dev` |
-| otter-lock, otter-greeter, otter-polkit | `libpam0g-dev` |
+## Build a component
 
-## Basic build
+For example, from a workspace containing `otter-bar` and its sibling libraries:
 
 ```bash
-cd otter-bar    # or any component directory
-zig build -Doptimize=ReleaseFast          # compile
-zig build -Doptimize=ReleaseFast run      # build and run
-zig build -Doptimize=ReleaseFast test     # run unit tests
-zig build -Doptimize=ReleaseFast install  # install to prefix
+cd otter-bar
+
+otr run otr/build.otr --release-fast -- deps
+otr run otr/build.otr --release-fast -- check
+otr run otr/build.otr --release-fast -- test
+otr run otr/build.otr --release-fast -- install
 ```
 
-Libraries link through **path dependencies** in sibling `build.zig.zon` files (`../otter-render`, etc.) when you build from the monorepo checkout.
-
-## Build options
-
-Common flags across apps:
-
-| Flag | Effect |
-|------|--------|
-| `-Doptimize=ReleaseFast` | Release build |
-| `-Dcpu=x86_64_v3` | PikaOS packaging default (AVX2) |
-| `-Denable_dbus=false` | Remove D-Bus widgets (battery, MPRIS, tray) |
-| `-Denable_pipewire=false` | Remove PipeWire audio |
-| `-Denable_pam=false` | Remove PAM auth (lock/greeter) |
-| `-Dc_allocator=jemalloc` | Use jemalloc as C allocator |
-| `-Dc_allocator=mimalloc` | Use mimalloc as C allocator |
-
-Release build example:
+The bar installs to `otr-out/bin/otter-bar` by default. Its `run` step builds and starts it:
 
 ```bash
-zig build -Doptimize=ReleaseFast -Dcpu=x86_64_v3
+otr run otr/build.otr --release-fast -- run
 ```
 
-## Packaging (otter-zenith)
+<Note>Step names and output directories vary by package. Read the header of that package's `otr/build.otr` before using an optional step. A step marked as having no otr counterpart does not verify that feature.</Note>
 
-PikaOS packages come from [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith):
+## Verification
+
+The bar's runner exposes these additional steps:
+
+```bash
+# Run from otter-bar/, not otter-bar/otr/.
+otr run otr/build.otr --release-fast -- e2e
+otr run otr/build.otr --release-fast -- bench
+```
+
+`check` runs package type checks and formatter checks. `test` runs the package's test modules; some runners test both debug and release-fast modes. `e2e` exercises integration behavior in an isolated environment. `bench` runs that package's performance suite. Installation builds use release-fast.
+
+Some legacy E2E and benchmark runners still expect the old Zig source tree as a comparison baseline. A clean otr checkout no longer contains those root Zig build files; use the required preserved historical tree or frozen artifacts rather than treating the step as ready to run. Any Zig comparison builds must use `-Doptimize=ReleaseFast`.
+
+The bar's standalone `e2e-lua-quiet` test checks Lua widget rendering without a Zig baseline. Passing `--release-fast` to `otr run` builds the runner in release mode; the runner determines its child test modes.
+
+## CPU target and installation prefix
+
+Packaging targets `x86_64_v3` through `OTR_CPU`. For the bar:
+
+```bash
+OTR_CPU=x86_64_v3 otr run otr/build.otr --release-fast -- install
+```
+
+To stage a package without writing into the live system:
+
+```bash
+DESTDIR="$PWD/stage" otr run otr/build.otr --release-fast -- install --prefix /usr --cpu x86_64_v3
+```
+
+This puts the bar under `stage/usr/bin/`. Prefix handling and supported flags belong to the package runner; old Zig `-D...` options are not interchangeable with otr runner arguments.
+
+Otter libraries are **statically linked** into the released otr applications. You do not install a shared `libotter-*-0` runtime library set for them. System libraries and packaged external engines can still be dynamic dependencies.
+
+## Intentional Zig dependencies
+
+| Dependency                        | Why Zig remains                                                               |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `otter-term/vt/`                  | Builds `libotter_vt.a` for the terminal engine boundary                       |
+| `otter-pkg/zapt/`                 | Builds `libotter_zapt.a` for the APT boundary                                 |
+| `otter-assistant/zhl/`            | Builds `libotter_zhl.a` for the highlighting boundary                         |
+| `otter-desktop/otr/pipewire/zig/` | Builds the vendored static PipeWire dependency                                |
+| Browser `zig-maint` trees         | Browser and its pinned Zig libraries use a separate WPE WebKit packaging path |
+
+Run the component's `deps` step rather than rebuilding those boundaries by hand. Dependency steps also prepare native libraries such as LuaJIT and rendering dependencies. Packaging can supply an offline dependency tree through `OTTER_VENDOR`.
+
+## Packaging with otter-zenith
+
+[otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) assembles tagged source trees from `pins.json`, checks the otr toolchain pin, and builds PikaOS packages:
 
 ```bash
 cd otter-zenith
 ./main.sh
 ```
 
-This clones tagged releases, assembles a source tree, and runs `dpkg-buildpackage`. End users install with `pikman install otter-shell`. They do not need Zig.
+`debian/rules` runs each selected component's `deps` step, then its `install` step, from that component's root. It passes `DESTDIR`, `/usr` as prefix, and `OTR_CPU=x86_64_v3`. The browser instead uses `zig-maint/otter-browser/scripts/packaging-zenith.sh` to build its engine and stage its files.
 
-## Benchmarks
+End users install those packages with `pikman install otter-shell`; they need neither compiler.
 
-```bash
-cd otter-conf/benchmarks && zig build -Doptimize=ReleaseFast bench
-cd otter-render/benchmarks && zig build -Doptimize=ReleaseFast -Dcpu=x86_64_v3 bench
-cd otter-ui/benchmarks && zig build -Doptimize=ReleaseFast -Dcpu=x86_64_v3 bench
-cd otter-desktop/benchmarks && zig build -Doptimize=ReleaseFast bench
-```
+## Repository workflow
 
-## Per-component git workflow
+The workspace root is a thin Git repository with package submodules. Code changes belong in the affected component's repository. Root commits record workspace documentation, tools, or submodule pins; they do not replace component commits.
 
-Each component is its own repo. From inside a component directory:
-
-```bash
-git add .
-git commit -m "your message"
-git push origin main
-```
-
-Do not commit from the monorepo root. It is not a git repository.
-
-## App structure convention
-
-Most apps use this layout:
-
-| File | Purpose |
-|------|---------|
-| `src/main.zig` | Entry point, Wayland event loop |
-| `src/config.zig` | Config schema and parsing |
-| `src/draw.zig` | Surface Description frame and rendering |
-
-Long-running daemons use `GeneralPurposeAllocator`. One-shot overlays (launcher, logout) use `ArenaAllocator`.
+Native application sources live in `otr/`, alongside `otr/build.otr` and `otr/otr.toml`. Retained `.zig` sources are not the primary v0.13.0 build entry point. See [Creating an app](/developers/creating-an-app) for the native application workflow.

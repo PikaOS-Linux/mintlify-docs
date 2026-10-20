@@ -1,52 +1,32 @@
 ---
 title: "otter-render"
 sidebarTitle: "otter-render"
-description: "CPU rendering: colors, surfaces, fonts, images, CommandList, and quad_renderer."
+description: "otr CPU rendering with owned surfaces, image handles, fonts, and command lists."
 ---
 
-`otter-render` is the software renderer behind Otter Shell UI. Colors, surfaces, FreeType, HarfBuzz shaping, image decode, deferred draw commands.
+`otter-render` records drawing commands and rasterizes them on the CPU. Import leaf modules such as `otter_render.surface`, `otter_render.command_list`, and `otter_render.quad_renderer`.
 
-`otter-ui` fills a `CommandList`. You call `quad_renderer.rasterize` to paint SHM buffers.
+## Rendering boundary
 
-## Quick example
+- `Surface` owns pixels or a mapped pixel region.
+- `CommandList(N, M)` owns bounded commands and string storage.
+- `ImageHandle` identifies an image in an `ImageSource`; it is not a pointer.
+- `TextContext` lends the font and optional shaping resources during rasterization.
+- `Scale` carries exact Q8 scale independently of the integer ceiling.
 
-```zig
-const render = @import("otter_render");
+Fonts use FreeType and HarfBuzz. `otter_render.bidi` implements bidirectional layout without itijah.
 
-const accent = try render.parseColor("#FF5500");
-var surface = render.Surface.fromPixels(&pixels, width, height);
-surface.clear(render.Color.black);
+## Lua
 
-const font = try render.Font.init(allocator, .{});
-defer font.deinit();
-font.drawText(&surface, "Hello", .{ .x = 0, .y = 20 }, 16, accent);
-```
+`otter_render_lua` registers `otter.render` with no capability requirement. `measure(text, size, scale?)` measures logical text width. `image_size(bytes)` inspects encoded image dimensions. This module does not load files or expose a native command-list object to Lua; drawing uses the UI/SD bindings.
 
-## Pages in this library
+## Reference pages
 
-<CardGroup cols={2}>
-  <Card title="Colors and surfaces" icon="palette" href="/developers/libraries/otter-render/colors-and-surfaces">
-    `Color`, `Surface`, HiDPI scaling, and immediate-mode drawing.
-  </Card>
-  <Card title="Fonts and text" icon="font" href="/developers/libraries/otter-render/fonts-and-text">
-    `Font`, `TextSystem`, shaping, bidi, and fallbacks.
-  </Card>
-  <Card title="Images and animation" icon="image" href="/developers/libraries/otter-render/images-and-animation">
-    `Image`, sprite sheets, downsampling, and `Animation`.
-  </Card>
-  <Card title="Command list" icon="list" href="/developers/libraries/otter-render/command-list">
-    `DefaultCommandList`, scissor, damage culling, `quad_renderer`.
-  </Card>
-</CardGroup>
+- [Colors and surfaces](/developers/libraries/otter-render/colors-and-surfaces)
+- [Command lists](/developers/libraries/otter-render/command-list)
+- [Fonts and text](/developers/libraries/otter-render/fonts-and-text)
+- [Images and animation](/developers/libraries/otter-render/images-and-animation)
 
-## Build flags
+## Source reference
 
-| Flag | Effect |
-|------|--------|
-| `-Denable_text=false` | Drop FreeType, HarfBuzz, Fontconfig |
-| `-Denable_svg=false` | SVG loads return `error.SvgDisabled` |
-| `-Denable_wide_image_formats=false` | Limit decode to PNG/JPEG |
-
-## Dependencies
-
-`otter-geo`, `otter-utils`, FreeType, HarfBuzz, Fontconfig, zigimg.
+`otr/otr.toml`, `otr/` in the component repository.

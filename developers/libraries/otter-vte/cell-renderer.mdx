@@ -1,28 +1,35 @@
 ---
 title: "Cell renderer"
 sidebarTitle: "Cell renderer"
-description: "CellRenderer, hooks, and Renderer in otter-vte."
+description: "Explicit otr cell interfaces, snapshot walking, and layered terminal rasterization."
 ---
 
-Comptime cell renderer. You supply hooks for cursor shape, hyperlink hits, and selection highlights. `otter-term` is the main embedder.
+## Cell contract
 
-## CellRenderer
+Import `otter_vte.cell_renderer`. `Cell` is a concrete borrowed view containing codepoints, optional RGB colors, width, and `StyleFlags`.
 
-```zig
-const vte = @import("otter_vte");
+`CellRenderer(App, Sel, hooks)` requires explicit interfaces:
 
-const Hooks = vte.CellRendererHooks(MyCell, MyState);
+- `App` implements `CellHost`: hovered URL state, blink visibility, text measurement.
+- `Sel` implements `SelectionRange.contains`.
+- `Hooks` supplies Kitty-placeholder classification and selection behavior.
 
-var renderer = vte.CellRenderer(MyCell, Hooks).init(&state);
-try renderer.drawGrid(&cmds, visible_rows, visible_cols);
-```
+`DrawContext` receives mutable visual hashes, column count, font size, selection colors, and borrowed output lists. Profiling counters and blink observations return through that context instead of writing arbitrary application fields.
 
-`textRunBatchingSafe` reports whether adjacent cells can merge into one text draw call (same style, no wide-char boundary).
+## Snapshot walking
 
-## Renderer facade
+`otter_vte.snapshot.Rows` borrows column slices from a terminal snapshot. `snapshot.walk` gathers graphemes into caller-kept storage, then visits cells through `CellVisitor`.
 
-`vte.Renderer` wraps command list allocation, damage rects, and `quad_renderer` playback for simpler embedders.
+The terminal app constructs this view from its terminal backend. `otter-vte` renders snapshots; it does not own the PTY or parse terminal escape sequences.
 
-## Integration with otter-term
+## Layered renderer
 
-`otter-term` maps Ghostty screen cells into `MyCell`, wires PTY resize, forwards pointer selection. New terminal drawing belongs in hooks here, not copy-pasted in the app.
+`renderer.Renderer.init(alloc)` owns base, background, and text command lists, powerline/block operations, and rounded-mask cache.
+
+Call `prepare`, `configure(Scale)`, then emit cells. Base/background raster helpers accept explicit surfaces and damage. Text is rasterized directly with `quad_renderer.rasterize` and caller-owned text resources.
+
+Keep the snapshot and mutable renderer in separate borrowed arguments during the walk. Do not retain borrowed cell text after visiting it.
+
+## Source reference
+
+`otr/cell_renderer.otr`, `otr/snapshot.otr`, `otr/renderer.otr` in the component repository.

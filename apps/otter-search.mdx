@@ -4,9 +4,9 @@ sidebarTitle: "Desktop Search"
 description: "Fast file and content search for your desktop. Fuzzy path search and live grep over documents, downloads, and home directories."
 ---
 
-`otter-search` indexes personal files and answers fuzzy path queries plus grep-style content search. Indexing and scoring run in pure Zig (`otter_tools_search` in otter-tools-core). It does not use Rust or a vendored fuzzy engine.
+`otter-search` indexes personal files and answers fuzzy path queries plus grep-style content search. Indexing and scoring use the native search implementation in `otter-tools-core`.
 
-A companion CLI, `otter-searchctl`, queries the indexes, checks status, lists roots, or triggers a reindex. **The daemon must be running** for `otter-searchctl` to work.
+The companion CLI, `otter-searchctl`, queries the indexes, checks status, lists roots, or triggers a reindex. Run the daemon before using `otter-searchctl`.
 
 The daemon watches the filesystem and reindexes on changes. Writes are debounced and throttled so a burst of activity does not thrash the index.
 
@@ -23,19 +23,17 @@ Run once per session (or add to autostart).
 otter-search
 ```
 
-<Tip>
-  Add `otter-search` to your compositor autostart so indexes are ready early. The daemon binds `$XDG_RUNTIME_DIR/otter-shell/otter-search.sock`.
-</Tip>
+<Tip>Add `otter-search` to your compositor autostart so indexes are ready early. The daemon binds `$XDG_RUNTIME_DIR/otter-shell/otter-search.sock`.</Tip>
 
 ## CLI: otter-searchctl
 
-| Command | Description |
-|---------|-------------|
-| `otter-searchctl status` | Daemon health, root states, memory (RSS/PSS), and scan progress |
-| `otter-searchctl roots` | List configured and expanded search roots with status |
-| `otter-searchctl reindex` | Drop and rebuild indexes |
-| `otter-searchctl path QUERY...` | Fuzzy path search across indexed roots |
-| `otter-searchctl content QUERY...` | Live content (grep) search within indexed files |
+| Command                            | Description                                                     |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `otter-searchctl status`           | Daemon health, root states, memory (RSS/PSS), and scan progress |
+| `otter-searchctl roots`            | List configured and expanded search roots with status           |
+| `otter-searchctl reindex`          | Drop and rebuild indexes                                        |
+| `otter-searchctl path QUERY...`    | Fuzzy path search across indexed roots                          |
+| `otter-searchctl content QUERY...` | Live content (grep) search within indexed files                 |
 
 `path` and `content` accept space-separated multi-word queries. Replies stop after `max_results` matches (default **10**, clamped to **50**).
 
@@ -49,7 +47,7 @@ otter-searchctl content "quarterly results"
 ### Example JSON (path)
 
 ```json
-{"items":[{"kind":"file","path":"/home/you/Documents/invoice-2026.pdf","name":"invoice-2026.pdf","root":0,"size":12345,"modified":1720000000,"score":42}]}
+{ "items": [{ "kind": "file", "path": "/home/you/Documents/invoice-2026.pdf", "name": "invoice-2026.pdf", "root": 0, "size": 12345, "modified": 1720000000, "score": 42 }] }
 ```
 
 Path results include `root` index, `size`, `modified`, and `score`.
@@ -79,17 +77,17 @@ See the [otter-conf Dynamic docs](/developers/libraries/otter-conf/advanced-feat
 
 ### Options
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `enable_xdg_user_dirs` | true | Index XDG dirs (Desktop, Documents, Downloads, Music, Pictures, Public, Templates, Videos) |
-| `enable_home_config` | true | Index `~/.config` recursively |
-| `enable_home_shallow` | true | Index direct children of `$HOME` (path only, shallow) |
-| `content_indexing` | true | Enable live grep / content search |
-| `max_content_file_bytes` | 10 MiB | Skip content indexing for larger files |
-| `cache_budget_max_bytes` | 256 MiB | Total memory budget across recursive roots |
-| `max_files_per_root` | 75,000 | Skip roots that look too large at startup |
-| `max_results` | 10 | Cap on path/content matches per reply (clamped to 50) |
-| `root` | (none) | Additional user roots (repeatable via Dynamic) |
+| Key                      | Default | Description                                                                                |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------ |
+| `enable_xdg_user_dirs`   | true    | Index XDG dirs (Desktop, Documents, Downloads, Music, Pictures, Public, Templates, Videos) |
+| `enable_home_config`     | true    | Index `~/.config` recursively                                                              |
+| `enable_home_shallow`    | true    | Index direct children of `$HOME` (path only, shallow)                                      |
+| `content_indexing`       | true    | Enable live grep / content search                                                          |
+| `max_content_file_bytes` | 10 MiB  | Skip content indexing for larger files                                                     |
+| `cache_budget_max_bytes` | 256 MiB | Total memory budget across recursive roots                                                 |
+| `max_files_per_root`     | 75,000  | Skip roots that look too large at startup                                                  |
+| `max_results`            | 10      | Cap on path/content matches per reply (clamped to 50)                                      |
+| `root`                   | (none)  | Additional user roots (repeatable via Dynamic)                                             |
 
 `status` also reports top-level `rss_kb` / `pss_kb` plus per-root scan progress when available.
 
@@ -119,6 +117,4 @@ Use after large file operations or when you want fresh results immediately. The 
 - [otter-launcher](/desktop/otter-launcher) uses the daemon for `file` / `f` (path) and `grep` / `g` (content) modes.
 - Embedders: `otter_tools_search` and `search_client` in [otter-tools-core](/developers/libraries/otter-tools-core), schemas in [otter-config-types](/developers/libraries/otter-config-types/app-config-modules).
 
-<Note>
-  Content search is capped and skips binaries and large files. For very large collections, tune budgets or limit roots.
-</Note>
+<Note>Content search is capped and skips binaries and large files. For very large collections, tune budgets or limit roots.</Note>

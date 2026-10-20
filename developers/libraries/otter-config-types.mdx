@@ -1,31 +1,32 @@
 ---
 title: "otter-config-types"
 sidebarTitle: "otter-config-types"
-description: "Typed config structs shared across Otter Shell apps and otter-settings."
+description: "Shared otr configuration schemas and field metadata for Otter Shell apps."
 ---
 
-`otter-config-types` is the Zig structs `otter-conf` parses for each app. `otter-settings` edits the same types at runtime.
+`otter-config-types` defines defaulted application schemas without opening services or drawing UI. Import an application leaf module, for example `otter_config_types.bar` or `otter_config_types.term`.
 
-New configurable app? Add the struct here first, then a tab in `otter-settings/src/tabs.zig`.
+Colors come from `otter_geo.color`. Text fields use `otter_conf.text.Text`; configs containing owned text have `deinit()`. Plain numeric/color-only configs remain copyable values.
 
-## Quick example
+`otter_config_types.fields` exposes `is_known_field`, `field_needs_quoting`, and `get_enum_field_names` for editors.
 
-```zig
-const config_types = @import("otter_config_types");
-const BarConfig = config_types.bar.Config;
-```
+## Lua schema access
 
-## Pages in this library
+The separate `otter_config_types_lua` package exposes `otter.config.schema`, not `otter.config`. It requires no capability because it performs no I/O.
 
-<CardGroup cols={2}>
-  <Card title="App config modules" icon="table" href="/developers/libraries/otter-config-types/app-config-modules">
-    Per-app structs: bar, launcher, lock, monitor, and more.
-  </Card>
-  <Card title="Patterns" icon="code" href="/developers/libraries/otter-config-types/patterns">
-    Defaults, nested structs, colors, and adding new configs.
-  </Card>
-</CardGroup>
+- `apps()` lists the 22 schema names.
+- `file(app)` returns the config file name or greeter's system path.
+- `defaults(app)` returns a nested defaults table.
+- `parse(app, text)` returns the typed table or `nil, error_name`.
+- `field(app, key)` returns quoting and enum metadata, or nil.
 
-## Dependencies
+File reads, watches, and typed writes belong to `otter_conf_lua`.
 
-`otter-geo`, `otter-render`, `otter-conf`.
+## Reference pages
+
+- [App config modules](/developers/libraries/otter-config-types/app-config-modules)
+- [Schema conventions](/developers/libraries/otter-config-types/patterns)
+
+## Source reference
+
+`otr/otr.toml`, `otr/` in the component repository.

@@ -1,0 +1,31 @@
+---
+title: "otter-installer"
+sidebarTitle: "PikaOS installer"
+description: "Native PikaOS installation wizard for storage, desktop selection, and installation progress."
+---
+
+`otter-installer` is the graphical PikaOS installation wizard. It is packaged separately from the `otter-shell` metapackage and intended for the PikaOS installation workflow.
+
+## Usage
+
+Open the installer from the live image's application menu, or run:
+
+```bash
+otter-installer
+```
+
+The wizard collects locale, keyboard layout, timezone, target drive, desktop or shell modules, and optional software. Account creation happens in [First Setup](/apps/otter-first-setup) after reboot.
+
+## Storage
+
+Automatic installation defaults to XFS, with ext4 and Btrfs available. Advanced options cover home layout, encryption, swap, and rEFInd. Manual mode opens Blivet to edit partitions, then validates the partition assignments before installation.
+
+<Warning>Automatic installation erases the selected drive after the final erase review. Check the drive and partition plan before confirming. Mounted or read-only drives, including drives with mounted partitions, are refused.</Warning>
+
+## Installation progress
+
+The privileged helper uses `pikainstall` to validate and prepare the target. Answers files and logs are private. Navigation and window close are disabled while installation runs.
+
+Progress shows the active stage and elapsed time. **Restart** becomes available only after the helper exits successfully. If installation fails, the final screen shows the helper output, including authorization errors.
+
+After reboot, First Setup completes identity and remaining setup tasks. The installer does not make a compositor part of the `otter-shell` package; desktop choices belong to the PikaOS installation profile.

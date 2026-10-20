@@ -1,54 +1,29 @@
 ---
 title: "otter-utils"
 sidebarTitle: "otter-utils"
-description: "Pure Zig utilities: BoundedArray, FilePath, logging, inotify, and Otter config paths."
+description: "otr logging, XDG paths, inotify, process and runtime-state helpers."
 ---
 
-`otter-utils` sits at the bottom of the stack. Pure Zig, no external deps. Every other library links it for bounded containers, path helpers, logging, file watching, and shared XDG paths under `~/.config/otter-shell/`.
+`otter-utils` supplies small Linux and application helpers through `otter_utils.<module>` imports. It has no package root barrel.
 
-## Quick example
+| Modules                                                       | Purpose                                       |
+| ------------------------------------------------------------- | --------------------------------------------- |
+| `log`                                                         | Scoped logging, counters, periodic reporters  |
+| `fixed_string`                                                | UTF-8-aware bounded configuration text        |
+| `xdg_paths`, `runtime_paths`, `runtime_state`, `legacy_paths` | Shared filesystem locations and session state |
+| `inotify`                                                     | File and directory event watching             |
+| `process`, `command`, `shutdown`                              | Child-process and lifecycle helpers           |
+| `unix_socket`, `runtime_auth`                                 | Local IPC support                             |
 
-```zig
-const utils = @import("otter_utils");
+Use otr standard-library containers and path types instead of `BoundedArray` and `FilePath`, which are not exported. Environment-dependent helpers take `std.Env`; there is no global `io.install` step.
 
-var arr = utils.BoundedArray(u8, 256){};
-try arr.appendSlice("hello");
+## Reference pages
 
-const mylog = utils.log.Scoped("my-app");
-mylog.info("starting", .{});
+- [Arrays and paths](/developers/libraries/otter-utils/arrays-and-paths)
+- [Config and runtime paths](/developers/libraries/otter-utils/config-and-runtime-paths)
+- [Inotify](/developers/libraries/otter-utils/inotify)
+- [Logging](/developers/libraries/otter-utils/logging)
 
-var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-const config_path = utils.config_paths.otterConfigPath(&path_buf, "myapp.conf") orelse return error.NoHome;
-```
+## Source reference
 
-## Pages in this library
-
-<CardGroup cols={2}>
-  <Card title="Arrays and paths" icon="layer-group" href="/developers/libraries/otter-utils/arrays-and-paths">
-    `BoundedArray`, `FilePath`, `FixedString`, and stack buffers.
-  </Card>
-  <Card title="Logging" icon="terminal" href="/developers/libraries/otter-utils/logging">
-    Scoped loggers, counters, timers, and periodic reporters.
-  </Card>
-  <Card title="Inotify" icon="eye" href="/developers/libraries/otter-utils/inotify">
-    Generic file and directory watcher for event loops.
-  </Card>
-  <Card title="Config and runtime paths" icon="folder" href="/developers/libraries/otter-utils/config-and-runtime-paths">
-    XDG config, data, cache, runtime dirs, and `runtime_state`.
-  </Card>
-</CardGroup>
-
-## Other exports
-
-| Module | Purpose |
-|--------|---------|
-| `process` / `command` | Find executables through local build paths or `$PATH`, then spawn with bounded argv |
-| `SubscriberList` | Lightweight pub/sub for state changes |
-| `unix_socket` | Bounded Unix socket paths and FD hardening |
-| `app_id_match` | Match Wayland `app_id` strings |
-| `assist` | ChatML prompt helpers for `otter-assist` |
-| `cli` | Shared CLI flag parsing for small tools |
-
-## Dependencies
-
-None.
+`otr/otr.toml`, `otr/` in the component repository.

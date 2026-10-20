@@ -16,10 +16,12 @@ description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other
 - Power profiles (power-profiles-daemon / tuned-ppd)
 - CPU, temperature, memory, and network widgets
 - Volume via PipeWire with scroll-to-adjust and device popup
-- MPRIS media player with album art
+- MPRIS media player: left-click opens playback controls; middle-click toggles play/pause. Intentionally blurred artwork covers the full popup with aspect-preserving cropping.
 - System tray (StatusNotifierItem) with context menus
 - Do Not Disturb toggle shared with notifications and OSD
 - Night Light toggle (`nightlight`) for [otter-nightlight](/desktop/otter-nightlight)
+- Keyboard layout indicator (`keyboard_layout`)
+- Weather from the `otter-weather` cache
 - Custom button widgets with an icon and a command
 - HiDPI scaling per output
 
@@ -33,19 +35,28 @@ Add it to compositor autostart: see [Session setup](/desktop/session-setup).
 
 The menu button runs `otter-launcher` by default. Change it with `button_menu_command`.
 
-The optional power button runs `otter-logout` by default. Set `button_power_enabled = true`, then add `button_power` to a layout.
+The power button runs `otter-logout` by default. It is enabled and sits at the end of the default right layout.
 
-Third-party widgets load as `plugin:<id>` slots. Enable them in otter-settings **Plugins**, then drag the chip into the layout. See [Plugins](/desktop/plugins).
+### Lua widgets
 
-`otter-bluetooth-plugin` installs `plugin:bluetooth-applet` and depends on `blueman`. Enable it under **Plugins**, then add `plugin:bluetooth-applet` to a layout. Click the chip for status and device controls. The applet menu can open `blueman-manager`.
+The built-in widgets are drawn by Lua plugins by default. `otter-bar` installs them under `/usr/share/otter-shell/plugins/<name>`. A layout name such as `clock` loads `plugin:clock`, which reads the same `clock_*` keys from `otter-bar.conf` and draws the same widget. Every `button_<name>` loads the shared `button` plugin.
+
+To keep the native widget instead, do one of these:
+
+- Write `native:<name>` in the layout, for example `native:clock`.
+- Set `<plugin-id>_enabled = false` in `~/.config/otter-shell/plugins.conf`, for example `clock_enabled = false`. For the shared button renderer, use `button_enabled = false`.
+
+The bar also falls back to the native widget when a plugin is missing or fails to load. To override a bundled widget, copy its directory to `~/.local/share/otter-shell/plugins/<name>` and edit it.
+
+Third-party widgets load as `plugin:<id>` slots. Enable them in otter-settings **Plugins**, then drag the chip into the layout. See [Plugins](/desktop/plugins). To write your own widget, see [Plugin development](/developers/plugins).
+
+`otter-bluetooth-plugin` installs `plugin:bluetooth-applet` and depends on `bluez` and `otter-term`. Enable it under **Plugins**, then add `plugin:bluetooth-applet` to a layout. Click the chip for status and device controls. Advanced device management opens `bluetoothctl` in Otter Terminal.
 
 ## Configuration
 
 Config: `~/.config/otter-shell/otter-bar.conf` (fallback: `/etc/otter-shell/otter-bar.conf`). Created on first run.
 
-<Tip>
-  Drag widgets in [otter-settings](/desktop/otter-settings) instead of editing layout strings.
-</Tip>
+<Tip>Drag widgets in [otter-settings](/desktop/otter-settings) instead of editing layout strings.</Tip>
 
 Key settings:
 
@@ -76,6 +87,14 @@ Add `dnd` to any layout section. Click its bell icon to pause or resume notifica
 
 Add `nightlight` to any layout section. Left-click enables or disables [otter-nightlight](/desktop/otter-nightlight). Right-click for temperature presets, the schedule window, and a one-hour suspend. The widget does nothing if the daemon is not running.
 
+### Keyboard layout
+
+Add `keyboard_layout` to a layout section to show the current XKB layout. Set `keyboard_layout_notify_on_change = true` to show layout changes through `otter-osd`. Niri and Hyprland report layouts over native IPC. Other compositors rely on Wayland keyboard events.
+
+### System tray
+
+Set `system_tray_always_show = true` to show tray icons without the expand button.
+
 ### Weather widget
 
 Add `weather` to a layout section, then run the cache watcher:
@@ -88,14 +107,10 @@ Set coordinates in `~/.config/otter-shell/otter-weather.conf`. See [otter-weathe
 
 ### Calendar popover
 
-Point the clock widget at [otter-cal](/apps/otter-cal):
-
-```conf
-clock_calendar_command = otter-cal --layer
-```
+Left-click the clock to open the calendar popover. Click the bar or outside the popover to close it. The popover lists today's agenda lines from `~/.config/otter-shell/agenda`, one `YYYY-MM-DD text` entry per line. Set `clock_agenda_path` to read another file.
 
 ## Dependencies
 
 - Wayland compositor with `zwlr_layer_shell_v1`
-- D-Bus (UPower, MPRIS, system tray): disable with `-Denable_dbus=false` at build time
-- PipeWire (volume widget): disable with `-Denable_pipewire=false` at build time
+- D-Bus services for battery, power profiles, MPRIS, network, and system tray
+- PipeWire for the volume widget

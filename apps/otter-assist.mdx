@@ -6,18 +6,16 @@ description: "Local text-generation daemon for Otter Shell. Ships in otter-shell
 
 `otter-assist` runs the local model behind Otter Assistant. It listens on a Unix socket tied to your Wayland display and does inference on-device. It can also look up packaged knowledge, search the web, fetch weather, or query desktop search. The chat window is [otter-assistant](/apps/otter-assistant).
 
-<Note>
-  `otter-assist`, `otter-assistant`, `otter-assist-data`, and `otter-assist-model` ship in **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.
-</Note>
+<Note>`otter-assist`, `otter-assistant`, `otter-assist-data`, and `otter-assist-model` ship in **`otter-shell-extras`**, not the base `otter-shell` metapackage. Install with `pikman install otter-shell-extras`.</Note>
 
 ## Packages
 
-| Package | Role |
-|---------|------|
-| `otter-assist` | Daemon (`otter-assist`) and control CLI (`otter-assistctl`) |
-| `otter-assist-data` | Packaged knowledge indexes under `/usr/lib/otter-assist/` |
-| `otter-assist-model` | GGUF weights under `/usr/share/otter-shell/models/assist` |
-| `otter-assistant` | XDG toplevel chat client |
+| Package              | Role                                                        |
+| -------------------- | ----------------------------------------------------------- |
+| `otter-assist`       | Daemon (`otter-assist`) and control CLI (`otter-assistctl`) |
+| `otter-assist-data`  | Packaged knowledge indexes under `/usr/lib/otter-assist/`   |
+| `otter-assist-model` | GGUF weights under `/usr/share/otter-shell/models/assist`   |
+| `otter-assistant`    | XDG toplevel chat client                                    |
 
 Packaged builds load the model from `/usr/share/otter-shell/models/assist` (`otter-assist-model`). Indexes land under `/usr/lib/otter-assist/indexes/` (`otter-assist-data`).
 
@@ -43,7 +41,7 @@ Vulkan is the default backend. Set `backend = cpu` to load the CPU llama library
 ## Control CLI
 
 ```bash
-otter-assistctl infer "Rewrite this shorter: Otter Shell is a Zig-based Wayland desktop shell."
+otter-assistctl infer "Rewrite this shorter: Otter Shell is a native Wayland desktop shell."
 otter-assistctl --json infer "Reply with one word: ok"
 otter-assistctl chat --file request.json
 otter-assistctl status
@@ -72,20 +70,20 @@ max_tool_calls = 4
 max_web_searches = 2
 ```
 
-| Key | Meaning |
-|-----|---------|
-| `backend` | `vulkan` (default) or `cpu` |
-| `vulkan_device` | `-1` for llama.cpp auto selection; `0` first GPU, `1` second, and so on |
-| `idle_seconds` | Unload the idle model after this many seconds (default `120`) |
-| `knowledge_enabled` | Run packaged knowledge retrieval on JSON chat requests |
-| `web_enabled` / `web_always_allow` | Allow web search; ask for approval unless always-allow is on |
-| `weather_enabled` | Open-Meteo weather tool (same path as `otter-weather`) |
+| Key                                                      | Meaning                                                                                |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `backend`                                                | `vulkan` (default) or `cpu`                                                            |
+| `vulkan_device`                                          | `-1` for llama.cpp auto selection; `0` first GPU, `1` second, and so on                |
+| `idle_seconds`                                           | Unload the idle model after this many seconds (default `120`)                          |
+| `knowledge_enabled`                                      | Run packaged knowledge retrieval on JSON chat requests                                 |
+| `web_enabled` / `web_always_allow`                       | Allow web search; ask for approval unless always-allow is on                           |
+| `weather_enabled`                                        | Open-Meteo weather tool (same path as `otter-weather`)                                 |
 | `desktop_search_enabled` / `desktop_search_always_allow` | Query `otter-search` over its socket; blocked unless always-allow or one-shot approval |
-| `pika_search_url` | Web search endpoint |
-| `knowledge_index_dir` | Packaged index directory |
-| `max_tool_calls` / `max_web_searches` | Tool call budgets per request |
+| `pika_search_url`                                        | Web search endpoint                                                                    |
+| `knowledge_index_dir`                                    | Packaged index directory                                                               |
+| `max_tool_calls` / `max_web_searches`                    | Tool call budgets per request                                                          |
 
-Web search only fires on its own when `web_enabled` and `web_always_allow` are both true, and the prompt actually needs current or web-backed info. Otherwise you get an `approval_required` event and no network call. Desktop search returns metadata and content previews only.
+Web search runs automatically only when `web_enabled` and `web_always_allow` are both true and the prompt needs current information or web sources. Otherwise, it returns an `approval_required` event without making a network call. Desktop search returns metadata and content previews only.
 
 Every prompt gets the current UTC date and time, so the model does not invent relative dates. The packaged default model is the v12 full-knowledge LFM2.5 1.2B Q4_0 checkpoint.
 

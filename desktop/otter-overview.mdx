@@ -4,7 +4,7 @@ sidebarTitle: "Workspace overview"
 description: "Workspace and window overlay with cards, thumbnails, search, and an application grid."
 ---
 
-`otter-overview` is a one-shot overlay. Bind it to a hotkey. Workspace cards, window thumbnails, search, and an app grid. Click a tile to jump there. Type to launch an app. Escape closes.
+`otter-overview` shows workspace cards, window thumbnails, search, and an app grid in a one-shot overlay. Bind it to a hotkey. Click a tile to focus a window or type to launch an app. Escape closes the overlay.
 
 The same package ships [`otter-switcher`](/desktop/otter-switcher), an Alt-Tab strip for the current workspace only. See that page for binds and input.
 
@@ -24,7 +24,21 @@ Typical Hyprland bind:
 bind = SUPER, Super_L, exec, otter-overview
 ```
 
+Running `otter-overview` again while it is open closes it.
+
 Do not autostart it. Same pattern as [otter-launcher](/desktop/otter-launcher): run it from a hotkey. It exits when you dismiss.
+
+### Commands
+
+| Command                           | Action                                                |
+| --------------------------------- | ----------------------------------------------------- |
+| `otter-overview toggle`           | Close a running overview                              |
+| `otter-overview gesture-begin`    | Start a 1:1 open swipe from a compositor gesture bind |
+| `otter-overview gesture-close`    | Start a 1:1 close swipe                               |
+| `otter-overview gesture-delta DY` | Send a swipe delta. Down is positive                  |
+| `otter-overview gesture-finish`   | Commit or cancel based on progress                    |
+| `otter-overview gesture-cancel`   | Abort the current swipe                               |
+| `otter-overview --help`           | Show usage                                            |
 
 ## What you can do
 
@@ -37,7 +51,7 @@ Do not autostart it. Same pattern as [otter-launcher](/desktop/otter-launcher): 
 - Click the search bar, or type, for the application grid. Enter launches. Escape clears search, then closes.
 - Wheel or trackpad scrolls the card strip, or pages the app grid. Page Up / Page Down and the `< n / m >` chips change pages. Arrows and Tab move between tiles or app cells.
 
-On compositors that advertise `zwp_pointer_gestures_v1`, a three-finger vertical swipe tracks overlay progress 1:1 while it is open. Touchpad motion on the card strip stays 1:1 until you lift, then snaps to the nearest card.
+On compositors that advertise `zwp_pointer_gestures_v1`, a three-finger vertical swipe tracks overlay progress 1:1 while it is open. A three-finger horizontal swipe scrubs a scrolling workspace lane. Opening from the desktop is a compositor bind, for example Sway `bindgesture`. Touchpad motion on the card strip stays 1:1 until you lift, then snaps to the nearest card.
 
 Only that output's workspaces show.
 
@@ -47,9 +61,7 @@ If tiled windows sit past the output edge (Hyprland scrolling layout, niri colum
 
 Config: `~/.config/otter-shell/otter-overview.conf` (fallback: `/etc/otter-shell/otter-overview.conf`). Created on first run.
 
-<Tip>
-  The **Overview** tab in [otter-settings](/desktop/otter-settings) writes the same file.
-</Tip>
+<Tip>The **Overview** tab in [otter-settings](/desktop/otter-settings) writes the same file.</Tip>
 
 ```conf
 axis = vertical
@@ -63,14 +75,14 @@ capture_refresh_ms = 4000
 empty_workspaces = one_empty
 ```
 
-| Key | Meaning |
-|-----|---------|
-| `axis` | `vertical` or `horizontal` card strip |
-| `card_scale_percent` | Card size as a percent of the output, clamped 20 to 80. Default 50. |
-| `empty_workspaces` | `all` (every compositor workspace), `one_empty` (occupied plus one spare; a new slot appears when that one fills), or `populated` (occupied only) |
-| `capture_windows` | Grab window thumbnails when the compositor supports it |
-| `max_capture_px` | Longest side of a stored capture, clamped 768 to 2048 |
-| `capture_refresh_ms` | Thumbnail refresh interval. `0` disables. Other values clamp to 1000 to 30000 |
+| Key                  | Meaning                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `axis`               | `vertical` or `horizontal` card strip                                                                                                             |
+| `card_scale_percent` | Card size as a percent of the output, clamped 20 to 80. Default 50.                                                                               |
+| `empty_workspaces`   | `all` (every compositor workspace), `one_empty` (occupied plus one spare; a new slot appears when that one fills), or `populated` (occupied only) |
+| `capture_windows`    | Grab window thumbnails when the compositor supports it                                                                                            |
+| `max_capture_px`     | Longest side of a stored capture, clamped 768 to 2048                                                                                             |
+| `capture_refresh_ms` | Thumbnail refresh interval. `0` disables. Other values clamp to 1000 to 30000                                                                     |
 
 Omit color keys (`overlay_color`, `card_color`, `card_active_color`, `card_border_color`, `tile_color`, `search_color`, `text_color`, `muted_color`, `accent_color`) to inherit from [theme.conf](/configuration/themes). `font_path`, `font_size`, and `border_radius` are optional the same way.
 
@@ -82,26 +94,26 @@ Hyprland can also use `hyprland_toplevel_export`. Other compositors use `ext-ima
 
 ## Compositor support
 
-| Compositor | Workspaces and windows | Thumbnails |
-|------------|------------------------|------------|
-| Sway | IPC (`get_workspaces`, `get_tree`) for `otter-switcher` | `ext-image-copy-capture` when available |
-| Hyprland | IPC (`j/workspaces`, `j/clients`, `j/monitors`) | `hyprland_toplevel_export` |
-| niri | IPC (`Workspaces`, `Windows`, `FocusWindow`, `MoveWindowToWorkspace`) | `ext-image-copy-capture` when available |
-| mango/dwl | `zdwl_ipc_output_v2` + wlr-foreign-toplevel (tag cards; no otter-tag) | `ext-image-copy-capture` when available |
-| Other | `ext-workspace` + wlr-foreign-toplevel fallback | `ext-image-copy-capture` when available |
+| Compositor | Workspaces and windows                                                | Thumbnails                              |
+| ---------- | --------------------------------------------------------------------- | --------------------------------------- |
+| Sway       | IPC (`get_workspaces`, `get_tree`) for `otter-switcher`               | `ext-image-copy-capture` when available |
+| Hyprland   | IPC (`j/workspaces`, `j/clients`, `j/monitors`)                       | `hyprland_toplevel_export`              |
+| niri       | IPC (`Workspaces`, `Windows`, `FocusWindow`, `MoveWindowToWorkspace`) | `ext-image-copy-capture` when available |
+| mango/dwl  | `zdwl_ipc_output_v2` + wlr-foreign-toplevel (tag cards; no otter-tag) | `ext-image-copy-capture` when available |
+| Other      | `ext-workspace` + wlr-foreign-toplevel fallback                       | `ext-image-copy-capture` when available |
 
 Needs `zwlr_layer_shell_v1`.
 
 ## Keyboard
 
-| Key | Action |
-|-----|--------|
-| Escape | Clear search, then close |
-| Enter | Launch selected app |
-| Arrows / Tab | Move between tiles or app cells |
-| Page Up / Page Down | Change app-grid pages |
-| Ctrl+1 .. Ctrl+9 | Jump to workspace 1 to 9 (mini strip) |
-| Ctrl+0 | Jump to workspace 10 |
+| Key                 | Action                                |
+| ------------------- | ------------------------------------- |
+| Escape              | Clear search, then close              |
+| Enter               | Launch selected app                   |
+| Arrows / Tab        | Move between tiles or app cells       |
+| Page Up / Page Down | Change app-grid pages                 |
+| Ctrl+1 .. Ctrl+9    | Jump to workspace 1 to 9 (mini strip) |
+| Ctrl+0              | Jump to workspace 10                  |
 
 ## Dependencies
 

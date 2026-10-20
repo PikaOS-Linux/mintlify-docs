@@ -1,39 +1,31 @@
 ---
 title: "Greeter and auth"
-sidebarTitle: "Auth"
-description: "PAM, session catalog, logind, and power actions in otter-desktop."
+sidebarTitle: "Greeter and auth"
+description: "Explicit otr PAM conversations, session discovery, and power-service boundaries."
 ---
 
-PAM, session files, logind seats, and power actions. Lock uses a thin slice of this. The greeter uses most of it.
+## PAM authentication
 
-## PAM
+Native authentication lives under `otter_desktop.pam`. `pam.PamAuth.authenticate(service, user, password)` returns `PamResult`. PAM support is controlled by `enable_pam`.
 
-```zig
-var auth = otter_desktop.PamAuth.init("otter-lock");
-const result = try auth.authenticate(password);
-```
+Session operations use `pam_session.Session(Backend)` with a backend owned by value. Conversations are borrowed through `conv.Conversation` for the duration of a PAM call; no application pointer remains in `appdata_ptr`.
 
-`PamSession` wraps full session open/close for `otter-greeter`. Build with `-Denable_pam=true` for lock and greeter packages.
+Account checks, credential setup/deletion, and session open/close operations receive a conversation too. `conv.Silent` drops messages and refuses prompts when interaction is not allowed. Test fixtures can select a private PAM configuration directory.
 
-## Session catalog
+## Session discovery and launch
 
-`session_catalog` scans Wayland `.desktop` session files and maps `DesktopNames` to XDG session environment variables.
+`otter_desktop.apps.session_catalog` discovers session entries. `session_launcher` handles session launching. Session discovery does not mean Otter Shell supplies the compositor named by an entry.
 
-`session_launcher` builds user/session env without inventing logind-owned variables.
+The greeter uses Hyprland for the login screen only. User sessions select their own compositor/session.
 
-## Accounts and seats
+## D-Bus authentication and power
 
-- `accounts_service`: user list with passwd fallback
-- `logind_seats`: seat records and watch hooks for greeter UI
+`dbus.logind`, `logind_seats`, `accounts_service`, `power_actions`, `polkit_agent`, and `fprintd` cover the corresponding services. Keep cancellation, prompts, and service errors explicit in the app's lifecycle.
 
-## Power actions
+## Lua boundary
 
-`power_actions` routes shutdown, reboot, and suspend through logind policy checks.
+Lua desktop bindings expose selected status and power operations, not raw PAM conversation or authentication handles. `otter.desktop.logind.suspend`, `reboot`, and `poweroff` require `power`. Never invoke these actions as documentation verification.
 
-## Greeter integration
+## Source reference
 
-`otter-greeter` composes these modules with `otter-ui` Surface Description. Lock screen (`otter-lock`) uses `PamAuth` only; greeter uses full `PamSession` plus session picker.
-
-## Polkit and fprintd
-
-`PolkitAgent` registers the desktop auth agent. `Fprintd` adds fingerprint auth for lock and polkit dialogs when hardware is there.
+`otr/pam/`, `otr/apps/session_catalog.otr`, `otr/apps/session_launcher.otr`, `otr/dbus/logind.otr`, `otr/dbus/polkit_agent.otr` in the component repository.

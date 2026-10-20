@@ -4,7 +4,7 @@ sidebarTitle: "Overview"
 description: "Configure Otter Shell in otter-settings or by editing ~/.config/otter-shell/. Most changes hot-reload on save."
 ---
 
-**`otter-settings`** is the main config UI. One tab per app, a theme browser, and drag-and-drop bar layout. It writes the same `~/.config/otter-shell/*.conf` files you would edit by hand, so the GUI and text stay in sync.
+`otter-settings` is the main config UI, with one tab per app, a theme browser, and drag-and-drop bar layout. It writes the same `~/.config/otter-shell/*.conf` files you would edit by hand, so the GUI and text stay in sync.
 
 ```bash
 otter-settings
@@ -12,79 +12,79 @@ otter-settings
 
 Launch from [otter-launcher](/desktop/otter-launcher), bind a compositor hotkey, or run the command above. See [otter-settings](/desktop/otter-settings) for tabs, features, and theme presets.
 
-<Note>
-  Click **Apply** and most running apps reload via inotify. No restart needed.
-</Note>
+<Note>Click **Apply** to reload most running apps via inotify without restarting them.</Note>
 
 ## What you can configure in otter-settings
 
-| Tab | What you edit |
-|-----|---------------|
-| Bar | Widget layout, clock, volume, tray, custom buttons |
-| Launcher | Size, colors, placeholder text |
-| Plugins | Enable or disable installed `.so` plugins |
-| Dock | Magnification dock layout and pinned apps |
-| Taskbar | Taskbar height, clock, tray, pinned apps |
-| Overview | Workspace overview card size, axis, captures |
-| Notifications | Position, timeouts, margins |
-| Wallpaper | Path, rotation, scale mode |
-| OSD | Volume/brightness overlay appearance |
-| Terminal | Fonts, colors, padding, keybinds |
-| Theme | Colors, spacing, presets (12 built-in themes) |
-| Theme Gen | Wallpaper-reactive themes, opacity, template outputs |
-| Monitor | System monitor refresh interval |
-| Files | File manager view, sort, thumbnails, confirms |
-| Night Light | Schedule and color temperature |
-| Assist | `otter-assist` backend (`otter-shell-extras`) |
-| Clicker | Auto-clicker interval, button, and fixed-position mode |
-| Lock / Logout / Idle / Polkit / Jade | Session and overlay settings |
-| Recorder / Voice | `otter-rec` and `otter-vox` options |
+| Tab                                  | What you edit                                                                     |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| Bar                                  | Widget layout, clock, volume, tray, custom buttons                                |
+| Launcher                             | Size, colors, placeholder text                                                    |
+| Plugins                              | Enable Lua plugins, review capabilities, inspect status, and request reloads      |
+| UI Scripts                           | Inspect surface scripts, select native fallback, and control supported hot reload |
+| Dock                                 | Magnification dock layout and pinned apps                                         |
+| Taskbar                              | Taskbar height, clock, tray, pinned apps                                          |
+| Overview                             | Workspace overview card size, axis, captures                                      |
+| Notifications                        | Position, timeouts, margins                                                       |
+| Wallpaper                            | Path, rotation, scale mode                                                        |
+| OSD                                  | Volume/brightness overlay appearance                                              |
+| Terminal                             | Fonts, colors, padding, keybinds                                                  |
+| Theme                                | Color schemes (11 built-in presets), layout, spacing, fonts, opacity, and blur    |
+| Theme Gen                            | Wallpaper-reactive themes, opacity, template outputs                              |
+| Monitor                              | System monitor refresh interval                                                   |
+| Files                                | File manager view, sort, thumbnails, confirms                                     |
+| Night Light                          | Schedule and color temperature                                                    |
+| Assist                               | `otter-assist` backend (`otter-shell-extras`)                                     |
+| Clicker                              | Auto-clicker interval, button, and fixed-position mode                            |
+| Lock / Logout / Idle / Polkit / Jade | Session and overlay settings                                                      |
+| Recorder / Voice                     | `otter-rec` and `otter-vox` options                                               |
 
 Compositor hotkeys (screenshot, launcher, overview, lock) are **not** in otter-settings. Bind those in your compositor config. See [Keybinds](/configuration/keybinds).
 
 ## Manual config files
 
-Each app has a plain-text file in `~/.config/otter-shell/`. Edit by hand when you want to script changes, or keep comments the UI might not show.
+App settings live under `$XDG_CONFIG_HOME/otter-shell/`, defaulting to `~/.config/otter-shell/`. Paths below use that default. Edit by hand when you want to script changes, or keep comments the UI might not show. Lua code belongs in data directories, not here.
 
-| App | Config file |
-|-----|-------------|
-| Shared theme | `~/.config/otter-shell/theme.conf` |
-| otter-bar | `~/.config/otter-shell/otter-bar.conf` |
-| otter-launcher | `~/.config/otter-shell/otter-launcher.conf` |
-| Plugins | `~/.config/otter-shell/plugins.conf` |
-| otter-overview | `~/.config/otter-shell/otter-overview.conf` |
-| otter-dock | `~/.config/otter-shell/otter-dock.conf` |
-| otter-taskbar | `~/.config/otter-shell/otter-taskbar.conf` |
-| otter-notifications | `~/.config/otter-shell/notifications.conf` |
-| otter-wallpaper | `~/.config/otter-shell/otter-wallpaper.conf` |
-| otter-theme-gen | `~/.config/otter-shell/otter-theme-gen.conf` |
-| otter-osd | `~/.config/otter-shell/otter-osd.conf` |
-| otter-logout | `~/.config/otter-shell/otter-logout.conf` |
-| otter-polkit | `~/.config/otter-shell/otter-polkit.conf` |
-| otter-lock | `~/.config/otter-shell/otter-lock.conf` |
-| otter-idle | `~/.config/otter-shell/otter-idle.conf` |
-| otter-nightlight | `~/.config/otter-shell/otter-nightlight.conf` |
-| otter-jade | `~/.config/otter-shell/otter-jade.conf` |
-| otter-term | `~/.config/otter-shell/otter-term.conf` |
-| otter-monitor | `~/.config/otter-shell/otter-monitor.conf` |
-| otter-files | `~/.config/otter-shell/otter-files.conf` |
-| otter-assist | `~/.config/otter-shell/otter-assist.conf` *(via `otter-shell-extras`)* |
-| otter-assistant | `~/.config/otter-shell/otter-assistant.conf` *(via `otter-shell-extras`)* |
-| otter-rec | `~/.config/otter-shell/otter-rec.conf` |
-| otter-clip | `~/.config/otter-shell/otter-clip.conf` |
-| otter-note | `~/.config/otter-shell/otter-note.conf` |
-| otter-cal | `~/.config/otter-shell/otter-cal.conf` |
-| otter-timer | `~/.config/otter-shell/otter-timer.conf` |
-| otter-transcribe | `~/.config/otter-shell/otter-transcribe.conf` |
-| otter-calc | `~/.config/otter-shell/otter-calc.conf` |
-| otter-emoji | `~/.config/otter-shell/otter-emoji.conf` |
-| otter-pick | `~/.config/otter-shell/otter-pick.conf` |
-| otter-clicker | `~/.config/otter-shell/otter-clicker.conf` |
-| otter-vox | `~/.config/otter-shell/otter-vox.conf` |
-| otter-weather | `~/.config/otter-shell/otter-weather.conf` |
-| otter-screenshot | *(no persistent config: CLI flags only)* |
-| otter-pkg | *(app state under `$XDG_STATE_HOME/otter-pkg/`, not otter-conf)* |
-| otter-keybindhelp | *(reads compositor configs; no otter-conf file)* |
+| App                 | Config file                                                               |
+| ------------------- | ------------------------------------------------------------------------- |
+| Shared theme        | `~/.config/otter-shell/theme.conf`                                        |
+| otter-bar           | `~/.config/otter-shell/otter-bar.conf`                                    |
+| otter-launcher      | `~/.config/otter-shell/otter-launcher.conf`                               |
+| Plugin policy       | `~/.config/otter-shell/plugins.conf`                                      |
+| Surface UI choices  | `~/.config/otter-shell/ui.conf`                                           |
+| otter-overview      | `~/.config/otter-shell/otter-overview.conf`                               |
+| otter-dock          | `~/.config/otter-shell/otter-dock.conf`                                   |
+| otter-taskbar       | `~/.config/otter-shell/otter-taskbar.conf`                                |
+| otter-notifications | `~/.config/otter-shell/notifications.conf`                                |
+| otter-wallpaper     | `~/.config/otter-shell/otter-wallpaper.conf`                              |
+| otter-theme-gen     | `~/.config/otter-shell/otter-theme-gen.conf`                              |
+| otter-osd           | `~/.config/otter-shell/otter-osd.conf`                                    |
+| otter-logout        | `~/.config/otter-shell/otter-logout.conf`                                 |
+| otter-polkit        | `~/.config/otter-shell/otter-polkit.conf`                                 |
+| otter-lock          | `~/.config/otter-shell/otter-lock.conf`                                   |
+| otter-idle          | `~/.config/otter-shell/otter-idle.conf`                                   |
+| otter-nightlight    | `~/.config/otter-shell/otter-nightlight.conf`                             |
+| otter-jade          | `~/.config/otter-shell/otter-jade.conf`                                   |
+| otter-term          | `~/.config/otter-shell/otter-term.conf`                                   |
+| otter-monitor       | `~/.config/otter-shell/otter-monitor.conf`                                |
+| otter-files         | `~/.config/otter-shell/otter-files.conf`                                  |
+| otter-assist        | `~/.config/otter-shell/otter-assist.conf` _(via `otter-shell-extras`)_    |
+| otter-assistant     | `~/.config/otter-shell/otter-assistant.conf` _(via `otter-shell-extras`)_ |
+| otter-rec           | `~/.config/otter-shell/otter-rec.conf`                                    |
+| otter-clip          | `~/.config/otter-shell/otter-clip.conf`                                   |
+| otter-note          | `~/.config/otter-shell/otter-note.conf`                                   |
+| otter-cal           | `~/.config/otter-shell/otter-cal.conf`                                    |
+| otter-timer         | `~/.config/otter-shell/otter-timer.conf`                                  |
+| otter-transcribe    | `~/.config/otter-shell/otter-transcribe.conf`                             |
+| otter-calc          | `~/.config/otter-shell/otter-calc.conf`                                   |
+| otter-emoji         | `~/.config/otter-shell/otter-emoji.conf`                                  |
+| otter-pick          | `~/.config/otter-shell/otter-pick.conf`                                   |
+| otter-clicker       | `~/.config/otter-shell/otter-clicker.conf`                                |
+| otter-vox           | `~/.config/otter-shell/otter-vox.conf`                                    |
+| otter-weather       | `~/.config/otter-shell/otter-weather.conf`                                |
+| otter-screenshot    | _(no persistent config: CLI flags only)_                                  |
+| otter-pkg           | _(app state under `$XDG_STATE_HOME/otter-pkg/`, not otter-conf)_          |
+| otter-keybindhelp   | _(reads compositor configs; no otter-conf file)_                          |
 
 System defaults may live under `/etc/otter-shell/`. User configs always win.
 
@@ -97,9 +97,40 @@ font_family = "IoskeleyMono Nerd Font"
 url_enabled = true
 ```
 
-Quote strings with double quotes. Booleans are `true` or `false`. Empty string `""` falls back to the compiled default.
+Quote strings with double quotes. Booleans are `true` or `false`. Empty-string behavior depends on the field; it is not a universal request for a default. Omit optional color overrides to inherit the shared theme.
 
-On first launch, apps normalize their config: missing keys get defaults, unknown keys are removed.
+Apps that normalize config add missing defaults and remove unknown fields at startup. Back up hand-edited files before upgrading. Hot-reload paths should read settings without rewriting them.
+
+## Lua plugins and surface scripts
+
+Bar widgets and launcher providers use hosted Lua plugins. The Zig `.so` ABI is unsupported. Put a plugin's `plugin.toml` and `init.lua` in a directory named after its ID. Hosts search these roots in order; the first matching plugin ID wins:
+
+1. Colon-separated roots in `$OTTER_PLUGIN_PATH`
+2. `$XDG_DATA_HOME/otter-shell/plugins/` (default `~/.local/share/otter-shell/plugins/`)
+3. `/usr/lib/otter-shell/plugins/`
+4. `otter-shell/plugins/` under each `$XDG_DATA_DIRS` entry (default `/usr/local/share:/usr/share`)
+
+`plugins.conf` holds enable gates and capability policy, for example:
+
+```conf
+calc_enabled = true
+search_enabled = true
+search_capabilities = "desktop-search"
+```
+
+A capability allow-list narrows what a plugin declares in its manifest; it does not grant undeclared capabilities. Review plugins before enabling them. See [Plugins](/desktop/plugins) for installation and [Writing plugins](/developers/plugins) for manifests and bindings.
+
+Surface UI scripts use `$XDG_DATA_HOME/otter-shell/ui/`, then `otter-shell/ui/` under `$XDG_DATA_DIRS`. `$OTTER_UI_DIR` overrides that search for development. Scripts in the old config-directory `ui/` location are not loaded by default.
+
+For hosts that support per-app UI choices, `ui.conf` selects automatic Lua loading or native fallback:
+
+```conf
+otter-osd_mode = auto
+otter-osd_hot_reload = true
+otter-logout_mode = native
+```
+
+`auto` uses a valid script when available and falls back to native UI otherwise. Privileged surfaces ignore user overrides and only accept trusted root-owned system scripts. Use **UI Scripts** in Settings to see which scripts and controls a host supports. See [UI scripts](/developers/lua/ui-scripts) for the host contract and [Runtime safety](/developers/lua/runtime) for trust boundaries.
 
 ## Hot reload
 
@@ -117,8 +148,8 @@ otter-settings and manual saves hit the same reload path.
 
 Lookup order (example for `otter-term`):
 
-1. `~/.config/otter-shell/otter-term.conf` *(user: highest priority)*
-2. `/etc/otter-shell/otter-term.conf` *(system defaults)*
+1. `~/.config/otter-shell/otter-term.conf` _(user: highest priority)_
+2. `/etc/otter-shell/otter-term.conf` _(system defaults)_
 3. Compiled-in defaults
 
 Set system defaults in `/etc/otter-shell/` without touching home directories.

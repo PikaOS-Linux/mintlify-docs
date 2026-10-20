@@ -4,21 +4,27 @@ sidebarTitle: "Weather"
 description: "Fetch current conditions and a 7-day forecast from Open-Meteo. Feed the bar widget, open a popup, or print to stdout."
 ---
 
-`otter-weather` fetches current conditions and a 7-day forecast from Open-Meteo. It feeds the bar weather widget or opens a popup. Set latitude and longitude, then run it as a watch daemon if you want the bar to stay current.
+`otter-weather` fetches current conditions and a 7-day forecast from Open-Meteo. It feeds the bar weather widget or opens a popup. Set a city or coordinates. The default config runs it as a watch daemon that keeps the bar cache current.
 
 ## Usage
 
-Run `otter-weather` with no arguments to fetch and print a forecast for the configured location. Pass coordinates to override the config.
+Run `otter-weather` with no arguments to use your config file. With the default config, it fetches London, prints the forecast, writes the bar widget cache, and refreshes every 900 seconds. Pass a city or coordinates to override the configured location.
 
 ```bash
-otter-weather                             # fetch and print (default: London)
+otter-weather                             # use config (default: London, watch every 900 s)
+otter-weather Filey                       # resolve a city name through Open-Meteo geocoding
+otter-weather --city "Filey, UK"          # qualified name filters by country or region
 otter-weather 40.7128 -74.0060            # specify coordinates (New York)
+otter-weather --lat 40.7128 --lon -74.0060
 otter-weather --dry-run 51.5072 -0.1276   # print Open-Meteo URL without fetching
 otter-weather --write-cache               # refresh bar widget cache
+otter-weather --write-cache /tmp/weather  # write the cache to a specific path
 otter-weather --watch 900 --write-cache   # refresh every 900 seconds
-otter-weather --cache                     # print cached forecast without HTTP
+otter-weather --cache /path/to/cache      # print a cached forecast without HTTP
 otter-weather --layer                     # open 7-day popup from cache
 ```
+
+City names resolve through Open-Meteo geocoding before the forecast fetch. A qualified name such as `Filey, UK` searches `Filey`, then filters candidates by country or admin region. A city or coordinates on the command line always win over the config file and `auto_location`.
 
 ## Bar widget integration
 
@@ -28,30 +34,30 @@ The otter-bar weather widget reads from a bounded local cache file. Use `--write
 otter-weather --watch 900 --write-cache &
 ```
 
-The `--layer` flag opens the cached forecast in a small layer-shell popup that closes when clicked. Bind it to the bar widget button.
+The `--layer` flag opens the cached forecast in a small layer-shell popup that closes when clicked. Bind it to the bar widget button. The popup follows your theme, including Current and Bank profiles and generated colours, and reloads font, colour, radius, and border changes without restarting.
 
-<Note>
-  Responses are capped at 128 KiB, so the cache file stays small and fetch time stays predictable.
-</Note>
+<Note>Responses are capped at 128 KiB, so the cache file stays small and fetch time stays predictable.</Note>
 
 ## Configuration
 
 `otter-weather` reads `~/.config/otter-shell/otter-weather.conf`.
 
 ```conf
+auto_location = false
+city = "London"
 latitude = 51.5072
 longitude = -0.1276
-# Optional; empty uses $XDG_CACHE_HOME/otter-shell/weather-cache
+# Optional; empty uses $XDG_CACHE_HOME/otter-shell/otter-weather-cache
 cache_path = ""
-write_cache = false
-watch_seconds = 0
+write_cache = true
+watch_seconds = 900
 ```
 
-- `latitude` / `longitude`: your location (default is London)
+- `auto_location`: `true` derives city and coordinates from your public IP (via `ipapi.co`) before fetching. Command-line locations still win
+- `city`: city name to geocode. When `city` is set, it takes precedence over `latitude` and `longitude`
+- `latitude` / `longitude`: your location, used when `city` is empty
 - `cache_path`: cache file location. Empty uses the default XDG cache location
-- `write_cache`: write cache after fetch
-- `watch_seconds`: refresh interval in watch mode. Config reloads between refreshes, so you can change location without restarting the daemon
+- `write_cache`: write the bar widget cache after each fetch
+- `watch_seconds`: refresh interval in seconds. `0` fetches once and exits. Config reloads between refreshes, so you can change location without restarting the daemon
 
-<Tip>
-  Find your coordinates at [Open-Meteo's geocoding API](https://open-meteo.com/en/docs/geocoding-api) or use a site like [latlong.net](https://www.latlong.net).
-</Tip>
+<Tip>Find your coordinates at [Open-Meteo's geocoding API](https://open-meteo.com/en/docs/geocoding-api) or use a site like [latlong.net](https://www.latlong.net).</Tip>

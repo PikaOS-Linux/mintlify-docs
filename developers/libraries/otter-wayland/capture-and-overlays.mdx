@@ -1,37 +1,33 @@
 ---
 title: "Capture and overlays"
-sidebarTitle: "Capture"
-description: "Screen capture, region and point selection overlays, and dim overlay in otter-wayland."
+sidebarTitle: "Capture and overlays"
+description: "Native otr capture modules, shared selectors, and output scale tracking."
 ---
 
-Screen capture plus the overlay helpers that screenshot, recording, and picker tools share.
+## Capture modules
 
-## Screen capture
+Capture lives in flat leaf modules such as `capture_output`, `capture_session`, `capture_buffer`, `capture_formats`, `capture_color`, and `capture_hdr`. The Zig `capture` root namespace is not available.
 
-`capture` module wraps `ext_image_copy_capture_v1`:
+Capture sources depend on compositor-advertised protocols. Keep source selection, buffer lifetime, and completion/failure events explicit.
 
-- `Capturer`: session lifecycle
-- `OutputList` / `OutputInfo`: monitor enumeration
-- Toplevel capture for window shots
+## Shared selectors
 
-Used by screenshot, recording, and wallpaper tools.
+`selection_overlay` is the shared region/point selection implementation. `capture_overlay` manages its Wayland surface. Apps use the supplied presets for screenshots, product shots, recording, or point selection instead of maintaining separate selectors.
 
-## Capture overlay
+The overlay composites pixels directly; it is not a Surface Description node tree. Editor integration uses the `selection_overlay.Editor` interface, not a raw callback/context pair.
 
-`capture_overlay` draws a dimmed frozen backdrop for interactive capture UIs. Pairs with live capture frames from `capture`.
+## Outputs and scale
 
-## Selection overlay
+`capture_output.OutputList` is the output state owner. It tracks mode, position, transform, integer scale, and available logical geometry.
 
-Drag-to-select for `otter-screenshot`, `otter-shot`, and `otter-rec`. Also supports crosshair point selection for `otter-clicker` via `Selector.runPoint()`. Pixels go straight to SHM with incremental damage. This path skips Surface Description.
+Exact scale derives from mode/logical dimensions and snaps to the protocol grid. Integer `wl_output.scale` is a ceiling. Unknown exact scale is reported as unknown, not guessed as 1.
 
-| Preset | App | Visual |
-|--------|-----|--------|
-| `selection_overlay.preset.screenshot` | `otter-screenshot` | Full-brightness freeze, border-only chrome |
-| `selection_overlay.preset.shot` | `otter-shot` | Dimmed outside selection |
-| `selection_overlay.preset.rec` | `otter-rec` | Same as shot |
+## Lua boundary and verification
 
-Live mode skips the freeze and draws a shaded overlay. The selector can hide the cursor when the capture omits it. Point mode draws a transparent overlay with a crosshair cursor and returns a single `geo.Point`.
+`otter.wayland` exposes output/window/workspace information and selected actions. It does not expose native capture-session or selection-overlay constructors.
 
-## Dim overlay
+Verify capture behavior in isolated headless sessions or direct-render fixtures. Never start a selector or screenshot operation against the developer's real Wayland session during tests.
 
-`DimOverlay` is a fullscreen layer surface for modal dimming (logout menu, lock transitions).
+## Source reference
+
+`otr/capture_session.otr`, `otr/capture_output.otr`, `otr/selection_overlay.otr`, `otr/capture_overlay.otr`, `otr/lua/wayland.otr` in the component repository.

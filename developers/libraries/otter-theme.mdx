@@ -1,36 +1,26 @@
 ---
 title: "otter-theme"
 sidebarTitle: "otter-theme"
-description: "Semantic theme tokens, spacing, presets, and theme.conf loading."
+description: "Semantic otr theme values, 11 color presets, loading, and graph watching."
 ---
 
-`otter-theme` is how Otter Shell looks: semantic colors, bar chrome, popup styles, spacing, fonts, surface roles. Plain data structs. The theme module itself does no I/O.
+`otter-theme` provides `Theme` values through `otter_theme.theme` and loaders through `otter_theme.loader`. A theme owns its text fields, so call `deinit()` or clone it explicitly for another owner.
 
-Load `~/.config/otter-shell/theme.conf` with `loadTheme` and pass `Theme` into `otter-ui` `FrameOptions`.
+Themes contain `colors`, `layout`, `spacing`, and `globals`. Render applications consume semantic roles and metrics instead of branching on theme names.
 
-## Quick example
+There are 11 color presets. The `bar_islands` global controls Islands styling; Islands is not a twelfth preset.
 
-```zig
-const otter_theme = @import("otter_theme");
+## Lua
 
-const theme = otter_theme.loadTheme(allocator);
-const accent = theme.colors.accent;
-const bar_h = theme.bar.height;
-```
+The separate `otter_theme_lua` package exposes `otter.theme`. Reads such as `get`, `color`, `surface`, `alpha`, `contrast`, `presets`, and `generation` need no capability. `subscribe` reports successful changes. `use_preset` requires `theme-write`.
 
-Color resolution at runtime: widget config field, then theme token, then the struct default (`?Color = null`).
+The host installs the environment/root before loading plugins and registers the module. Broken theme edits keep the previous valid snapshot and do not notify subscribers.
 
-## Pages in this library
+## Reference pages
 
-<CardGroup cols={2}>
-  <Card title="Tokens" icon="palette" href="/developers/libraries/otter-theme/tokens">
-    Colors, bar, popup, spacing, fonts, surfaces, density.
-  </Card>
-  <Card title="Presets and loading" icon="swatchbook" href="/developers/libraries/otter-theme/presets-and-loading">
-    12 bundled presets, `theme.conf`, hot-reload paths.
-  </Card>
-</CardGroup>
+- [Tokens and metrics](/developers/libraries/otter-theme/tokens)
+- [Presets and loading](/developers/libraries/otter-theme/presets-and-loading)
 
-## Dependencies
+## Source reference
 
-`otter-geo`, `otter-render`, `otter-conf`, `otter-utils`.
+`otr/otr.toml`, `otr/` in the component repository.

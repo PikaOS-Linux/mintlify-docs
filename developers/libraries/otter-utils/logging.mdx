@@ -1,41 +1,35 @@
 ---
 title: "Logging"
 sidebarTitle: "Logging"
-description: "Scoped loggers, counters, timers, and reporters in otter-utils."
+description: "Scoped otr logging with owned counters and periodic reports."
 ---
 
-Zero-allocation logging with scoped component tags. Counters and timers help profile daemon hot paths. Log level follows the app's build mode.
+Import `otter_utils.log`. `Scoped(scope)` formats allocation-free stderr lines with a padded scope name. `StdScoped(scope)` provides the alternate standard-log layout.
 
-## Scoped logger
+```otr
+import otter_utils.log
 
-```zig
-const log = @import("otter_utils").log;
+const logger = log.Scoped("example")
 
-const mylog = log.Scoped("my-component");
-mylog.info("starting up", .{});
-mylog.debug("value: {}", .{42});
-mylog.err("something failed", .{});
-```
-
-Log level follows the app's build mode and any global filter the app sets.
-
-## Performance helpers
-
-```zig
-var counter = log.Counter{};
-counter.inc();
-counter.add(5);
-const total = counter.reset();
-
-var timer = log.Timer{};
-timer.begin();
-// ... work ...
-const elapsed_ms = timer.elapsedMs();
-
-var reporter = log.Reporter("perf", 30).init();
-if (reporter.shouldReport()) |elapsed| {
-    // emit periodic metrics
+pub fn main() void {
+    logger.info("ready", .{})
 }
 ```
 
-Use `Reporter` in bar daemons and collectors that should not spam logs every frame.
+`set_level`, `level`, and `enabled` manage the process-wide level. The level is atomic; a change applies across threads.
+
+## Counters
+
+`Counter` is plain state owned by your loop. Its methods are `inc`, `add`, `get`, and `reset`. `reset` returns the previous count.
+
+Use `StaticCounter.init()` for a shared top-level atomic counter. Do not make every local counter atomic.
+
+## Reporters
+
+`Reporter(scope, interval_seconds)` limits how often you print rate summaries. Keep it in the owner's state and call its reporting methods from normal loop activity.
+
+Lines have a 512-byte bound. Oversized messages end in `...`. Use standard otr formatting placeholders, not Zig-only formatting APIs.
+
+## Source reference
+
+`otr/log.otr` in the component repository.

@@ -4,7 +4,7 @@ sidebarTitle: "Quick Start"
 description: "Launch the terminal, autostart shell daemons, and try screenshot, clipboard, and notes after install."
 ---
 
-Right after install. You need a Wayland compositor running. No compositor, no windows.
+After [installing Otter Shell](/installation), start your own Wayland compositor. Otter Shell does not provide a user-session compositor. Installed applications are native binaries; you do not need otr or Zig to run them.
 
 <Steps>
   <Step title="Launch the terminal">
@@ -12,7 +12,8 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     otter-term
     ```
 
-    Renders on the CPU through the shared Otter render stack. The terminal grid does not need a GPU.
+    The terminal renders on the CPU through the shared Otter render stack. Its grid does not need a GPU.
+
   </Step>
 
   <Step title="Start background daemons">
@@ -33,6 +34,16 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     Optional: `otter-dock &` or `otter-taskbar &` for a bottom app strip.
 
     For a permanent setup, add them to compositor autostart. See [Session setup](/desktop/session-setup).
+
+  </Step>
+
+  <Step title="Choose settings and extensions">
+    ```bash
+    otter-settings
+    ```
+
+    Choose shared colors, layout, and spacing under **Theme**. Use **Plugins** to enable installed Lua extensions and review their capabilities. **UI Scripts** controls supported surface scripts and their native fallback. See [Configuration](/configuration/overview).
+
   </Step>
 
   <Step title="Open the launcher">
@@ -43,6 +54,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     ```
 
     Type to search apps. Try `=2+3*4` (calculator), `:heart` (emoji), `clip` (clipboard), or `file invoice` / `grep TODO` (desktop search; needs `otter-search` running).
+
   </Step>
 
   <Step title="Open the workspace overview">
@@ -52,7 +64,8 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     otter-overview
     ```
 
-    Workspace cards, window tiles, search, and an app grid. See [otter-overview](/desktop/otter-overview).
+    The overview shows workspace cards, window tiles, search, and an app grid. See [otter-overview](/desktop/otter-overview).
+
   </Step>
 
   <Step title="Bind Alt-Tab">
@@ -62,7 +75,8 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     otter-switcher
     ```
 
-    Bind Alt-Tab to it. Each press advances. Release Alt to focus. See [otter-switcher](/desktop/otter-switcher).
+    Bind Alt-Tab to it. Each press advances the selection; releasing Alt focuses the selected window. See [otter-switcher](/desktop/otter-switcher).
+
   </Step>
 
   <Step title="Take a screenshot">
@@ -71,6 +85,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     ```
 
     Click and drag a region. The image copies to your clipboard.
+
   </Step>
 
   <Step title="Try the auto-clicker">
@@ -79,6 +94,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     ```
 
     With the default config, pick a point with the crosshair, then let it click. Run `toggle` again to stop. See [otter-clicker](/apps/otter-clicker).
+
   </Step>
 
   <Step title="Create a sticky note">
@@ -87,6 +103,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     ```
 
     Bind a hotkey, for example `Super+N`.
+
   </Step>
 
   <Step title="Open the system monitor">
@@ -95,6 +112,7 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     ```
 
     Check CPU, memory, disk, and running processes. See [otter-monitor](/apps/otter-monitor).
+
   </Step>
 
   <Step title="Check the weather">
@@ -111,36 +129,38 @@ Right after install. You need a Wayland compositor running. No compositor, no wi
     ```
 
     See [otter-weather](/apps/otter-weather) and [otter-bar](/desktop/otter-bar).
+
   </Step>
 </Steps>
 
 <Tip>
-  **Bind global hotkeys in your compositor.** Wayland apps cannot grab system-wide shortcuts. Examples:
+  Bind global hotkeys in your compositor because Wayland apps cannot grab system-wide shortcuts. For example:
 
-  **Hyprland** (`~/.config/hypr/hyprland.conf`):
+**Hyprland** (`~/.config/hypr/hyprland.conf`):
 
-  ```ini
-  bind = $mainMod, D, exec, otter-launcher
-  bind = SUPER, Super_L, exec, otter-overview
-  bind = ALT, Tab, exec, otter-switcher
-  bind = $mainMod, P, exec, otter-screenshot
-  bind = $mainMod, R, exec, otter-rec
-  bind = $mainMod, V, exec, otter-clip popup
-  bind = $mainMod, N, exec, otter-note new
-  bind = $mainMod, L, exec, loginctl lock-session
-  ```
+```ini
+bind = $mainMod, D, exec, otter-launcher
+bind = SUPER, Super_L, exec, otter-overview
+bind = ALT, Tab, exec, otter-switcher
+bind = $mainMod, P, exec, otter-screenshot
+bind = $mainMod, R, exec, otter-rec
+bind = $mainMod, V, exec, otter-clip popup
+bind = $mainMod, N, exec, otter-note new
+bind = $mainMod, L, exec, loginctl lock-session
+```
 
-  **Sway** (`~/.config/sway/config`):
+**Sway** (`~/.config/sway/config`):
 
-  ```
-  bindsym $mod+d exec otter-launcher
-  bindsym $mod+o exec otter-overview
-  bindsym Mod1+Tab exec otter-switcher
-  bindsym $mod+p exec otter-screenshot
-  bindsym $mod+v exec otter-clip popup
-  ```
+```
+bindsym $mod+d exec otter-launcher
+bindsym $mod+o exec otter-overview
+bindsym Mod1+Tab exec otter-switcher
+bindsym $mod+p exec otter-screenshot
+bindsym $mod+v exec otter-clip popup
+```
 
-  See [Keybinds](/configuration/keybinds) for the full reference.
+See [Keybinds](/configuration/keybinds) for the full reference.
+
 </Tip>
 
 ## Next

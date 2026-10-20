@@ -20,6 +20,7 @@ Send commands from scripts, the status bar, or compositor keybindings:
 otter-osd volume-up 5
 otter-osd volume-down 10
 otter-osd volume-mute-toggle
+otter-osd microphone-mute-toggle
 otter-osd brightness-up 5
 otter-osd brightness-down 5
 otter-osd caps-lock
@@ -31,6 +32,8 @@ otter-osd message "Tea timer done"
 The optional step value (default `5`) applies to volume and brightness commands.
 Text messages are centered and wrap to fit the OSD.
 
+Bind your microphone-mute key to `otter-osd microphone-mute-toggle` to toggle the default PipeWire microphone and display its mute state.
+
 When Do Not Disturb is on, popup surfaces stay hidden. Hardware commands still change volume and brightness. Run `otter-notifications dnd-off` to show future OSD updates again.
 
 [otter-timer](/apps/otter-timer) and [otter-rec](/apps/otter-rec) also use `otter-osd` for completion notifications.
@@ -39,7 +42,7 @@ When Do Not Disturb is on, popup surfaces stay hidden. Hardware commands still c
 
 One binary, two roles:
 
-- **Daemon** (no args): Connects to Wayland, opens a UNIX datagram socket, and renders overlays. Surfaces appear when needed and go away after timeout, so idle RAM stays near zero.
+- **Daemon** (no args): Connects to Wayland, opens a UNIX datagram socket, and renders overlays. Surface buffers are allocated when needed and released after timeout. The daemon and its PipeWire connection remain running.
 - **Client** (with args): Sends a command to the daemon and exits.
 
 Socket path: `$XDG_RUNTIME_DIR/otter-shell/osd-{WAYLAND_DISPLAY}.sock`
@@ -62,3 +65,9 @@ animation_duration = 150
 ```
 
 Color fields inherit from [theme.conf](/configuration/themes) when omitted. Position and size changes need new surfaces. Save the config and the daemon recreates the overlay on reload.
+
+## Lua surface
+
+If `osd.lua` is available on the UI script search path, it describes the overlay while native code handles hardware state and rendering. User overrides live under `$XDG_DATA_HOME/otter-shell/ui/` (normally `~/.local/share/otter-shell/ui/`). Script edits hot-reload; a failed frame falls back to native drawing.
+
+Use otter-settings **UI Scripts** to create or reset an override, choose **Native UI**, inspect reported errors, or request **Reload now**. From a terminal, `otter-osd ui-reload` requests a script reload. See [Settings](/desktop/otter-settings#ui-scripts-tab).

@@ -1,0 +1,81 @@
+---
+title: "otter-lua"
+sidebarTitle: "otter-lua"
+description: "Sandboxed LuaJIT UI scripts, capability-scoped plugins, and otr binding modules."
+---
+
+`otter-lua` hosts LuaJIT scripts and plugins in otr applications. It owns the runtime, UI hot reload, plugin discovery/lifecycle, and binding interface. Individual libraries provide their Lua bindings separately.
+
+Import native leaves such as `otter_lua.runtime`, `host`, `plugins`, `binding`, `sd`, `manifest`, and `caps`.
+
+## UI scripts and plugins
+
+`host.Ui` manages one live UI script and its last good frame. `open_with` supplies host-chosen extensions. Successful reload replaces the script only after a candidate loads and renders. Failed edits keep the previous UI. This host does not run a plugin event loop; asynchronous binding events need `plugins.Host`.
+
+`plugins.Host` owns a sandboxed runtime per plugin and one descriptor-driven event loop. Use `poll_fd` with an outer app loop or `run_once` to drive it. `load`, `reload`, `set_allow`, `unload`, `info`, and `write_status` support lifecycle and Settings administration.
+
+Plugin reload creates a new instance. Handles, timers, processes, watches, callbacks, and module subscriptions belong to the instance and are released on replacement/unload. A failed candidate keeps the old running instance; a failing call unloads only its own plugin.
+
+## Plugin manifest
+
+A plugin directory contains `plugin.toml` and its text entry script:
+
+```toml
+name = "example-widget"
+version = "0.1.0"
+entry = "init.lua"
+kind = "widget"
+capabilities = []
+provides = ["bar"]
+description = "Example widget"
+```
+
+Kinds are `widget`, `plugin`, and `app`; default kind is `plugin`. Widget exports are `measure(max_w, max_h)`, `draw(w, h)`, and `event(kind, id, x, y)`. Export names for non-widget extensions depend on the consuming application.
+
+## Widget drawing
+
+The runtime provides the global `sd` table. This `init.lua` exports a static widget without requesting capabilities:
+
+```lua
+return {
+  measure = function(max_w, max_h)
+    return math.min(120, max_w), math.min(32, max_h)
+  end,
+  draw = function(w, h)
+    sd.begin(w, h)
+    sd.rect(0, 0, w, h, 0x202020FF, 4)
+    sd.text(8, 6, "Example", 14, 0xFFFFFFFF)
+    sd.finish()
+  end,
+  event = function(kind, id, x, y)
+  end,
+}
+```
+
+`sd` records a bounded frame; the application replays it through its native drawing sink. It does not grant arbitrary window or filesystem access.
+
+## Sandbox and capabilities
+
+Each state opens base, table, string, math, and bit support. Raw `io`, `os`, `ffi`, `package`, `debug`, and `jit` libraries are not opened. FFI is compiled out. Code-loading/dumping functions are removed, bytecode is refused, and local `require` stays beneath the script directory after resolving symlinks.
+
+Every allocation counts against a heap cap. A CPU-time watchdog bounds calls, including JIT execution. Privileged UI scripts additionally require trusted root-owned sources.
+
+Capabilities granted to a plugin are the intersection of manifest requests and the host allow-list. File roots are canonicalized; a declared request alone grants nothing.
+
+Built-ins are `otter.timer`, `otter.process`, `otter.fs`, `otter.log`, and `otter.host`. File/process actions use their capability checks. Additional `otter.*` modules exist only when registered by the host.
+
+## Binding contract
+
+`binding.Module` names a module and supplies `open`, optional module capability, `release(instance)`, and optional `shutdown`. `Open.add` gates individual functions. Missing permissions become explicit Lua errors, not silent no-ops.
+
+Binding callbacks post to the host bus; Lua callbacks run later under the guarded host loop, never inside C callbacks. Watch descriptors through `binding.watch` and remove them before closing resources.
+
+Lua errors unwind past ordinary native cleanup. Follow `binding.otr`'s no-`defer` and argument-validation rules when implementing binding callbacks; do not acquire host resources before a later argument check can raise.
+
+## Build setup
+
+From `otter-lua`, run `otr run otr/build.otr --release-fast -- deps` before building a dependent. This builds the pinned static LuaJIT with FFI disabled. Register per-library modules from their separate `otr/lua/` packages; native dependencies alone do not link them into the host.
+
+## Source reference
+
+`otr/runtime.otr`, `otr/host.otr`, `otr/plugins.otr`, `otr/binding.otr`, `otr/sd.otr`, `otr/manifest.otr`, `otr/caps.otr` in the component repository.

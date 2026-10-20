@@ -1,0 +1,38 @@
+---
+title: "otter-browser"
+sidebarTitle: "Web browser"
+description: "Wayland-native browser with Otter Shell controls and a private WPE WebKit runtime."
+---
+
+`otter-browser` combines native Otter Shell window controls with WPE WebKit web content. It is a separate package, not a dependency of the `otter-shell` metapackage.
+
+## Install
+
+```bash
+pikman install otter-browser
+```
+
+The package installs its matching `otter-browser-webkit-runtime` automatically. That private runtime is for Otter Browser only, not a replacement for system WebKit. The packaged engine targets x86-64-v3 processors.
+
+## Usage
+
+```bash
+otter-browser
+otter-browser https://example.com
+otter-browser --private
+otter-browser --safe-mode
+```
+
+`--private` uses an ephemeral profile without history or session writes. `--safe-mode` disables user styles, scripts, and content filters for troubleshooting.
+
+## Browse
+
+The toolbar provides navigation, an address and search field, bookmarks, downloads, extension actions, and a main menu. Tabs support pinning, drag reordering, mute controls, and middle-click close. The main menu opens with <kbd>F10</kbd> or <kbd>Alt+E</kbd>.
+
+Web content follows the desktop Settings portal's light/dark preference, including live changes. Browser controls use the shared Otter Shell theme.
+
+## Runtime packages
+
+Keep the browser and its matching WebKit runtime together when updating. WebKit and multimedia dependencies are managed by the package manager.
+
+`otter-browser-widevine-helper` is a placeholder for open-source integration pieces. It does not bundle a proprietary CDM or enable Widevine playback by itself.

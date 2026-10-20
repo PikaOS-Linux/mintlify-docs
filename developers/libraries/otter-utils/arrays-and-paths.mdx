@@ -1,52 +1,37 @@
 ---
 title: "Arrays and paths"
-sidebarTitle: "Arrays & paths"
-description: "BoundedArray, FilePath, and FixedString in otter-utils."
+sidebarTitle: "Arrays and paths"
+description: "Standard otr containers and otter_utils.fixed_string replace legacy utility types."
 ---
 
-Hot paths skip the heap. These types give you fixed-capacity containers and stack path builders. Daemons use them for hit lists, workspace IDs, and damage rects.
+## Bounded containers
 
-## BoundedArray
+Use `std.bounded.BoundedList(T, N)` for fixed-capacity records and `std.bounded.InlineString(N)` for bounded text. Use `std.list.List(T)` when capacity must grow. The Zig `BoundedArray` wrapper is not available.
 
-Drop-in for removed `std.BoundedArray` in Zig 0.15+. Same idea: fixed capacity, dynamic length, nothing on the heap.
+Containers that allocate keep their allocator. Drop an owned list with `deinit()` rather than passing the allocator again.
 
-```zig
-const utils = @import("otter_utils");
+## Configuration strings
 
-var arr = utils.BoundedArray(u8, 256){};
-try arr.append(42);
-try arr.appendSlice("hello");
+`otter_utils.fixed_string.FixedString(N)` wraps inline text. `set` keeps what fits and does not split a UTF-8 sequence.
 
-const slice = arr.constSlice();
+```otr
+import otter_utils.fixed_string
+
+pub fn main() void {
+    var title = fixed_string.FixedString(32).init()
+    title.set("Otter Shell")
+    _ = title.get()
+}
 ```
 
-Use for hit region lists, workspace IDs, damage rects, and any bounded collection in daemons.
+Methods include `from`, `set`, `get`, `len`, `is_empty`, `clear`, `eql`, `is_none`, and `as_cstr`. `is_none` recognizes empty text, `none`, and `None`.
 
-## FilePath
+## Paths
 
-Stack buffer sized to `fs.max_path_bytes`. Build paths from segments without allocating.
+Use `std.path` for general path handling. Shared Otter Shell path builders use `otter_utils.xdg_paths.Buf`. A returned `str` borrows that buffer: consume it before reusing or clearing the buffer.
 
-```zig
-const FilePath = @import("otter_utils").FilePath;
+Use `otter_conf.text.Text` for parser-owned configuration fields. `FixedString` is not a replacement for the configuration parser's ownership model.
 
-const path = try FilePath.from("/home/user/docs");
-const path2 = try FilePath.fromMany(&.{ "home", "user", "docs" });
+## Source reference
 
-var builder = try FilePath.from("/home");
-try builder.appendSegment("user");
-const s = builder.slice(); // [:0]const u8
-
-_ = builder.pop(); // returns removed segment
-```
-
-## FixedString
-
-Small inline string buffer for titles, labels, and protocol names that must stay on the stack. See `fixed_string.zig` for capacity and append APIs.
-
-## When to use what
-
-| Type | Capacity | Best for |
-|------|----------|----------|
-| `BoundedArray(T, N)` | Comptime `N` | Homogeneous lists (IDs, rects, events) |
-| `FilePath` | `max_path_bytes` | Config paths, icon paths, socket paths |
-| `FixedString(N)` | Comptime `N` | Short names and cached strings |
+`otr/fixed_string.otr`, `otr/xdg_paths.otr` in the component repository.

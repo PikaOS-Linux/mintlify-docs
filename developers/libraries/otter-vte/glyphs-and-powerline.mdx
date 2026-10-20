@@ -1,31 +1,31 @@
 ---
 title: "Glyphs and powerline"
-sidebarTitle: "Glyphs"
-description: "PowerlineOps, BlockOps, and cell_glyphs in otter-vte."
+sidebarTitle: "Glyphs and powerline"
+description: "Owned powerline/block operation lists and reusable glyph geometry in otr."
 ---
 
-Powerline separators, block-drawing characters, and private-use cell glyphs. These fill gaps when a font does not cover the shapes a terminal prompt expects.
+## Custom glyph rectangles
 
-## Powerline
+`otter_vte.cell_glyphs.build` produces geometry for custom terminal glyphs. `GlyphRects` stores up to 16 rectangles and exposes `slice()`.
 
-```zig
-const vte = @import("otter_vte");
+Fractional blocks, quadrants, and braille use `append_bottom_frac`, `append_quadrant`, and `append_braille`. This geometry remains separate from font fallback.
 
-vte.drawPowerlineSeparator(cmds, rect, fg, bg, .right);
-vte.drawPowerlineTriangle(cmds, rect, fg, bg, .left);
-vte.drawPowerlineRound(cmds, rect, fg, bg, .right);
-```
+## Operation lists
 
-`PowerlineOps` and `PowerlineDirection` control separator geometry. Used by shell prompts and tab bars that mimic terminal powerline themes.
+`otter_vte.ops.PowerlineOps` and `BlockOps` initialize with an allocator, reserve capacity explicitly, and reuse storage through `reset`. `append` records operations; `items()` exposes the recorded slice. The public `dropped` field records overflow.
 
-## Block glyphs
+Payload types such as `PowerlineOp`, `PowerlineKind`, and `BlockOp` live at module level rather than nested under the list types.
 
-`BlockOps` draws block-drawing characters and heavy separators without font coverage gaps.
+## Rounded masks
 
-## Custom glyphs
+`RoundMaskCache` is caller-owned, not a mutable module global. The terminal `Renderer` owns one and passes it to powerline drawing. Masks allocate lazily on first use.
 
-`cell_glyphs.GlyphRects` maps special codepoints to pre-rasterized rects. Register glyphs for icons or private-use slots the primary font lacks.
+## Lua
 
-## Color mapping
+`otter.vte.glyph(cp, x, y, w, h)` returns rectangles plus alpha, or nil. `powerline(cp)` classifies a glyph.
 
-`ghosttyColor` converts terminal palette indices to `otter-render` `Color` for Ghostty-compatible themes.
+Plugin canvases support `clear`, `draw_powerline`, `draw_glyph`, `pixel`, and `free`. At most four canvases belong to one plugin, each bounded to 2 Mi physical pixels. The host releases them when that plugin instance unloads.
+
+## Source reference
+
+`otr/cell_glyphs.otr`, `otr/ops.otr`, `otr/lua/vte.otr` in the component repository.

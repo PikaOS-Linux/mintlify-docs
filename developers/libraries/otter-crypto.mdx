@@ -1,0 +1,63 @@
+---
+title: "otter-crypto"
+sidebarTitle: "otter-crypto"
+description: "Native otr hashing, MACs, authenticated encryption, signatures, and random bytes."
+---
+
+`otter-crypto` wraps otr standard-library cryptography. It has no libcrypto or other C cryptographic dependency. Import leaf modules, not a package root.
+
+| Module               | Surface                                            |
+| -------------------- | -------------------------------------------------- |
+| `hash`               | MD5, SHA-1, SHA-256, SHA-512                       |
+| `hmac`               | Corresponding keyed hashes                         |
+| `aes`, `cmac`        | AES-128 blocks, CTR32-BE, CBC-MAC, CMAC            |
+| `aead`               | AES-128-GCM, ChaCha20-Poly1305, XChaCha20-Poly1305 |
+| `chacha`, `poly1305` | Stream/MAC primitives                              |
+| `x25519`             | Key exchange                                       |
+| `ed25519`            | Keys, deterministic signing, verification          |
+| `random`, `wipe`     | OS randomness and explicit clearing                |
+
+```otr
+import otter_crypto.hash
+
+pub fn main() void {
+    digest := hash.Sha256.hash("example")
+    _ = digest
+}
+```
+
+## Ownership and safety
+
+Hash/HMAC contexts are value structs with `wipe()`. AES key schedules, CBC-MAC, and CMAC own boxed state and require consuming `deinit()` to clear and free it.
+
+Use `random.fill` for key material. It reports OS randomness errors rather than substituting a deterministic source. Use `std.crypto.timing_safe_eql` for secret comparisons and `std.mem.secure_zero` for byte buffers.
+
+AEAD decrypt returns an authentication error on invalid input and zeros its destination. In-place decrypt therefore destroys ciphertext on failure. Preserve a separate copy if retry logic needs the ciphertext.
+
+MD5 and SHA-1 are available for existing protocol/file-format compatibility. Do not choose them for new security-sensitive designs. Nonce uniqueness and key lifetime remain the caller's responsibility when using raw AEAD primitives.
+
+## Lua
+
+`otter_crypto_lua` provides `otter.crypto` with no capability requirement; its operations do not act on external services.
+
+- `hash(algorithm, data, raw?)` and `hmac(algorithm, key, data, raw?)` return hex by default.
+- `random(n)` / `random_hex(n)` accept 1..4096 bytes.
+- `equal(a, b)` compares in constant time.
+- `seal(key32, plain, ad?)` uses XChaCha20-Poly1305 with a fresh random nonce.
+- `open(key32, sealed, ad?)` authenticates the `nonce || ciphertext || tag` representation; failure returns `nil, "authentication failed"`.
+
+The host must register the binding; native package imports do not expose Lua functions automatically.
+
+```lua
+local crypto = require("otter.crypto")
+local key = crypto.random(32)
+local sealed = crypto.seal(key, "example", "context")
+local plain, err = crypto.open(key, sealed, "context")
+assert(plain == "example", err)
+```
+
+This example keeps a fresh key only in memory. Applications that retain encrypted data must also define secure key storage and recovery.
+
+## Source reference
+
+`otr/API.md`, `otr/api_check.otr`, `otr/aead.otr`, `otr/ed25519.otr`, `otr/lua/crypto.otr` in the component repository.

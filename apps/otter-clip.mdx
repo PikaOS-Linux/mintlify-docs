@@ -16,23 +16,21 @@ Run the daemon once per session.
 otter-clip daemon    # start monitoring clipboard selections
 ```
 
-<Tip>
-  Add `otter-clip daemon` to your compositor's autostart list so history is ready at login. Without the daemon, `otter-clip list`, `search`, and the Super+V popup have nothing to show.
-</Tip>
+<Tip>Add `otter-clip daemon` to your compositor's autostart list so history is ready at login. Without the daemon, `otter-clip list`, `search`, and the Super+V popup have nothing to show.</Tip>
 
 ## CLI commands
 
-| Command | Description |
-|---|---|
-| `otter-clip popup` | Open the Super+V history popup |
-| `otter-clip popup query` | Open the popup with a search term pre-filled |
-| `otter-clip list` | Print all stored history entries |
-| `otter-clip search query` | Filter history and print matching entries |
-| `otter-clip add some text` | Manually append a text entry to history |
-| `otter-clip clear` | Delete all history entries |
-| `otter-clip pin 0` | Pin an entry by its index so it is not evicted |
-| `otter-clip unpin 0` | Remove the pin from an entry |
-| `otter-clip select 0` | Copy a history entry by index to the clipboard |
+| Command                    | Description                                    |
+| -------------------------- | ---------------------------------------------- |
+| `otter-clip popup`         | Open the Super+V history popup                 |
+| `otter-clip popup query`   | Open the popup with a search term pre-filled   |
+| `otter-clip list`          | Print all stored history entries               |
+| `otter-clip search query`  | Filter history and print matching entries      |
+| `otter-clip add some text` | Manually append a text entry to history        |
+| `otter-clip clear`         | Delete all history entries                     |
+| `otter-clip pin 0`         | Pin an entry by its index so it is not evicted |
+| `otter-clip unpin 0`       | Remove the pin from an entry                   |
+| `otter-clip select 0`      | Copy a history entry by index to the clipboard |
 
 The `popup` command opens `otter-launcher --query "clip ..."`. Selecting a row calls `otter-clip select INDEX` to copy that item back to the clipboard. Pressing Enter in the popup is the same as running `otter-clip select` on the highlighted entry.
 
@@ -73,9 +71,7 @@ history_path = ""
 
 ## Privacy and password managers
 
-<Note>
-  otter-clip skips clipboard entries that carry password manager or secret MIME hints before reading their data. Credentials copied from password managers do not end up in plain text history. Wayland data-control does not expose the source application ID for copied data, so app-ID filtering only applies when a source ID is available to the caller.
-</Note>
+<Note>otter-clip skips clipboard entries that carry password manager or secret MIME hints before reading their data. Credentials copied from password managers do not end up in plain text history. Wayland data-control does not expose the source application ID for copied data, so app-ID filtering only applies when a source ID is available to the caller.</Note>
 
 ## Image support
 

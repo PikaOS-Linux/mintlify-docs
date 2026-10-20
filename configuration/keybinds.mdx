@@ -8,32 +8,32 @@ In-app shortcuts live in each app's config file. Edit them in [otter-settings](/
 
 ## In-app shortcuts
 
-| App | Action | Default shortcut |
-|-----|--------|-----------------|
-| otter-term | Copy selection | `Ctrl+Shift+C` |
-| otter-term | Paste | `Ctrl+Shift+V` |
-| otter-term | Context menu | Right-click |
-| otter-note | Save note | `Ctrl+S` |
-| otter-note | Toggle Markdown preview | `Ctrl+M` |
-| otter-screenshot | Cancel region selection | `Esc` or `Ctrl+C` |
-| otter-launcher | Close | `Escape` |
-| otter-launcher | Launch selected | `Enter` |
-| otter-launcher | Move through results | `Up` / `Down`, `Tab`, `Page Up/Down` |
-| otter-launcher | Clear search | `Ctrl+U` |
-| otter-overview | Close / clear search | `Escape` |
-| otter-overview | Launch selected app | `Enter` |
-| otter-overview | Move through tiles or apps | Arrows / `Tab`, `Page Up/Down` |
-| otter-overview | Jump to workspace card | `Ctrl+1` ... `Ctrl+9` (`Ctrl+0` = tenth) |
-| otter-switcher | Advance selection | Run `otter-switcher` again |
-| otter-switcher | Focus selected | Release Alt, or Enter |
-| otter-switcher | Cancel | `Escape` |
-| otter-keybindhelp | Close | `Escape` |
-| otter-keybindhelp | Search / clear | Type, `Ctrl+U` |
-| otter-keybindhelp | Change context / page | `Tab` / `Shift+Tab`, `Page Up` / `Page Down` |
-| otter-files | Connect to Server | `Ctrl+K` |
-| otter-lock | Submit password | `Enter` |
-| otter-polkit | Submit password | `Enter` |
-| otter-polkit | Cancel | `Escape` |
+| App               | Action                     | Default shortcut                             |
+| ----------------- | -------------------------- | -------------------------------------------- |
+| otter-term        | Copy selection             | `Ctrl+Shift+C`                               |
+| otter-term        | Paste                      | `Ctrl+Shift+V`                               |
+| otter-term        | Context menu               | Right-click                                  |
+| otter-note        | Save note                  | `Ctrl+S`                                     |
+| otter-note        | Toggle Markdown preview    | `Ctrl+M`                                     |
+| otter-screenshot  | Cancel region selection    | `Esc` or `Ctrl+C`                            |
+| otter-launcher    | Close                      | `Escape`                                     |
+| otter-launcher    | Launch selected            | `Enter`                                      |
+| otter-launcher    | Move through results       | `Up` / `Down`, `Tab`, `Page Up/Down`         |
+| otter-launcher    | Clear search               | `Ctrl+U`                                     |
+| otter-overview    | Close / clear search       | `Escape`                                     |
+| otter-overview    | Launch selected app        | `Enter`                                      |
+| otter-overview    | Move through tiles or apps | Arrows / `Tab`, `Page Up/Down`               |
+| otter-overview    | Jump to workspace card     | `Ctrl+1` ... `Ctrl+9` (`Ctrl+0` = tenth)     |
+| otter-switcher    | Advance selection          | Run `otter-switcher` again                   |
+| otter-switcher    | Focus selected             | Release Alt, or Enter                        |
+| otter-switcher    | Cancel                     | `Escape`                                     |
+| otter-keybindhelp | Close                      | `Escape`                                     |
+| otter-keybindhelp | Search / clear             | Type, `Ctrl+U`                               |
+| otter-keybindhelp | Change context / page      | `Tab` / `Shift+Tab`, `Page Up` / `Page Down` |
+| otter-files       | Connect to Server          | `Ctrl+K`                                     |
+| otter-lock        | Submit password            | `Enter`                                      |
+| otter-polkit      | Submit password            | `Enter`                                      |
+| otter-polkit      | Cancel                     | `Escape`                                     |
 
 ## otter-term keybinds
 
@@ -122,15 +122,15 @@ otter-jade &
 otter-transcribe &
 ```
 
-| Service | Purpose |
-|---------|---------|
-| `otter-bar` | Status bar; tray, clock, weather |
-| `otter-wallpaper` | Desktop background |
-| `otter-notifications` | `notify-send` and app alerts |
-| `otter-osd` | Volume/brightness overlays (bar scroll, `otter-timer`) |
-| `otter-idle` | Idle timeouts, DPMS, lock-on-idle |
-| `otter-polkit` | Privilege dialogs (`pkexec`, package installs) |
-| `otter-clip daemon` | Clipboard history for `otter-clip popup` |
-| `otter-weather --watch --write-cache` | Bar weather widget cache |
+| Service                               | Purpose                                                |
+| ------------------------------------- | ------------------------------------------------------ |
+| `otter-bar`                           | Status bar; tray, clock, weather                       |
+| `otter-wallpaper`                     | Desktop background                                     |
+| `otter-notifications`                 | `notify-send` and app alerts                           |
+| `otter-osd`                           | Volume/brightness overlays (bar scroll, `otter-timer`) |
+| `otter-idle`                          | Idle timeouts, DPMS, lock-on-idle                      |
+| `otter-polkit`                        | Privilege dialogs (`pkexec`, package installs)         |
+| `otter-clip daemon`                   | Clipboard history for `otter-clip popup`               |
+| `otter-weather --watch --write-cache` | Bar weather widget cache                               |
 
 The `&` suffix runs each process in the background.

@@ -14,11 +14,9 @@ Run `otter-shot` from the app launcher or a terminal. The composer window opens 
 otter-shot
 ```
 
-It ships a `.desktop` file, so it shows up in the app launcher. Bind it to a compositor shortcut if you use it often.
+It ships a `.desktop` file, so it appears in the app launcher. Bind it to a compositor shortcut if you use it often.
 
-<Note>
-  otter-shot appears in your application launcher through its installed `.desktop` entry. No manual PATH setup needed.
-</Note>
+<Note>The installed `.desktop` entry works without manual PATH setup.</Note>
 
 ## Capture sources
 
@@ -37,9 +35,7 @@ It ships a `.desktop` file, so it shows up in the app launcher. Bind it to a com
   </Card>
 </CardGroup>
 
-<Note>
-  If your compositor exposes `ext_foreign_toplevel_list_v1` metadata but not the full capture protocol, the window list still appears in the inspector. Those rows are marked metadata-only instead of failing silently when you try to capture them.
-</Note>
+<Note>If your compositor exposes `ext_foreign_toplevel_list_v1` metadata but not the full capture protocol, the window list still appears in the inspector. Those rows are marked metadata-only instead of failing silently when you try to capture them.</Note>
 
 ## Composer controls
 
@@ -60,19 +56,13 @@ Whole-image OCR copies recognized text to the clipboard. It uses the system `tes
 
 ## Exporting
 
-Two export paths once the composition looks right.
+When the composition is ready, save it to a file or copy it to the clipboard.
 
 <Steps>
-  <Step title="Export PNG to file">
-    Click **Export PNG** in the inspector. The xdg-desktop-portal save picker opens so you can choose a filename and destination directory. otter-shot writes the framed PNG only after you confirm the picker.
-  </Step>
-  <Step title="Copy to clipboard">
-    Click **Clipboard** to copy the framed PNG as `image/png`. Paste it into any application that accepts image data.
-  </Step>
+  <Step title="Export PNG to file">Click **Export PNG** in the inspector. The xdg-desktop-portal save picker opens so you can choose a filename and destination directory. otter-shot writes the framed PNG only after you confirm the picker.</Step>
+  <Step title="Copy to clipboard">Click **Clipboard** to copy the framed PNG as `image/png`. Paste it into any application that accepts image data.</Step>
 </Steps>
 
 ## Compositor requirements
 
-<Warning>
-  otter-shot requires the `ext_image_copy_capture_v1` protocol for all capture operations. Screen and dragged-selection capture also require output capture source support from the compositor. Window capture requires both `ext_image_copy_capture_v1` and `ext_foreign_toplevel_list_v1`. If your compositor does not expose these protocols, the affected capture sources will be unavailable.
-</Warning>
+<Warning>otter-shot requires the `ext_image_copy_capture_v1` protocol for all capture operations. Screen and dragged-selection capture also require output capture source support from the compositor. Window capture requires both `ext_image_copy_capture_v1` and `ext_foreign_toplevel_list_v1`. If your compositor does not expose these protocols, the affected capture sources will be unavailable.</Warning>

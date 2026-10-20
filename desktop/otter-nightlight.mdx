@@ -4,7 +4,7 @@ sidebarTitle: "Night Light"
 description: "Color-temperature daemon using wlr-gamma-control. Bar widget and CLI talk to it."
 ---
 
-`otter-nightlight` applies a warm gamma table through `wlr-gamma-control-unstable-v1`. That works on Hyprland, Sway, and other wlroots compositors. One binary: no arguments starts the daemon. Any other argument is a client command.
+`otter-nightlight` applies a warm gamma table through `wlr-gamma-control-unstable-v1` on Hyprland, Sway, and other wlroots compositors. Run it without arguments to start the daemon, or pass an argument to send a client command.
 
 Only one client can own gamma per output. Stop `wlsunset` or `hyprsunset` while this runs.
 
@@ -30,15 +30,15 @@ otter-nightlight suspend 60
 otter-nightlight resume
 ```
 
-| Command | Meaning |
-|---------|---------|
-| `toggle` | Enable or disable night light |
-| `enable` / `disable` | Set the state directly |
-| `temp KELVIN` | Night temperature (1000 to 10000) |
-| `schedule-on` / `schedule-off` | Follow or ignore the schedule window |
+| Command                           | Meaning                              |
+| --------------------------------- | ------------------------------------ |
+| `toggle`                          | Enable or disable night light        |
+| `enable` / `disable`              | Set the state directly               |
+| `temp KELVIN`                     | Night temperature (1000 to 10000)    |
+| `schedule-on` / `schedule-off`    | Follow or ignore the schedule window |
 | `start HOUR MIN` / `end HOUR MIN` | Schedule bounds, local 24-hour clock |
-| `suspend MINUTES` | Pause until then |
-| `resume` | Clear a suspend |
+| `suspend MINUTES`                 | Pause until then                     |
+| `resume`                          | Clear a suspend                      |
 
 A start later than end wraps midnight.
 
@@ -52,9 +52,7 @@ The widget is a client. It does nothing if the daemon is not running.
 
 Config: `~/.config/otter-shell/otter-nightlight.conf`
 
-<Tip>
-  The **Night Light** tab in [otter-settings](/desktop/otter-settings) writes the same file.
-</Tip>
+<Tip>The **Night Light** tab in [otter-settings](/desktop/otter-settings) writes the same file.</Tip>
 
 ```conf
 enabled = true

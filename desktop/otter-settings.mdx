@@ -4,7 +4,7 @@ sidebarTitle: "Settings app"
 description: "Graphical editor for Otter Shell app configs, themes, and bar layout."
 ---
 
-`otter-settings` is the GUI for Otter Shell config. Installed apps get their own tabs. You get a theme browser and drag-and-drop bar layout. If you prefer `$EDITOR`, both routes write the same files.
+`otter-settings` edits Otter Shell configuration through app-specific tabs, a theme browser, and a drag-and-drop bar layout. You can also edit the same files in `$EDITOR`.
 
 ## Usage
 
@@ -14,50 +14,48 @@ otter-settings
 
 Launch from [otter-launcher](/desktop/otter-launcher) or bind a compositor hotkey (for example `Super+Comma`).
 
-Settings only shows app tabs whose matching Otter executable is installed. **Theme** and **Plugins** always stay available. Restart Settings after installing or removing a component so it can refresh the sidebar.
+Settings only shows app tabs whose matching Otter executable is installed. **Theme**, **Plugins**, and **UI Scripts** stay available. Restart Settings after installing or removing a component so it can refresh the sidebar.
 
-<Note>
-  Writes to `~/.config/otter-shell/*.conf`. Running apps reload via inotify after **Apply**.
-</Note>
+<Note>Writes to `~/.config/otter-shell/*.conf`. Running apps reload via inotify after **Apply**.</Note>
 
 ## What otter-settings handles
 
-| Area | Detail |
-|------|--------|
-| Controls | Toggles, dropdowns, color swatches, and steppers instead of key-value files |
-| Search | Find fields by key, label, value, or section |
-| Bar layout | Drag widget chips instead of editing `layout_left` strings |
-| Themes | Preview all 12 presets before applying |
-| File writes | Keeps comments, field order, and custom fields |
+| Area        | Detail                                                                      |
+| ----------- | --------------------------------------------------------------------------- |
+| Controls    | Toggles, dropdowns, color swatches, and steppers instead of key-value files |
+| Search      | Find fields by key, label, value, or section                                |
+| Bar layout  | Drag widget chips instead of editing `layout_left` strings                  |
+| Themes      | Preview all 12 presets before applying                                      |
+| File writes | Keeps comments, field order, and custom fields                              |
 
 ## Config files managed
 
-| Tab | File |
-|-----|------|
-| Bar | `otter-bar.conf` |
-| Launcher | `otter-launcher.conf` |
-| Plugins | `plugins.conf` |
-| Dock | `otter-dock.conf` |
-| Taskbar | `otter-taskbar.conf` |
-| Overview | `otter-overview.conf` |
-| Notifications | `notifications.conf` |
-| Wallpaper | `otter-wallpaper.conf` |
-| OSD | `otter-osd.conf` |
-| Jade | `otter-jade.conf` |
-| Logout | `otter-logout.conf` |
-| Polkit | `otter-polkit.conf` |
-| Lock | `otter-lock.conf` |
-| Idle | `otter-idle.conf` |
-| Night Light | `otter-nightlight.conf` |
-| Terminal | `otter-term.conf` |
-| Theme Gen | `otter-theme-gen.conf` |
-| Recorder | `otter-rec.conf` |
-| Voice | `otter-vox.conf` |
-| Theme | `theme.conf` |
-| Monitor | `otter-monitor.conf` |
-| Files | `otter-files.conf` |
-| Assist | `otter-assist.conf` |
-| Clicker | `otter-clicker.conf` |
+| Tab           | File                    |
+| ------------- | ----------------------- |
+| Bar           | `otter-bar.conf`        |
+| Launcher      | `otter-launcher.conf`   |
+| Plugins       | `plugins.conf`          |
+| Dock          | `otter-dock.conf`       |
+| Taskbar       | `otter-taskbar.conf`    |
+| Overview      | `otter-overview.conf`   |
+| Notifications | `notifications.conf`    |
+| Wallpaper     | `otter-wallpaper.conf`  |
+| OSD           | `otter-osd.conf`        |
+| Jade          | `otter-jade.conf`       |
+| Logout        | `otter-logout.conf`     |
+| Polkit        | `otter-polkit.conf`     |
+| Lock          | `otter-lock.conf`       |
+| Idle          | `otter-idle.conf`       |
+| Night Light   | `otter-nightlight.conf` |
+| Terminal      | `otter-term.conf`       |
+| Theme Gen     | `otter-theme-gen.conf`  |
+| Recorder      | `otter-rec.conf`        |
+| Voice         | `otter-vox.conf`        |
+| Theme         | `theme.conf`            |
+| Monitor       | `otter-monitor.conf`    |
+| Files         | `otter-files.conf`      |
+| Assist        | `otter-assist.conf`     |
+| Clicker       | `otter-clicker.conf`    |
 
 Bar layout is drag-and-drop. You can add custom bar buttons. Text fields accept clipboard paste (Ctrl+V) through the Wayland data device.
 
@@ -97,7 +95,7 @@ Restart `otter-monitor` after you change the refresh interval. Theme colors stil
 
 ## Clicker tab
 
-The **Clicker** tab edits `otter-clicker.conf` for [otter-clicker](/apps/otter-clicker). Interval, button, single or double click, repeat count, jitter, hold time, and fixed-position mode.
+The **Clicker** tab edits `otter-clicker.conf` for [otter-clicker](/apps/otter-clicker). Set the interval, button, single or double click, repeat count, jitter, hold time, and fixed-position mode.
 
 ## Assist tab
 
@@ -123,7 +121,21 @@ Otter Shell, Otter Shell Islands, Catppuccin variants, Nord, Gruvbox, Dracula, T
 
 ## Plugins tab
 
-The **Plugins** tab lists installed `.so` plugins and writes `plugins.conf` enable toggles. Enabled bar plugins also show up as `plugin:<id>` chips in the bar layout palette. See [Plugins](/desktop/plugins).
+The **Plugins** tab discovers Lua plugin directories through their `plugin.toml` manifests. Compiled `.so` plugins are not supported. You can enable plugins, allow or deny each declared capability, and request a reload. **Apply** writes the enable flags and capability grants to `plugins.conf`.
+
+Running hosts can report load status, granted capabilities, heap use, reloads, failures, and their latest error or log message. Missing status means no running host has reported it, not that a plugin passed a health check. Enabled bar plugins also appear as `plugin:<id>` chips in the bar layout palette. See [Plugins](/desktop/plugins).
+
+## UI Scripts tab
+
+The **UI Scripts** tab manages Lua-drawn app surfaces such as `osd.lua` and `logout.lua`. It shows the system script, any user override, and runtime status when the app reports it.
+
+- **Create override** copies a system script to your XDG data directory, normally `~/.local/share/otter-shell/ui/`.
+- **Reset to system** moves your override aside so the system script takes over.
+- **Native UI** disables the script for that app.
+- **Hot reload** controls automatic script reloads.
+- **Reload now** is available for apps that support it, including OSD.
+
+Click **Apply** to save per-app mode and hot-reload choices in `~/.config/otter-shell/ui.conf`. Layout, hit testing, and rendering remain native even when Lua describes the surface.
 
 ## Overview tab
 
@@ -139,4 +151,4 @@ The **Night Light** tab edits `otter-nightlight.conf`. Autostart the [otter-nigh
 
 ## Files tab
 
-The **Files** tab edits `otter-files.conf` when `otter-files` is on `PATH`. View mode, sort, thumbnails, and confirm dialogs. See [otter-files](/apps/otter-files).
+The **Files** tab edits `otter-files.conf` when `otter-files` is on `PATH`. It controls view mode, sorting, thumbnails, and confirmation dialogs. See [otter-files](/apps/otter-files).

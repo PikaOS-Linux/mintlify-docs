@@ -1,50 +1,33 @@
 ---
 title: "Hot reload"
 sidebarTitle: "Hot reload"
-description: "hasChanged, Watcher, and event-loop integration for otter-conf."
+description: "Reload otr configs once per drained inotify burst and preserve valid state."
 ---
 
-Watch config files with `hasChanged` polling or an inotify `Watcher`. Most Otter daemons poll the watcher FD next to Wayland.
+Import `otter_conf.watcher`. `Watcher.init()` creates an owned watcher without allocator arguments.
 
-## Modification time check
+## Event-loop integration
 
-```zig
-const result = try otter_conf.loadWithMetadata(Config, allocator, path, .{});
-const last_mtime = result.mtime_ns;
+1. Call `watch_config_path(path)` to watch the file's parent directory.
+2. Put `get_fd()` into your existing event loop.
+3. On readiness, call `drain_changed()`.
+4. If it returns true, parse one replacement config.
+5. Publish the replacement only after the full parse succeeds.
 
-if (try otter_conf.hasChanged(path, last_mtime)) {
-    // reload
-}
-```
+Directory watching survives editors that save by atomic rename. `IN_IGNORED` alone does not mean the config changed. Do not reload separately for every event in a burst.
 
-## Watcher
+## Imported files
 
-```zig
-var watcher = try otter_conf.Watcher.init(allocator);
-defer watcher.deinit();
+`add_watches_for_imports(paths)` returns an owned list of descriptors. Refresh import watches when a successful reload changes the import graph.
 
-_ = try watcher.addWatch(allocator, path);
+For theme files, use `otter_theme.theme_watcher.ThemeWatcher` instead. It tracks the selected layers and imports as one graph.
 
-// Poll watcher.getFd() with Wayland:
-while (watcher.nextEvent()) |event| {
-    if (event.isModified()) {
-        config = try otter_conf.load(Config, allocator, path, .{});
-    }
-}
-```
+## Metadata alternative
 
-Event helpers match `otter-utils` inotify: `isModified`, `isDeleted`, `isCreated`, `isMoved`, `isIgnored`.
+`loader.get_mtime(alloc, path)` returns nanoseconds as `i64`. `has_changed(alloc, path, previous_mtime)` supports code that already checks metadata. Long-running desktop applications should prefer descriptor-driven watches.
 
-## Imports and multiple paths
+Never normalize or rewrite a file from its reload path. Failed edits retain the previous valid config; a watch event is not permission to replace it with defaults.
 
-When using `loadWithImports`, `result.paths` lists every file touched. Watch all of them or watch directories that contain imported fragments.
+## Source reference
 
-```zig
-var res = try otter_conf.loadWithImports(Config, gpa, path, .{});
-defer res.deinit(gpa);
-// res.config, res.paths
-```
-
-## Thread safety
-
-Parsers are not thread-safe on the same buffer. Load once per file, then share the resulting struct read-only across threads.
+`otr/watcher.otr`, `otr/loader.otr` in the component repository.

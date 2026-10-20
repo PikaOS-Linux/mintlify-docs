@@ -4,7 +4,7 @@ sidebarTitle: "Power menu"
 description: "Power menu overlay for lock, logout, suspend, reboot, and shutdown."
 ---
 
-`otter-logout` is the power menu. Lock, logout, suspend, reboot, shutdown. Bind it to a hotkey or the bar menu. It runs while the menu is open, then exits when you pick an action or dismiss.
+`otter-logout` opens a power menu for locking the session, logging out, suspending, rebooting, or shutting down. Bind it to a hotkey or the bar menu. It exits when you pick an action or dismiss the menu.
 
 ## Usage
 
@@ -27,6 +27,8 @@ Config file: `~/.config/otter-shell/otter-logout.conf`
 icon_size = 64
 button_size = 120
 button_spacing = 24
+highlight_destructive_actions = true
+confirm_destructive_actions = true
 overlay_color = "#000000aa"
 
 lock_label = "Lock"
@@ -52,9 +54,21 @@ shutdown_exec = "systemctl poweroff"
 
 You can change each button's label, XDG icon name, and shell command. Colors inherit from [theme.conf](/configuration/themes) when omitted.
 
+Reboot and shutdown are highlighted and require confirmation by default. Set `highlight_destructive_actions = false` to use normal colors. Set `confirm_destructive_actions = false` only if you want those actions to execute immediately.
+
+## Lua surface
+
+The menu uses native drawing unless it finds `logout.lua` on the UI script search path. A user script under `$XDG_DATA_HOME/otter-shell/ui/` (normally `~/.local/share/otter-shell/ui/`) overrides the system script. Edits can reload while the menu is open. A broken script keeps the last good frame or falls back to native drawing.
+
+Manage overrides, **Native UI**, and hot reload in otter-settings **UI Scripts**. Lua describes the panel; native code still handles input and action execution. See [Settings](/desktop/otter-settings#ui-scripts-tab).
+
 ## Keybindings
 
-| Key | Action |
-|-----|--------|
-| Escape | Close menu |
-| Enter | Activate focused button |
+| Key                         | Action                                                  |
+| --------------------------- | ------------------------------------------------------- |
+| Escape                      | Cancel confirmation, or close menu                      |
+| 1–5                         | Select action; confirm destructive actions when enabled |
+| Left / Shift+Tab            | Move left                                               |
+| Right / Tab                 | Move right                                              |
+| Enter                       | Activate selection or confirm the chosen action         |
+| Click outside / Right-click | Close menu                                              |

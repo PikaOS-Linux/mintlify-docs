@@ -1,50 +1,34 @@
 ---
 title: "otter-wayland"
 sidebarTitle: "otter-wayland"
-description: "Wayland client: connection, layer shell, input, SHM pools, capture, and damage."
+description: "otr Wayland clients with owned proxies, event hubs, input, SHM, and capture."
 ---
 
-`otter-wayland` is the shared Wayland client layer: compositor connection, layer and XDG surfaces, pointer and keyboard input, clipboard, SHM buffers, screen capture.
+`otter-wayland` wraps Wayland protocols and shared surface policy. Import native leaf modules such as `otter_wayland.connection`, `otter_wayland.hub`, and `otter_wayland.xdg_toplevel`.
 
-Poll `Connection.dispatch()` in your main loop with config watchers and timer FDs.
+## Event model
 
-## Quick example
+Each proxy has one owner. State records store copyable `wl.Id` identities rather than raw proxy pointers. Listeners append records to `hub.Hub`; components `pump` those records and expose event queues or generation counters.
 
-```zig
-const wl = @import("otter_wayland");
+There is no callback-plus-userdata or `SubscriberList` API. Dispatch the connection, pump relevant components, then drain events in your app loop.
 
-var conn: wl.Connection = .{};
-try conn.init();
-defer conn.deinit();
+## Lightweight clients
 
-while (conn.running) {
-    try conn.dispatch();
-}
-```
+Protocol-only applications can use `otter_wayland_core` from `otr/core/`. It excludes render and xkbcommon-dependent modules. Use either `otter_wayland` or core, never both: their types and hub contexts are distinct package identities.
 
-## Pages in this library
+## Lua
 
-<CardGroup cols={2}>
-  <Card title="Connection and surfaces" icon="plug" href="/developers/libraries/otter-wayland/connection-and-surfaces">
-    `Connection`, layer shell, `XdgToplevel`, `LayerPopup`, workspaces.
-  </Card>
-  <Card title="Input" icon="keyboard" href="/developers/libraries/otter-wayland/input">
-    Pointer, keyboard, IME, clipboard, virtual keyboard, virtual pointer.
-  </Card>
-  <Card title="SHM and damage" icon="memory" href="/developers/libraries/otter-wayland/shm-and-damage">
-    `DoubleShmPool`, `SingleShmPool`, `DamageTracker`, `Renderer`.
-  </Card>
-  <Card title="Capture and overlays" icon="camera" href="/developers/libraries/otter-wayland/capture-and-overlays">
-    Screen capture, selection overlay, dim overlay.
-  </Card>
-</CardGroup>
+`otter_wayland_lua` provides `otter.wayland`. Read outputs, toplevels, and workspaces without an action capability. Activation, closing, and workspace changes require `wayland-actions`; clipboard reads and writes require `clipboard`.
 
-## Protocols
+The binding opens its own connection lazily and registers its descriptor with the plugin host. `subscribe` callbacks run through the host loop, not from libwayland callbacks.
 
-`wl_compositor`, `wl_seat`, `wl_shm`, `wl_output`, `zwlr_layer_shell_v1`, `ext_workspace_manager_v1`, `zwlr_foreign_toplevel_manager_v1`, `zwp_text_input_v3`, `ext_session_lock_v1`, `wl_data_device`, `wp_viewporter`, `wp_cursor_shape_manager_v1`.
+## Reference pages
 
-Workspace providers also exist for Hyprland IPC, Niri, dwl, and Otter tag layouts.
+- [Connection and surfaces](/developers/libraries/otter-wayland/connection-and-surfaces)
+- [SHM and damage](/developers/libraries/otter-wayland/shm-and-damage)
+- [Input](/developers/libraries/otter-wayland/input)
+- [Capture and overlays](/developers/libraries/otter-wayland/capture-and-overlays)
 
-## Dependencies
+## Source reference
 
-`otter-geo`, `otter-render`, `otter-utils`, wayland-client, xkbcommon.
+`otr/otr.toml`, `otr/` in the component repository.

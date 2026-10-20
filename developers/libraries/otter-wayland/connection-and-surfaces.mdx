@@ -1,66 +1,39 @@
 ---
 title: "Connection and surfaces"
-sidebarTitle: "Connection"
-description: "Connection, layer shell, XdgToplevel, LayerPopup, and workspace tracking."
+sidebarTitle: "Connection and surfaces"
+description: "Owned otr Wayland connections, event pumping, layer shell, and XDG toplevels."
 ---
-
-Compositor connection, layer-shell panels, XDG toplevels, and workspace tracking.
 
 ## Connection
 
-```zig
-var conn: otter_wayland.Connection = .{};
-conn.callbacks = .{
-    .on_output_added = onOutput,
-    .on_seat_added = onSeat,
-    .context = &app,
-};
-try conn.init();
-```
+`connection.Connection.init(interest)` connects with a `GlobalInterest` selection. Optional advertised globals are owned fields on the connection. Check protocol availability before creating dependent resources.
 
-Register globals before `init` completes. Dispatch until `running` is false.
+`fd`, `flush`, `dispatch`, `dispatch_pending`, and `roundtrip` integrate with your loop. Dispatch methods requiring time/I/O take `std.Io` explicitly. `dispatch_or` can wait for Wayland, one extra descriptor, or a deadline.
 
-## Layer shell
+Consume `next_global()` records; the connection does not support callback registration.
 
-Bar panels and overlays use `zwlr_layer_shell_v1`. Anchor presets live on `Anchor`:
+## Hub and components
 
-- `top_bar`, `bottom_bar`, `left_panel`, `right_panel`, `fullscreen`
+`hub.Hub` stores records from generated protocol listeners. Each tracker keeps a cursor and applies records during `pump`. Use a component's `next_event` or generation value after pumping to detect changes.
 
-Set `Layer` (`background`, `bottom`, `top`, `overlay`) per surface role.
+Store `wl.Id` for identity. Borrow a live proxy from its owning tracker when sending a request. An identity is not permission to reuse a destroyed proxy.
 
-## XDG toplevel
+## Surfaces
 
-```zig
-var toplevel = otter_wayland.XdgToplevel.init(&conn, .{
-    .on_configure = onConfigure,
-    .on_close = onClose,
-    .context = &state,
-});
-toplevel.bindListeners();
-toplevel.setTitle("My window");
-toplevel.setAppId("com.example.app");
-```
+- `layer`: layer, anchor, and keyboard-interactivity values.
+- `xdg_toplevel`: reusable XDG window lifecycle and configure events.
+- `layer_popup`: layer-shell popups.
+- `background_effect`: compositor blur regions when supported.
+- `dim_overlay`: shared dimming surfaces.
 
-`on_configure` receives logical size; `0` means client picks dimensions.
+A compositor is external to Otter Shell. Handle unavailable optional protocols rather than assuming a particular compositor.
 
-## LayerPopup
+## Outputs and workspaces
 
-Transient menus and tooltips:
+`capture_output.OutputList` stores output state. `output_scale` reads exact scale information from it. Keep exact factors distinct from integer ceiling scale.
 
-```zig
-var popup = otter_wayland.LayerPopup.init(.{ .wl_shm = wl_shm, ... });
-try popup.showWithScale(.menu, x, y, w, h, scale, drawCb, ctx);
-popup.hide();
-popup.processPendingHide();
-```
+`foreign_toplevel`, `ext_workspace`, and `workspace_provider` expose window/workspace state. Compositor IPC helpers use explicit `ipc.Endpoints` and I/O, not environment singletons.
 
-## Workspaces and toplevels
+## Source reference
 
-| Type | Role |
-|------|------|
-| `ExtWorkspaceManager` | `ext_workspace_manager_v1` state |
-| `ForeignToplevelManager` | Active window title and `app_id` |
-| `WorkspaceProvider` | Unified snapshot across compositor backends |
-| `HyprlandManager` | Hyprland IPC fallback |
-
-Subscribe with `.subscribe(callback, context)` and read snapshots after protocol events.
+`otr/connection.otr`, `otr/hub.otr`, `otr/events.otr`, `otr/xdg_toplevel.otr`, `otr/capture_output.otr` in the component repository.

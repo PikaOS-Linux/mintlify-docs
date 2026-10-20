@@ -1,29 +1,29 @@
 ---
 title: "Command list"
 sidebarTitle: "Command list"
-description: "DynamicCommandList for terminal draw commands in otter-vte."
+description: "Dynamic otr terminal drawing storage and capacity/drop semantics."
 ---
 
-`DynamicCommandList` extends the render command model for terminal cells. Backgrounds, glyph runs, powerline segments, underline styles.
+Import `otter_vte.command_list`. `DynamicCommandList.init(alloc)` owns growable command and text lists. Its consuming `deinit()` frees storage.
 
-```zig
-const vte = @import("otter_vte");
+## Capacity
 
-var cmds = vte.DynamicCommandList.init(allocator);
-defer cmds.deinit();
+`ensure_grid_capacity`, `ensure_background_capacity`, and `ensure_text_capacity` prepare storage for the terminal geometry. Appends before initial capacity preparation drop and count commands instead of implicitly growing.
 
-// Record cell draws for the visible grid
-// Attach TextSystem + ShapeScratch for RTL/CJK through otter-render
-cmds.text_system = &text_system;
-cmds.text_scratch = &scratch;
-```
+`reset` reuses allocated storage for the next frame. `dropped` reports lost output. Treat nonzero drops as a capacity/verification failure, not an acceptable rendering mode.
 
-Reset or reuse the list each frame like `DefaultCommandList`. Terminal views often damage row bands instead of the full grid.
+## Drawing
 
-## Text shaping
+Methods include `solid_rect`, `blend_rect`, `rounded_solid_rect`, `rounded_blend_rect`, `rounded_rect_outline`, `clear`, `text`, and `text_styled`. `command_slice` and `get_string` expose recorded output.
 
-When `text_system` and `text_scratch` are set, text commands use HarfBuzz shaping and font fallbacks from `otter-render`. Plain ASCII can omit them for the FreeType fast path.
+`set_scale` takes `otter_render.scale.Scale`; `scale_factor` and `scale_q8` expose exact scale. There are no stored font or text-system pointers.
 
-## Playback
+## Rasterization
 
-Rasterize with `otter-render` `quad_renderer`, passing terminal damage rects for row-level culling.
+Use `otter_render.quad_renderer.rasterize` with a caller-built `TextContext` for text commands and `otter_vte.renderer.no_images` as the image source. `Renderer.rasterize_text` is not part of the otr API.
+
+Keep terminal draw buffers separate from snapshot borrows so the render walk can mutate commands without aliasing the source rows.
+
+## Source reference
+
+`otr/command_list.otr`, `otr/renderer.otr` in the component repository.

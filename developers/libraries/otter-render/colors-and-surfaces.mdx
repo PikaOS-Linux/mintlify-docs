@@ -1,47 +1,35 @@
 ---
 title: "Colors and surfaces"
-sidebarTitle: "Colors"
-description: "Color, Surface, and HiDPI drawing in otter-render."
+sidebarTitle: "Colors and surfaces"
+description: "Owned pixel surfaces and exact scale in otr rendering."
 ---
 
-Pixel colors and CPU surfaces. ARGB layout matches Wayland `argb8888`.
+## Colors
 
-## Color
+`otter_render.color` re-exports `otter_geo.color`. Prefer the geometry package when you only need colors. `Color.from_rgba` takes `0xRRGGBBAA`; pixel storage defaults to ARGB8888.
 
-```zig
-const render = @import("otter_render");
+## Owned surfaces
 
-const c = try render.parseColor("#FF5500");
-const faded = render.Color.white.withAlpha(128);
-```
+Import `otter_render.surface`. `Surface` owns either a `List(Color)` or a `linux.Mapping` plus pixel offset.
 
-`Color.parseHex` accepts `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, and named colors.
+| Entry point    | Ownership                                    |
+| -------------- | -------------------------------------------- |
+| `init_owned`   | Allocate pixels                              |
+| `from_owned`   | Move an existing pixel list into the surface |
+| `from_mapping` | Move a mapping into the surface              |
+| `into_pixels`  | Move pixel ownership back out                |
+| `deinit`       | Consume the surface and release storage      |
 
-## Surface
+Use `pixels()` and `pixels_mut()` for scoped access. A surface is not a borrowed view you can retain after its owner disappears. Examples using `fromPixels` and `subSurface` do not apply to this API.
 
-Pixel buffer with drawing primitives:
+Physical drawing helpers include `fill_rect`, `fill_rect_composite`, and `draw_rect_outline`. Logical-coordinate variants have `_logical` suffixes. `logical_bounds`, `logical_width`, `logical_height`, and coordinate conversion helpers distinguish the two spaces.
 
-```zig
-var surface = render.Surface.fromPixels(&pixels, width, height);
-surface.clear(render.Color.black);
-surface.fillRect(.{ .x = 2, .y = 2, .width = 10, .height = 10 }, render.Color.red);
-surface.drawRectOutline(rect, render.Color.white, 1);
-```
+## Exact scale
 
-`subSurface` returns a clipped view into a parent buffer.
+Import `otter_render.scale`. `Scale.one`, `Scale.from_int`, `Scale.from_q8`, and `Scale.from_q120` construct explicit scale values. Use `set_scale` instead of assigning internal scale fields.
 
-`blitRowsVertical(dst_y, src_y, height)` moves full-width physical pixel rows inside a surface. It handles overlapping ranges, stride, and clipping. `otter-term` uses it to scroll existing pixels before redrawing exposed rows.
+`integer_ceil()` is not the inverse of exact logical-size conversion. A 150% output may have integer ceiling 2; preserve its exact Q8 factor for sizing and rendering.
 
-## HiDPI
+## Source reference
 
-```zig
-var surface = render.Surface.fromPixelsScaled(&pixels, phys_w, phys_h, scale);
-surface.fillRectLogical(logical_rect, color);
-const phys = surface.toPhysicalRect(logical_rect);
-```
-
-Set `scale` on `CommandList` when recording logical coordinates for rasterization.
-
-## When to draw directly
-
-Prefer `CommandList` and `quad_renderer` for app UI. Direct `Surface` calls still make sense in tests, one-off buffers, and legacy widget `draw` methods.
+`otr/surface.otr`, `otr/scale.otr`, `otr/color.otr` in the component repository.

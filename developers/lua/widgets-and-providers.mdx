@@ -1,0 +1,144 @@
+---
+title: "Lua widgets and providers"
+sidebarTitle: "Widgets and providers"
+description: "Describe widget frames, handle input, and return launcher results with Lua exports."
+---
+
+Start with [Writing plugins](/developers/plugins) for manifests, `opf`, discovery, and policy. Widgets and providers share the Lua runtime but expose different functions to their hosts.
+
+## A clickable widget
+
+A `kind = "widget"` plugin returns `measure`, `draw`, and an optional `event` function:
+
+```lua
+local host = require("otter.host")
+local clicks = 0
+
+return {
+  measure = function(max_w, max_h)
+    return math.min(96, max_w), max_h
+  end,
+  draw = function(w, h)
+    sd.begin(w, h)
+    sd.rect(0, 0, w, h, 0x2288aa33, 4)
+    sd.hit(1)
+    sd.text(6, 6, "Clicks: " .. clicks, 14, 0xffffffff)
+    sd.finish()
+  end,
+  event = function(kind, id)
+    if kind == "click" and id == 1 then
+      clicks = clicks + 1
+      host.redraw()
+    end
+  end,
+}
+```
+
+`measure(max_w, max_h)` returns the desired width and height. `draw(w, h)` records a complete frame. `event(kind, id, x, y)` receives pointer events for tagged hit regions.
+
+A widget draws again after input, resizing, or `otter.host.redraw()`. Use native subscriptions, timers, or file watches to request updates when state changes. An idle widget with no event sources does not need periodic polling or Lua calls.
+
+## Surface Description calls
+
+`sd` is a global supplied by the runtime:
+
+| Call                                           | Purpose                                  |
+| ---------------------------------------------- | ---------------------------------------- |
+| `sd.begin(w, h)`                               | Open the root frame.                     |
+| `sd.row(x, y, gap)`                            | Open a horizontal container.             |
+| `sd.col(x, y, gap)`                            | Open a vertical container.               |
+| `sd.clip(x, y, w, h)`                          | Open a clipped container.                |
+| `sd.rect(x, y, w, h, color, radius)`           | Filled rectangle.                        |
+| `sd.outline(x, y, w, h, color, radius, width)` | Inside border; width defaults to 1.      |
+| `sd.text(x, y, text, size, color)`             | Text; accepts a string or number.        |
+| `sd.icon(x, y, name, size, color)`             | Named icon; `name` must be a string.     |
+| `sd.hit(id)`                                   | Tag the preceding node with an input id. |
+| `sd.hit(id, "text")`                           | Tag it as a text field.                  |
+| `sd.finish()`                                  | Close the current container or root.     |
+
+Colors use `0xRRGGBBAA`. Alpha below `ff` blends over content beneath the node. Close every container and the root. Invalid call order, unfinished frames, more than 4096 nodes, or more than 64 KiB of text fail the frame.
+
+The native host replays the recording. You do not allocate a Wayland surface or render pixels from Lua.
+
+## Text input
+
+Hosts supporting text-field hits focus a node tagged with `sd.hit(id, "text")` when clicked. Text events use `event(kind, id, text)` rather than pointer coordinates:
+
+- `focus` and `blur`, with empty text.
+- `text`, with committed field text.
+- `preedit`, for IME composition.
+- `submit`, when Enter is pressed.
+
+See the packaged `bar-search` plugin for the bar's field behavior.
+
+## Tooltips and menus
+
+Bar, taskbar, and dock hosts support named exports for native tooltips and menus:
+
+```lua
+tooltip = function()
+  return { { text = "Example status" } }
+end,
+menu = function(state, screen_w)
+  return {
+    { kind = "item", id = "refresh", label = "Refresh", depth = "0",
+      enabled = "1", submenu = "0", selected = "0", open = "0" },
+  }
+end,
+menu_activate = function(id)
+  if id == "refresh" then
+    -- Refresh state here.
+  end
+  return { { close = "1" } }
+end,
+menu_closed = function()
+end,
+```
+
+Place these fields in the returned widget table. Record fields are strings, including depth and flags. Use `kind = "separator"` for separators. Root items use depth `"0"`; first-level submenu items use `"1"`. The bar supports nested depths through `"8"` and calls the optional `submenu_open(id)` export before opening a submenu. Its menu query uses `state = "submenu"` while a submenu is open. Other hosts can impose narrower menu limits. `screen_w` is the output width, or zero when unknown.
+
+Hover shows tooltip text unless the menu is open. Menu activation depends on the host: the bar defaults to left click, while dock tiles use right click. Activating an item calls `menu_activate(id)`; `close = "1"` dismisses it. Dismissal calls `menu_closed()`. A redraw while open refreshes menu records.
+
+## Launcher provider
+
+Use this manifest:
+
+```toml
+name = "my-provider"
+kind = "plugin"
+entry = "init.lua"
+provides = ["launcher"]
+capabilities = []
+```
+
+Return string records from `query(text, max)`, and handle the selected record's payload in `activate(payload)`:
+
+```lua
+local log = require("otter.log")
+
+return {
+  query = function(text, max)
+    if max < 1 or not ("hello"):find(text:lower(), 1, true) then
+      return {}
+    end
+    return {
+      { title = "Hello", subtitle = "Example result", payload = "hello" },
+    }
+  end,
+  activate = function(payload)
+    log.info("Selected", payload)
+  end,
+}
+```
+
+`title` and `payload` are strings; `subtitle` is optional. Return no more than `max` records. An optional `row(payload, w, h)` export draws a custom result row with `sd.*`.
+
+The launcher reads `kind` and `provides` before executing the plugin. The built-in Lua providers `calc`, `emoji`, `clip`, and `search` default to off to avoid duplicate native results; `snippet-provider` is also opt-in. Enable those explicitly in `plugins.conf` only when wanted. This default does not apply to every custom provider.
+
+## Test the host behavior
+
+Run `opf check` and `opf check --build` after changes. Then exercise your plugin through its real host in an isolated headless session, with temporary `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_RUNTIME_DIR`.
+
+The `otter-shell-plugins/otr/tests/e2e.sh` suite covers plugins in the shared host driver, bar, and launcher under headless Sway. Do not use `opf check`'s inert service substitutes as evidence that process, filesystem, or desktop-service behavior works.
+
+Source contracts: `otter-lua/otr/sd.otr`, `otter-lua/otr/plugins.otr`, `otter-launcher/otr/providers.otr`, and the factory's `otr/templates/`.

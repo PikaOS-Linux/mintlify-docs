@@ -1,51 +1,41 @@
 ---
 title: "Command list"
 sidebarTitle: "Command list"
-description: "DefaultCommandList, scissor, damage culling, and quad_renderer."
+description: "Bounded drawing commands, image lookup, text loans, and damage-aware rasterization."
 ---
 
-Record draw ops into a bounded buffer. Play them back once per frame. `otter-ui` fills this list. `quad_renderer` paints it.
+Import `otter_render.command_list`. `DefaultCommandList` is `CommandList(2048, 32 * 1024)`: 2048 commands and 32 KiB of string storage.
 
-## Recording
+```otr
+import otter_geo.color
+import otter_geo.rect
+import otter_render.command_list
+import otter_render.scale
 
-```zig
-var cmds: render.DefaultCommandList = .{};
-cmds.scale = surface.scale;
-cmds.font = &font;
-cmds.clear(render.Color.black);
-cmds.solidRect(rect, bg);
-cmds.text(.{ .x = 15, .y = 35 }, "Hello", 16, render.Color.white);
-cmds.scissorPush(clip_rect);
-// clipped content
-cmds.scissorPop();
-cmds.reset(); // reuse next frame
+pub fn main() void {
+    var cmds = command_list.DefaultCommandList.init()
+    cmds.set_scale(scale.Scale.one)
+    cmds.solid_rect(rect.Rect{ x: 0, y: 0, width: 100, height: 40 }, color.Color.black)
+    _ = cmds.overflowed()
+}
 ```
 
-`DefaultCommandList` is `CommandList(2048, 32 * 1024)`. Strings intern inside the list buffer.
+## Commands
 
-Command families: `solidRect`, `blendRect`, `rectOutline`, `circle`, `text`, `image`, `imageFill`, `sprite`, `clear`, scissor stack (depth 8).
+Use `solid_rect`, `blend_rect`, `rect_outline`, `rounded_solid_rect`, `rounded_blend_rect`, `rounded_rect_outline`, `circle`, `text`, `text_styled`, `image`, `sprite`, `graph`, and `clear` as needed.
 
-## Rasterize
+`scissor_push` / `scissor_pop` bound nested drawing. Balance pushes and pops. `reset` prepares the list for another frame; `overflowed` reports capacity loss.
 
-```zig
-render.quad_renderer.rasterize(
-    render.DefaultCommandList,
-    &cmds,
-    &surface,
-    null,
-    damage_rects,
-    full_damage,
-);
-```
+Image commands store generational `ImageHandle` values. Put image pixels in an `ImageStore` or another `ImageSource`; stale handles draw nothing.
 
-- Scissor stack clips shapes and images.
-- When `full_damage` is false, commands outside `damage_rects` are skipped.
-- Font resolution: `font_instance` param, then `list.font`.
+## Rasterization
 
-## SDF rounded rects
+`quad_renderer.rasterize` takes the command-list type, borrowed list, mutable surface, optional mutable `TextContext`, an `ImageSource`, optional damage rectangles, and a full-damage flag.
 
-Rounded corners use an SDF path inside `quad_renderer`. Surface Description panel nodes emit these commands automatically.
+`TextContext` lends `Font`, optional `TextSystem`, and optional `ShapeScratch` for that call. The command list does not store those pointers.
 
-## Ownership
+Pass logical damage and scale consistently. Keep render-culling damage separate from submit-only damage when moving existing pixels.
 
-New app UI should go through `otter-ui` `UiState`, which owns the command list. Bar widgets, monitor chrome, and renderer internals still record commands directly.
+## Source reference
+
+`otr/command_list.otr`, `otr/quad_renderer.otr`, `otr/image.otr` in the component repository.

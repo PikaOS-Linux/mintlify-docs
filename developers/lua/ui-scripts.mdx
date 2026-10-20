@@ -1,0 +1,97 @@
+---
+title: "Lua UI scripts"
+sidebarTitle: "UI scripts"
+description: "Replace supported app frames with Lua while native code owns the window and state."
+---
+
+A UI script describes frames for a native application. Unlike a plugin, it does not need `plugin.toml`, `measure`, or the plugin event loop. The application owns the window, native services, input, and state passed to Lua.
+
+Examples include `osd.lua`, `logout.lua`, and the starter's `examples.lua`. State keys and registered bindings are specific to each app; copying a script between hosts does not give it the same state.
+
+## Script contract
+
+Return a frame function, or a table with `frame` and optional `action`:
+
+```lua
+local clicks = 0
+
+return {
+  frame = function(s)
+    sd.begin(320, 80)
+    sd.rect(0, 0, 320, 80, 0x202020ff, 4)
+    sd.hit(1)
+    sd.text(12, 12, "Clicks: " .. clicks, 14, 0xffffffff)
+    sd.finish()
+  end,
+  action = function(id)
+    if id == 1 then clicks = clicks + 1 end
+  end,
+}
+```
+
+`frame(state)` records a Surface Description frame. `action(id)` handles a tagged hit routed by the native host. See [Widgets and providers](/developers/lua/widgets-and-providers) for `sd.*` calls and frame limits.
+
+The host sends only state changes and replays unchanged frames without rerunning Lua. A failed update is not retried on every idle update; it waits for new state or a script edit.
+
+`require("helper")` loads `helper.lua` or `helper/init.lua` from the script directory. Paths must resolve inside that directory. Standard Lua package search paths and native module loading are unavailable. Reload creates a new runtime and module cache.
+
+## Script locations
+
+For ordinary, non-privileged hosts:
+
+1. `OTTER_UI_DIR`, when set to an absolute directory, is the **only** directory searched.
+2. Otherwise, `$XDG_DATA_HOME/otter-shell/ui`, defaulting to `~/.local/share/otter-shell/ui`.
+3. Then `otter-shell/ui` under `$XDG_DATA_DIRS`, defaulting to `/usr/local/share` and `/usr/share`.
+
+For example:
+
+```text
+~/.local/share/otter-shell/ui/
+  osd.lua
+  helper.lua
+```
+
+Scripts in `~/.config/otter-shell/ui/` are not loaded. The host warns you to move them to the data directory. Keep configuration in `plugins.conf` and `ui.conf`, and store executable Lua in the data directory.
+
+Privileged surfaces follow a stricter [root-owned script policy](/developers/lua/runtime#privileged-surfaces), ignoring user overrides and environment paths.
+
+## Choose native or Lua mode
+
+Use **UI Scripts** in Settings, or edit `$XDG_CONFIG_HOME/otter-shell/ui.conf` (default `~/.config/otter-shell/ui.conf`):
+
+```conf
+otter-osd_mode = auto
+otter-osd_hot_reload = true
+otter-logout_mode = native
+```
+
+Keys use the app id, not the script filename:
+
+- `auto`: try the Lua script; native fallback is the host's responsibility.
+- `native`: refuse the Lua script.
+- `hot_reload = false`: do not watch the loaded script for edits.
+
+The default is `auto` with hot reload enabled. A privileged host ignores this user policy. Not every app has a native fallback: the Lua-only examples view exits if forced native.
+
+Settings lists script path, active mode/reason, reload and failure counts, heap use, and the last message when a host reports them. Explicit reload controls depend on the host; the OSD supports a reload request, while short-lived surfaces need not keep a running control loop.
+
+## Safe reload
+
+When a watched script changes, the host builds a candidate runtime and renders it against current state. Only a successful load and complete frame replace the existing runtime and frame. A syntax error, runtime error, unfinished frame, memory failure, or watchdog timeout leaves the last valid UI intact and records the reason.
+
+Reload starts fresh Lua state. Keep durable data in native application state or an explicitly permitted storage service, not script globals.
+
+## Start a real window
+
+The `otter-examples` Lua-UI starter combines this contract with the native template's XDG toplevel or layer-shell lifecycle. From that repository's root:
+
+```bash
+otr run otr/build.otr --release-fast -- run-lua -- window
+otr run otr/build.otr --release-fast -- run-lua -- layer
+```
+
+The build wrapper selects `otr/lua-ui/ui/examples.lua`. Its host pushes geometry, resolved theme values, and hover/active ids. `otter.examples.measure(text, size)` and `baseline_in(y, height, size)` expose native text metrics to this particular script.
+
+For a source map and verification commands, see [Creating an app](/developers/creating-an-app). `otter-lua run` is a separate whole-app host with a headless backend.
+
+Source references: `otter-lua/otr/search.otr`, `host.otr`, `runtime.otr`, and `ui_conf.otr`; `otter-examples/otr/lua-ui/README.md`; `otter-settings/otr/ui_scripts.otr`.

@@ -1,61 +1,31 @@
 ---
 title: "SHM and damage"
-sidebarTitle: "SHM"
-description: "WaylandShmPool, DamageTracker, and Renderer in otter-wayland."
+sidebarTitle: "SHM and damage"
+description: "Move mapped pixel ownership safely through otr SHM pool and renderer APIs."
 ---
 
-Shared-memory buffers and damage tracking for Wayland surfaces. Interactive UIs use double buffering. Static wallpaper uses a single pool.
+## SHM ownership
 
-## SHM pools
+`otter_wayland.shm` owns shared-memory buffers and tracks compositor ownership. Acquisition returns a `Lent` value containing an owned render `Surface` and slot index, not an unbounded borrowed pixel slice.
 
-Two pool types share the same acquire API:
+Return the lent mapping through the pool's attach or unsubmitted-release path. Do not retain a surface after giving it back, reuse a compositor-owned buffer, or treat a release event as a global permission to rewrite all slots.
 
-| Pool | Use |
-|------|-----|
-| `DoubleShmPool` | Interactive surfaces (bar, launcher, settings) |
-| `SingleShmPool` | Static content (wallpaper). `forceReleaseAll()` for rare redraws |
+Pools process release/configure records through the hub. Retired mappings must remain alive until the compositor releases their buffers.
 
-```zig
-self.shm_pool = try otter_wayland.DoubleShmPool.init(.{
-    .wl_shm = wl_shm,
-    .width = 800,
-    .height = 600,
-    .scale = 2,
-    .name = "my-surface",
-});
-self.shm_pool.?.bindListeners(); // after struct is at final address
+## Damage
 
-if (self.shm_pool.?.acquire()) |acquired| {
-    var surface = render.Surface.fromPixelsScaledWithStride(
-        acquired.pixels,
-        pool.physicalWidth(),
-        pool.physicalHeight(),
-        acquired.stride_pixels,
-        scale,
-    );
-    wl_surface.attach(acquired.wl_buffer, 0, 0);
-    wl_surface.damageBuffer(0, 0, pool.physicalWidth(), pool.physicalHeight());
-    wl_surface.commit();
-}
-```
+`otter_wayland.damage.DamageTracker` accumulates dirty rectangles with double-buffer behavior and a full-redraw fallback when bounded storage overflows.
 
-Row stride is 256-byte aligned. Use `acquired.stride_pixels` when wrapping pixels.
+Use the same logical/physical coordinate conventions for emitted commands, render-culling damage, and Wayland submissions. Exact output scale is not interchangeable with its integer ceiling.
 
-`resizeWithScale` requires all buffers to be free.
+## Renderer
 
-## DamageTracker
+`otter_wayland.renderer.Renderer` is a CPU renderer stored by value. It has no heap-allocated vtable API.
 
-Accumulates dirty rectangles for partial redraws. Overflow falls back to full-surface damage.
+Rasterization resolves image handles through an image source and borrows font/shaping resources during the call. Follow the pool's acquire/attach lifecycle around that work.
 
-```zig
-var tracker = otter_wayland.DamageTracker.init(width, height);
-tracker.addRect(dirty);
-const rects = tracker.rects();
-const full = tracker.needsFullRedraw();
-```
+A move of already-rendered pixels may need submit damage without rendering those pixels again. Keep submit-only damage out of render-culling sets.
 
-Pass rects to `otter-render` `quad_renderer` and `wl_surface.damageBuffer`.
+## Source reference
 
-## Renderer helper
-
-`createRenderer` ties pool acquire, `UiState.rasterize`, and commit into one path for simple apps. Most apps still manage pools explicitly for custom damage.
+`otr/shm.otr`, `otr/damage.otr`, `otr/renderer.otr` in the component repository.

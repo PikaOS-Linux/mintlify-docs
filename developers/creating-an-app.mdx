@@ -1,226 +1,150 @@
 ---
-title: "Create a new Otter Shell app"
+title: "Create an Otter Shell app"
 sidebarTitle: "Creating an app"
-description: "Start a Wayland app on the Otter stack: dependencies, UI patterns, and config."
+description: "Start with a native otr app, a Lua-driven Wayland UI, or a Lua plugin template."
 ---
 
-You can build a new Wayland app on the Otter Shell stack. Same libraries, same config format.
+Otter Shell v0.13.0 uses native otr applications with optional LuaJIT views and extensions. Start from `otter-examples/otr/`. The Zig build files and `.so` plugin ABI are unsupported.
 
-## 1. Create the project
+## Choose a starter
 
-Initialize a Zig project and add Otter dependencies in `build.zig.zon`:
+| You want                    | Starter                                             | Main files                                |
+| --------------------------- | --------------------------------------------------- | ----------------------------------------- |
+| Native Wayland app          | `otter-examples/otr/`                               | `main.otr`, `ui/demo.otr`, `shell/`       |
+| Wayland app with a Lua UI   | `otter-examples/otr/lua-ui/`                        | `main.otr`, `view.otr`, `ui/examples.lua` |
+| Widget or launcher provider | `opf new bar-widget` or `opf new launcher-provider` | `plugin.toml`, `init.lua`                 |
+| Headless Lua service or app | `opf new plugin` or `opf new app`                   | `plugin.toml`, `init.lua`                 |
 
-```zig
-.{
-    .name = .my_otter_app,
-    .version = "0.1.0",
-    .minimum_zig_version = "0.16.0",
-    .dependencies = .{
-        .otter_ui = .{ .path = "../otter-ui" },
-        .otter_wayland = .{ .path = "../otter-wayland" },
-        .otter_render = .{ .path = "../otter-render" },
-        .otter_theme = .{ .path = "../otter-theme" },
-        .otter_conf = .{ .path = "../otter-conf" },
-        .otter_config_types = .{ .path = "../otter-config-types" },
-        .otter_utils = .{ .path = "../otter-utils" },
-        // Add otter_desktop if you need D-Bus, icons, or .desktop parsing.
-    },
-    .paths = .{
-        "build.zig",
-        "build.zig.zon",
-        "src",
-    },
-}
-```
+The native and Lua-UI templates share a demo card and native Wayland shells. Both support an XDG toplevel window and a layer-shell overlay. The standalone `otter-lua run` app host uses a headless backend; use the Lua-UI starter for a visible Wayland app.
 
-Outside the monorepo, fetch libraries by URL:
+For plugins, continue with [Writing plugins](/developers/plugins).
+
+## 1. Prepare the workspace
+
+You need the otr toolchain on `PATH`. The examples expect sibling library checkouts with their `otr/` trees:
 
 ```bash
-zig fetch --save git+https://git.pika-os.com/otter-shell/otter-conf
+git clone --recurse-submodules https://git.pika-os.com/otter-shell/otter-shell.git
+cd otter-shell/otter-examples
 ```
 
-## 2. Wire imports in build.zig
+The example's `otr/otr.toml` declares local path dependencies on `otter_geo`, `otter_utils`, `otter_theme`, `otter_render`, `otter_wayland`, and `otter_ui`. Preserve that layout while learning. If you move the starter, update its manifest paths.
 
-```zig
-const otter_ui = b.dependency("otter_ui", .{
-    .target = target,
-    .optimize = optimize,
-});
-const otter_wayland = b.dependency("otter_wayland", .{
-    .target = target,
-    .optimize = optimize,
-});
-const otter_render = b.dependency("otter_render", .{
-    .target = target,
-    .optimize = optimize,
-});
+The build wrapper fetches required C dependencies before its steps. The example README describes toolchain and system dependencies. Running a window requires a Wayland session; the layer variant also requires `zwlr_layer_shell_v1`. Tests and fixtures can run without your desktop session.
 
-const imports = [_]std.Build.Module.Import{
-    .{ .name = "otter_ui", .module = otter_ui.module("otter_ui") },
-    .{ .name = "otter_wayland", .module = otter_wayland.module("otter_wayland") },
-    .{ .name = "otter_render", .module = otter_render.module("otter_render") },
-};
+## 2. Build a release app
 
-const exe = b.addExecutable(.{
-    .name = "my-otter-app",
-    .root_module = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &imports,
-    }),
-});
+From the `otter-examples` repository root:
+
+```bash
+otr run otr/build.otr --release-fast -- check
+otr run otr/build.otr --release-fast -- app
 ```
 
-## 3. Choose your app pattern
+`app` builds `.build/otter-examples` and `.build/otter-examples-lua` with `--release-fast`. `check` checks the package roots and formatting.
 
-Otter apps differ in two ways: **which Wayland surface you create**, and **how long the process runs**. A daemon might use layer shell, an XDG toplevel, or no window at all. Do not treat "daemon" as a synonym for layer shell.
+To try the native window or overlay:
 
-### Layer-shell surfaces (`zwlr_layer_shell_v1`)
-
-Use `otter-wayland` layer shell when the compositor should anchor your surface to an output edge or layer, not as a normal floating window.
-
-| Layer | Lifecycle | Examples |
-|-------|-----------|----------|
-| `.top` / `.bottom` bar | Daemon | `otter-bar` |
-| `.background` | Daemon | `otter-wallpaper` |
-| `.overlay` (persistent) | Daemon | `otter-notifications`, `otter-osd`, `otter-transcribe` indicator |
-| `.overlay` (on demand) | Overlay session, exits on dismiss | `otter-launcher`, `otter-logout`, `otter-overview` |
-| `.overlay` (on demand) | Daemon shows dialog when needed | `otter-polkit` |
-| `.overlay` (fullscreen) | Daemon while greeter runs | `otter-greeter-ui` |
-| `.top` popup | Optional CLI flag | `otter-weather --layer`, `otter-note popup` |
-
-A common overlay pattern is `DimOverlay` (fullscreen dim on `.overlay`) plus a second layer surface for the panel. See `otter-launcher` and `otter-logout`. Overlay sessions that exit after one action often use `ArenaAllocator`.
-
-Layer-shell daemons typically poll Wayland plus D-Bus, inotify config watchers, and timer FDs. Use `GeneralPurposeAllocator` and `otter-conf.Watcher` for hot reload.
-
-### XDG toplevel windows (`xdg_toplevel`)
-
-Use `otter-wayland` `XdgToplevel` for regular desktop windows with a title bar and workspace placement.
-
-| Lifecycle | Examples |
-|-----------|----------|
-| Singleton window (second launch focuses existing) | `otter-settings` |
-| Long-running while open | `otter-term`, `otter-monitor` |
-| Runs until export or quit | `otter-shot` composer |
-
-Describe UI with **Surface Description** (`otter-ui` `UiFrame`). Poll Wayland plus app-specific FDs (PTY for `otter-term`, config inotify, keyboard repeat).
-
-### Session lock (`ext_session_lock_v1`)
-
-`otter-lock` draws on lock surfaces from `ext_session_lock_v1`, not layer shell. The process stays up while the session is locked.
-
-### Capture and selection overlays
-
-Region pickers and frozen-capture UIs use shared `otter-wayland` helpers (`selection_overlay`, `capture_overlay`, `dim_overlay`). They attach layer `.overlay` surfaces but are not full apps.
-
-| Lifecycle | Examples |
-|-----------|----------|
-| One-shot CLI | `otter-screenshot` (region mode), `otter-pick` |
-| Toggle CLI | `otter-rec` (`--region select`) |
-| Transient step inside a toplevel app | `otter-shot` dragged selection |
-
-### No Wayland UI
-
-| Lifecycle | Examples |
-|-----------|----------|
-| Daemon (protocols or IPC only) | `otter-idle`, `otter-clip daemon`, `otter-greeterd` |
-| One-shot CLI | `otter-calc`, `otter-emoji`, `otter-cal`, `otter-vox`, `otter-timer` |
-| CLI with optional layer popup | `otter-weather` (default prints to stdout; `--layer` opens a layer popup) |
-
-CLI tools can use minimal deps (`otter-tools-core` + `otter-conf`) with no Wayland connection unless you add a popup mode.
-
-### Quick reference
-
-| You want… | Surface | Study |
-|-----------|---------|-------|
-| Status bar | Layer `.top` / `.bottom` | `otter-bar` |
-| Wallpaper | Layer `.background` | `otter-wallpaper` |
-| Toast notifications | Layer `.overlay` per notification | `otter-notifications` |
-| Launcher / power menu | Layer `.overlay` + dim, exit on action | `otter-launcher`, `otter-logout` |
-| Settings GUI | `xdg_toplevel` singleton | `otter-settings` |
-| Terminal | `xdg_toplevel` | `otter-term` |
-| Lock screen | `ext_session_lock_v1` | `otter-lock` |
-| Region screenshot | `selection_overlay` | `otter-screenshot`, `otter-wayland/src/selection_overlay.zig` |
-| Expression in a pipe | No surface | `otter-calc` |
-| Idle / DPMS only | No surface | `otter-idle` |
-
-## 4. Build the UI with Surface Description
-
-Use Surface Description via `UiState` and `UiFrame`. The [otter-ui guide](/developers/libraries/otter-ui) covers layout, nodes, input, and examples.
-
-```zig
-const ui = @import("otter_ui");
-const render = @import("otter_render");
-
-const caps = ui.ui_frame.Capacities{ .elements = 64, .hit_regions = 64, .overlays = 8 };
-var state: ui.UiState(caps) = .{};
-
-var text_system = try render.text.TextSystem.init(allocator, font);
-defer text_system.deinit();
-var text_scratch: render.text.ShapeScratch = .{};
-
-var frame = state.begin(.{
-    .viewport = .{ .x = 0, .y = 0, .width = width, .height = height },
-    .scale = surface.scale,
-    .font = font,
-    .text_system = &text_system,
-    .text_scratch = &text_scratch,
-});
-
-const root = ui.SurfaceNode{
-    .id = ui.SurfaceId.namedComptime("root"),
-    .kind = .column,
-    .layout = .{ .width = .fill, .height = .fill, .gap = 8, .padding = ui.Padding.uniform(12) },
-    .children = &children,
-};
-
-_ = try frame.render(&root, frame.viewport);
-try frame.finish();
-
-// Rasterize via otter-render (commands inherit text_system from the frame)
-state.rasterize(surface, null, true);
+```bash
+otr run otr/build.otr --release-fast -- run -- window
+otr run otr/build.otr --release-fast -- run -- layer
 ```
 
-Use `state.hitTest(point)` for pointer input. No parallel hit arrays needed.
+For the Lua view:
 
-Skip `text_system` and `text_scratch` for ASCII-only labels. Pass both when the UI might show RTL, CJK, or other user-typed text (see `otter-lock/src/lock_render_loop.zig`).
-
-## 5. Add configuration
-
-Define a config struct and parse it with `otter-conf`:
-
-```zig
-const otter_conf = @import("otter_conf");
-
-const Config = struct {
-    font_size: u16 = 14,
-    enabled: bool = true,
-    label: []const u8 = "Hello",
-};
-
-var config = try otter_conf.load(Config, allocator, config_path, .{});
-defer otter_conf.freeConfig(Config, allocator, &config);
+```bash
+otr run otr/build.otr --release-fast -- run-lua -- window
+otr run otr/build.otr --release-fast -- run-lua -- layer
 ```
 
-Store config at `~/.config/otter-shell/my-app.conf`. On first run, normalize the file (add missing defaults, strip unknown keys).
+The wrapper runs those applications in release-fast mode. The Lua commands select the starter's own UI directory, so you do not need to install `examples.lua` into your user data directory first.
 
-For typed configs shared with `otter-settings`, add structs to `otter-config-types` and register a tab in `otter-settings/src/tabs.zig`.
+## 3. Keep the shell separate from the view
 
-## 6. Apply theming
+| File                         | Responsibility                                                                            |
+| ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `otr/shell/core.otr`         | Wayland connection, seat, theme reload, damage, frame callbacks, and shared view dispatch |
+| `otr/shell/xdg_app.otr`      | XDG toplevel configure, resize, close, and debug overlays                                 |
+| `otr/shell/layer_app.otr`    | Layer-shell configure, scale, and dismissal                                               |
+| `otr/ui/demo.otr`            | Native view state, ids, Surface Description tree, and pointer handling                    |
+| `otr/ui/draw.otr`            | Paint, damaged-rectangle repair, rasterization, and surface submission                    |
+| `otr/lua-ui/view.otr`        | Lua host state, bindings, frame replay, and script-watch integration                      |
+| `otr/lua-ui/ui/examples.lua` | Lua version of the demo card                                                              |
 
-Load the shared theme:
+Choose the lifecycle you need:
 
-```zig
-const theme = try otter_theme.loader.loadTheme(allocator);
-defer theme.deinit(allocator);
+- **XDG toplevel** for a normal window, such as an editor or Settings.
+- **Layer shell** for edge-anchored panels, popups, and overlays, when supported by the compositor.
+- **Session lock** for lock surfaces; use the lock app and shared Wayland lock wrapper as references, not an ordinary overlay.
+- **No surface** for a service or CLI.
+
+Otter Shell does not ship a default compositor. Do not make a compositor-specific interface a requirement unless your application needs it.
+
+## 4. Change the UI
+
+### Native view
+
+The native starter describes its card through `otter-ui` Surface Description. Start in `otr/ui/demo.otr`:
+
+1. Add a stable id in `ids` for each new interactive element.
+2. Add its node to the view tree, following neighboring controls' theme styles.
+3. Handle its press in `Demo.on_press`.
+4. Return damage for content that changed, or the appropriate existing input/full result.
+
+Keep hit-region capacity large enough for your controls. The shell already handles hover/press damage and pointer cursor changes. Do not build a second hit-test registry.
+
+See [otter-ui](/developers/libraries/otter-ui) for the native frame boundary.
+
+### Lua view
+
+The script returns `{ frame = function(state), action = function(id) }`. It records `sd.*` nodes; the native `LuaView` owns replay and routes tagged actions.
+
+`view.otr`'s `push_state` defines the script's available state: card geometry, compact mode, title, hover/active ids, and resolved colors and metrics. The starter-specific `otter.examples` binding exposes native text measurement and baseline placement.
+
+Add a hit id, draw its control, then handle the id in `action`. Script globals reset on reload. A failed candidate script retains the last valid card. See [UI scripts](/developers/lua/ui-scripts) for the complete contract, paths, and policy.
+
+## 5. Apply shared theme and configuration
+
+Use semantic theme colors, dimensions, and control styles rather than checking profile names. Both templates already integrate the shared theme and imported-file watcher. Keep their transactional reload: a broken theme edit must retain the previous valid theme and font.
+
+Application configuration belongs under `$XDG_CONFIG_HOME/otter-shell/`, defaulting to `~/.config/otter-shell/`. Use `otter-conf` for the shared flat key-value format. If Settings should expose a feature, add its configuration and controls there too; study `otter-settings/otr/tabs.otr` and its editor modules.
+
+Lua code belongs in data directories, not config directories:
+
+- Plugins: `$XDG_DATA_HOME/otter-shell/plugins/<id>/`.
+- UI scripts: `$XDG_DATA_HOME/otter-shell/ui/`.
+- Plugin policy: `$XDG_CONFIG_HOME/otter-shell/plugins.conf`.
+- Native/Lua UI choice: `$XDG_CONFIG_HOME/otter-shell/ui.conf`.
+
+The default data home is `~/.local/share`. Native hosts choose which bindings and capabilities to expose to Lua. See [Bindings and capabilities](/developers/lua/bindings).
+
+## 6. Verify without touching your desktop
+
+The starter provides static checks, tests, direct-render fixtures, and isolated headless integration tests:
+
+```bash
+otr run otr/build.otr --release-fast -- check
+otr run otr/build.otr --release-fast -- test
+otr run otr/build.otr --release-fast -- visual-test
+otr run otr/build.otr --release-fast -- e2e
+otr run otr/build.otr --release-fast -- headless-smoke
 ```
 
-Widget config fields should use `?Color = null` and resolve via `config.field orelse theme.token`. Precedence: widget config, then `theme.conf`, then compiled defaults.
+`test` runs both debug and release-fast tests. Release applications and visual fixtures use `--release-fast`. The E2E starts private headless Sway sessions with isolated runtime, home, config, and D-Bus state. It compares native and Lua templates and checks input, damage, and reload behavior. Do not point capture tools at your real Wayland session.
 
-## 7. Install a .desktop file
+Review generated visual evidence in `otr/out/visual/` and `otr/out/headless/`. Golden fixtures live in `otr/testdata/visual/`. Review changed pixels before updating baselines.
 
-For launcher integration, install a freedesktop `.desktop` entry:
+For native window debugging, pass `--inspect` or `--metrics` after `window`, or press **Ctrl+Shift+I** to cycle overlays. These overlays intentionally force full-surface repaint on input.
+
+## 7. Install the application
+
+The starter's install step writes release-fast binaries under `otr/out/bin/` and `examples.lua` under `otr/out/share/otter-shell/ui/`:
+
+```bash
+otr run otr/build.otr --release-fast -- install
+```
+
+For your app, add a freedesktop desktop entry and install it with your packaging:
 
 ```ini
 [Desktop Entry]
@@ -231,21 +155,11 @@ Type=Application
 Categories=Utility;
 ```
 
-Place in `data/applications/` and install icons under `data/icons/hicolor/`.
+Install the desktop entry into an XDG applications directory and icons under `icons/hicolor/`. Rename the starter's binary, application identifiers, UI script, and package metadata consistently before distribution.
 
-## Reference implementations
+## Source guides
 
-| Pattern | Study these sources |
-|---------|-------------------|
-| Layer bar daemon | `otter-bar/src/main.zig`, `otter-bar/src/config.zig` |
-| Layer background daemon | `otter-wallpaper/src/main.zig`, `otter-wallpaper/src/output.zig` |
-| Layer overlay session | `otter-launcher/src/main.zig`, `otter-logout/src/main.zig` |
-| Layer overlay daemon | `otter-notifications/src/main.zig`, `otter-osd/src/main.zig` |
-| XDG toplevel window | `otter-settings/src/app.zig`, `otter-term/src/main.zig` |
-| Session lock | `otter-lock/src/main.zig` |
-| Region capture / selection | `otter-screenshot/src/main.zig`, `otter-wayland/src/selection_overlay.zig` |
-| Toplevel + selection step | `otter-shot/src/main.zig`, `otter-shot/src/capture/workflow.zig` |
-| CLI helper | `otter-calc/src/main.zig`, `otter-tools-core/src/calc.zig` |
-| No-surface daemon | `otter-idle/src/main.zig`, `otter-clip/src/main.zig` |
-
-See the [Libraries overview](/developers/libraries) and per-library pages in the sidebar for API details.
+- [Native starter](https://git.pika-os.com/otter-shell/otter-examples/src/branch/main/otr/README.md)
+- [Lua-UI starter](https://git.pika-os.com/otter-shell/otter-examples/src/branch/main/otr/lua-ui/README.md)
+- [Lua plugin starters](https://git.pika-os.com/otter-shell/otter-examples/src/branch/main/otr/plugins/README.md)
+- [Libraries overview](/developers/libraries)

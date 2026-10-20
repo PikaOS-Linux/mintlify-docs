@@ -1,45 +1,29 @@
 ---
 title: "otter-tools-core"
 sidebarTitle: "otter-tools-core"
-description: "Pure-Zig helpers for small CLI tools: calc, emoji, clipboard, calendar, and more."
+description: "otr helpers for small tools, protocols, search, palettes, and knowledge lookup."
 ---
 
-`otter-tools-core` is shared logic for small Otter utility apps. No Wayland, D-Bus, PipeWire, or rendering. Keep state bounded. Keep UI in the app.
+`otter-tools-core` shares data processing between small tools and larger applications. Import `otter_tools_core.<module>`; there is no root barrel.
 
-Small-app config schemas live in `app_configs.zig`, synced with `otter-settings` defaults.
+Pure helpers include calculator parsing, durations, calendars, emoji lookup, color conversion, recorder selection, and palette generation. Environment/file/socket operations take explicit `std.Env` or `std.Io`.
 
-Desktop search ships as a second build module, `otter_tools_search`, so only `otter-search` (and other embedders) pull in the index and fuzzy code.
+Owned results use `String` and `List`; bounded results use standard otr containers. Socket replies append into caller-owned reusable strings rather than returning a 256 KiB inline reply object.
 
-## Pages in this library
+## Separate packages
 
-<CardGroup cols={2}>
-  <Card title="Tool modules" icon="wrench" href="/developers/libraries/otter-tools-core/tool-modules">
-    Calculator, emoji, clipboard, search, calendar, weather, color, record.
-  </Card>
-  <Card title="Theme helpers" icon="palette" href="/developers/libraries/otter-tools-core/theme-helpers">
-    SplatHash, semantic palettes, and shared app configs.
-  </Card>
-</CardGroup>
+- `otter_tools_search_engine`: indexing, query parsing, scanning, fuzzy/content search.
+- `otter_tools_search`: configured search integration.
+- `otter_ocr`: OCR integration.
+- `otter_tools_core_lua`: selected `otter.tools.*` modules.
 
-## Module overview
+Lua exposure is selective. The weather binding parses bodies and reads caches; it does not fetch forecasts by itself. Search daemon operations require `desktop-search`.
 
-| Module | Used by |
-|--------|---------|
-| `calc` | `otter-calc`, `otter-launcher` (`=EXPR`) |
-| `emoji` | `otter-emoji`, `otter-launcher` (`:QUERY`) |
-| `clipboard` / `clip_history` | `otter-clip`, `otter-launcher` |
-| `calendar` | `otter-cal` |
-| `duration` | `otter-timer` |
-| `weather` | `otter-weather` |
-| `color` | `otter-pick` |
-| `record` | `otter-rec` encoder selection |
-| `search_client` | `otter-searchctl`, `otter-launcher` (daemon protocol) |
-| `assist_client` | `otter-assistctl`, `otter-assistant` (daemon socket protocol) |
-| `otter_tools_search` | `otter-search` daemon (Zig index and query core) |
-| `zidx` | Knowledge index helpers used by `otter-assist` |
+## Reference pages
 
-Clipboard helpers invoke `wl-copy` by name. Packaged installs shadow that binary with `otter-copy`.
+- [Tool modules](/developers/libraries/otter-tools-core/tool-modules)
+- [Theme helpers](/developers/libraries/otter-tools-core/theme-helpers)
 
-## Dependencies
+## Source reference
 
-`otter-conf`, `otter-utils`. The `otter_tools_search` module also links `otter-config-types` for `search.Config`.
+`otr/otr.toml`, `otr/` in the component repository.

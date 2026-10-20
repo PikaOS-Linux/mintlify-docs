@@ -1,50 +1,38 @@
 ---
 title: "Fonts and text"
-sidebarTitle: "Fonts"
-description: "Font, TextSystem, ShapeScratch, and RTL/CJK text in otter-render."
+sidebarTitle: "Fonts and text"
+description: "FreeType fonts, HarfBuzz shaping, and native otr bidi layout."
 ---
 
-FreeType rasterization and HarfBuzz shaping. Most UI labels go through `Font`. RTL, CJK, and mixed-direction text go through `TextSystem`.
+## Font ownership
 
-## Font (FreeType)
+Import `otter_render.font`. `Font.init(alloc, io, options)` returns an owned `Font`, not a heap pointer. Its consuming `deinit()` closes backend resources.
 
-```zig
-const font = try render.Font.init(allocator, .{});
-defer font.deinit();
+`InitOptions` borrows paths or bytes during initialization. Explicit static font data can remain embedded and be read in place. File-backed font operations take `std.Io` explicitly.
 
-font.drawText(&surface, "Hello", .{ .x = 0, .y = 20 }, 16, render.Color.white);
-const width = font.measureText("Hello", 16);
-```
+`measure_text_at_scale(text, size, factor)` uses an explicit `Scale`. Terminal layout uses `terminal_metrics_at_scale`.
 
-Loading priority: explicit `font_path`, then `font_family` discovery, then bundled fallback (`IoskeleyMonoNerdFont-Regular.ttf`). Fallback faces mmap lazily on first missing glyph.
+## Shaping
 
-Glyph cache evicts least-recently-used entries at 65,536 entries and on allocation failure. Color emoji glyphs share the cache, so their bitmap decode is not repeated every frame. Failed Fontconfig fallback lookups also use a small negative cache.
+Import `otter_render.text`. `TextSystem.init(alloc, &mut font)` creates the shaping system. Its methods also take the mutable font explicitly; the system does not store a font pointer.
 
-## TextSystem
+Keep a `ShapeScratch.init(alloc)` resource beside the system. Shaped runs and line views borrow scratch storage. Consume or copy them before reshaping with the same scratch.
 
-For RTL, CJK, and mixed-direction labels:
+- `measure` keeps a simple-text fast path.
+- `shape_into`, `draw`, and clipped variants handle shaped glyph runs.
+- `wrap`, `truncate`, and `cursor_rect` support controls and editors.
+- A different font instance returns `TextError.FontMismatch` on shaping paths.
 
-```zig
-var text_system = try render.TextSystem.init(allocator, &font);
-defer text_system.deinit();
+HarfBuzz performs shaping. `otter_render.bidi` provides native UAX #9 layout using Unicode 17 tables. Do not configure the obsolete itijah backend.
 
-var scratch: render.ShapeScratch = .{};
-const shaped = try text_system.shapeInto("مرحبا", &scratch, .{});
-```
+## Cache-safe drawing
 
-Helpers:
+Cached glyph references borrow the font. Use combined `draw_glyph_index`, `draw_char`, and `draw_emoji_glyph` helpers when loading and drawing together would otherwise overlap mutable font borrows.
 
-- `hasStrongRtlUtf8` / `hasStrongRtlCodepoints`: cheap bidi preflight
-- `measure`, `wrap`, `truncate`, `cursorRect`: layout-facing APIs
-- `draw`: FreeType fast path or shaped glyph rasterization
+## Lua
 
-Pass `text_system` and `text_scratch` through `otter-ui` `FrameOptions`, or attach both to `CommandList` for direct rasterization.
+`require("otter.render").measure(text, size, scale)` returns logical width. It accepts at most 16 KiB of text per call. The host must register `otter_render_lua.render.module()` before a plugin can require it.
 
-`TextSystem` reuses the latest shaped run when the text, font size, scale, direction, and scratch generation still match. Reuse the same scratch storage across measure and draw calls to take that fast path.
+## Source reference
 
-## HiDPI text
-
-- `drawTextScaled` / `measureTextScaled`: logical coords via `Surface`
-- `measureTextAtScale`: explicit scale without a `Surface`
-
-Build with `-Denable_text=false` to omit the text stack entirely.
+`otr/font.otr`, `otr/text.otr`, `otr/bidi.otr`, `otr/lua/render.otr` in the component repository.

@@ -1,41 +1,39 @@
 ---
 title: "D-Bus clients"
-sidebarTitle: "D-Bus"
-description: "D-Bus services in otter-desktop: UPower, MPRIS, NetworkManager, and more."
+sidebarTitle: "D-Bus clients"
+description: "otr D-Bus services and the capability gates of their Lua bindings."
 ---
 
-All clients go through `dbus.Connection` (vendored basu / sd-bus). Poll `getFd()`, then drain with `while (conn.process()) {}`. One `process()` call handles one message.
+Import service leaves under `otter_desktop.dbus`, for example `mpris`, `upower`, `network_manager`, `logind`, `power_profiles`, or `system_tray`.
 
-## Connection
-
-```zig
-var conn = try otter_desktop.dbus.Connection.open(allocator, .session);
-defer conn.deinit();
-const fd = conn.getFd();
-```
+Core `connection`, `message`, and `types` modules wrap basu. Drain available messages: one bus-processing call is not guaranteed to empty the queue.
 
 ## Services
 
-| Client | Bus | Role |
-|--------|-----|------|
-| `UPower` | session | Battery state, on-battery detection |
-| `PowerProfiles` | system | balanced / performance profiles |
-| `Mpris` | session | Media metadata and transport control |
-| `NetworkManager` | system | WiFi scan, connections, byte counters |
-| `ScxLoader` | system | SCX scheduler switch (`scx_flow` for bar `falcond` widget) |
-| `Screensaver` | session | Inhibit screen blanking |
-| `SystemTray` / `StatusNotifierWatcher` | session | Tray icons and menus |
-| `NotificationService` | session | `org.freedesktop.Notifications` for `otter-notifications` |
-| `PolkitAgent` | system | Auth agent registration |
-| `Fprintd` | system | Fingerprint reader |
-| `Logind` | system | Session seat hints |
+The library includes notifications, screensaver inhibition/service support, UDisks, BlueZ, SCX, switcheroo-control, DisplayConfig, portals, accounts, seats, polkit, and fprintd alongside panel services.
 
-Each service exposes `startMonitoring()`, `subscribe()`, `getFd()`, and `process()` for the same poll-loop pattern.
+GNOME DisplayConfig support reads current monitor state; it does not expose display reconfiguration. Protocol/service availability remains a runtime concern.
 
-## Portals
+## Lua actions
 
-`portal_file_chooser` and `portal_screencast` wrap XDG desktop portal APIs when D-Bus is enabled.
+The host registers only the bindings it intends to expose. Common modules and action gates are:
 
-## Disabled builds
+| Module                                                 | Action capability |
+| ------------------------------------------------------ | ----------------- |
+| `otter.desktop.mpris`                                  | `media`           |
+| `otter.desktop.power_profiles`, `otter.desktop.logind` | `power`           |
+| `otter.desktop.network`                                | `network`         |
+| `otter.desktop.screensaver`                            | `idle-inhibit`    |
+| `otter.desktop.notifications`                          | `notifications`   |
+| `otter.desktop.tray`                                   | `tray`            |
+| `otter.desktop.scx`                                    | `scheduler`       |
+| `otter.desktop.udisks`                                 | `storage`         |
+| `otter.desktop.bluetooth`                              | `bluetooth`       |
 
-With `-Denable_dbus=false`, types compile to `void`. Guard imports with `desktop.has_dbus`.
+Public-state reads generally need no action capability. Notification send/close/subscription operations are gated, and notification IDs remain scoped to the sending plugin. A tray action validates item identity in addition to its current index.
+
+`subscribe` callbacks are posted to the host loop. Service descriptors are opened lazily and closed after their last using plugin unloads. A lost bus removes its dead descriptor; a later call can reconnect.
+
+## Source reference
+
+`otr/dbus/`, `otr/lua/dbus_mpris.otr`, `otr/lua/dbus_notifications.otr`, `otr/lua/dbus_tray.otr` in the component repository.

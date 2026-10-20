@@ -1,144 +1,119 @@
 ---
 title: "Themes and colors"
 sidebarTitle: "Themes"
-description: "Change Otter Shell colors and spacing in otter-settings or theme.conf. Per-app overrides inherit from the shared theme when left blank."
+description: "Choose independent color, layout, and spacing layers in Otter Shell v0.13.0, with shared fonts and appearance settings."
 ---
 
-All Otter Shell apps share one theme via `otter-theme`. The **Theme** tab in [otter-settings](/desktop/otter-settings) lets you choose a visual profile, density, and color source. It also previews all 12 built-in presets.
+Use **Theme** in [otter-settings](/desktop/otter-settings) to choose a color scheme, layout, and spacing scale independently. Running applications share the resolved `otter-theme` graph.
 
 ```bash
 otter-settings
 ```
 
-Settings stores those choices as ordered imports in `~/.config/otter-shell/theme.conf`. Built-in preset colors go in `preset-colors.conf`. Running apps watch the root file and every imported layer. [otter-term](/apps/otter-term) reloads without a restart, and [otter-bar](/desktop/otter-bar) refreshes widget colors without reloading `otter-bar.conf`.
+## Theme files
 
-<Tip>
-  Stick with otter-settings unless you need keys the UI does not expose. It keeps comments and field order on save.
-</Tip>
-
-## Theme config file
-
-Edit `~/.config/otter-shell/theme.conf` directly if you prefer. otter-bar, otter-transcribe, and otter-term read it at startup and on change.
-
-Theme layers load in this order:
-
-1. Compiled Current fallback
-2. Selected profile, `profiles/current.conf` or `profiles/bank.conf`
-3. Selected density profile
-4. Optional `preset-colors.conf` or `generated-colors.conf`
-5. Explicit fields in root `theme.conf`
-6. Per-app and per-widget overrides
-
-Color layers only change semantic colors. Profiles own geometry, spacing, fonts, radii, and layout. Root overrides always win over imported layers.
-
-## Terminal colors
-
-Set otter-term's 16-color palette and UI chrome in otter-settings under **Terminal**, or in `~/.config/otter-shell/otter-term.conf`:
+The root file is `$XDG_CONFIG_HOME/otter-shell/theme.conf`, defaulting to `~/.config/otter-shell/theme.conf`. It selects three layer files and global appearance settings:
 
 ```conf
-colors_background = "#1e1e2e"
-colors_foreground = "#cdd6f4"
-colors_cursor     = "#f5e0dc"
-colors_selection  = "#313244"
-
-# 16-color palette
-colors_black   = "#45475a"
-colors_red     = "#f38ba8"
-colors_green   = "#a6e3a1"
-colors_yellow  = "#f9e2af"
-colors_blue    = "#89b4fa"
-colors_magenta = "#f5c2e7"
-colors_cyan    = "#94e2d5"
-colors_white   = "#bac2de"
+colors_path = "/usr/share/otter-shell/themes/colors/otter.conf"
+layout_path = "/usr/share/otter-shell/themes/layouts/current.conf"
+spacing_path = "/usr/share/otter-shell/themes/spacing/standard.conf"
+font_family = "Inter"
+font_size = 16
+icon_theme = ""
+icon_coloring = true
+opacity = 100
+blur = false
+bar_islands = false
 ```
 
-Terminal colors hot-reload on save.
+Absolute paths, `~/` paths, and paths relative to the root theme file are supported. Settings preserves custom layer paths when you edit an unrelated field.
 
-## App-level color overrides
+| Layer   | Controls                                                                     |
+| ------- | ---------------------------------------------------------------------------- |
+| Colors  | Twelve semantic color roles                                                  |
+| Layout  | Shape, radii, indicators, dock anatomy, decorations, and window buttons      |
+| Spacing | Density, control and row heights, bar height, titlebar height, and icon size |
+| Globals | Selected paths, font, icon theme, opacity, blur, and bar islands             |
 
-Apps can override the shared theme with their own color keys. In otter-transcribe's **Transcribe** tab (or `otter-transcribe.conf`):
+User `theme.conf` takes precedence over `/etc/otter-shell/theme.conf`; compiled defaults provide the final fallback. The loader also supports migrating older flat theme files. For new configuration, use the selected layer files instead of obsolete `colors_*`, `icons_theme`, `csd_*`, or `transparency_background_blur` root keys.
+
+## Colors
+
+A color file contains these roles:
 
 ```conf
-background_color  = ""
-border_color      = ""
-graph_color       = ""
-graph_peak_color  = ""
-text_color        = ""
+background = "#0c1012"
+surface = "#10181a"
+surface_alt = "#182224"
+foreground = "#e6ece8"
+muted = "#91a39a"
+accent = "#48d7b0"
+on_accent = "#0c1012"
+selected = "#183c35"
+border = "#2a3834"
+success = "#7abb8f"
+warning = "#d4a64a"
+danger = "#e56b72"
 ```
 
-Empty string `""` inherits from the theme. Set a hex color to override for that app only.
+Settings has 11 built-in color presets: Otter Shell, Catppuccin Mocha/Latte/Frappe/Macchiato, Nord, Gruvbox Dark/Light, Dracula, Tokyo Night, and One Dark. A preset writes `preset-colors.conf` and selects it through `colors_path` without replacing layout or spacing.
 
-## Font
+**Islands** is the `bar_islands` global, not a twelfth color preset.
 
-Default terminal font: `IoskeleyMono Nerd Font`, bundled in `otter-shell-fonts` at `/usr/share/fonts/otter-shell/`.
+## Layout and density
 
-Change it in otter-settings under **Terminal**, or in `otter-term.conf`:
+Choose **Current** or **Bank** as layout. Current uses 4 px standalone control and panel radii. Bank uses status markers, 2 px control radii, 6 px panel radii, a wider navigation column, and a dock panel. Layout selection does not replace your colors. Generic list selection uses tonal fill rather than adding a second focus indicator.
+
+Choose **Compact**, **Standard**, or **Spacious** for density. Changing colors does not change these dimensions. For custom layout files, supported fields include:
 
 ```conf
-font_family    = "JetBrains Mono"
-font_size      = 14
-font_dpi_aware = true
+control_radius = 4
+panel_radius = 4
+joined_radius = 0
+decoration = server
+window_buttons = ":sbc"
 ```
 
-`font_dpi_aware = true` scales font and padding on high-DPI displays. Empty `font_family = ""` falls back to the bundled Nerd Font.
+`decoration` accepts `server`, `client`, `client_floating`, or `none`. `window_buttons` uses `:` to separate left and right groups, with `s` for minimize, `b` for maximize, and `c` for close. Actual server decorations depend on compositor support.
 
-## Icon theme
+## Fonts and icons
 
-Set one XDG icon theme for semantic Otter Shell icons:
+`font_family` and `font_size` in `theme.conf` control shared UI typography. Terminal fonts and ANSI palette remain application settings in `otter-term.conf`; use **Terminal** in Settings for those.
+
+Set `icon_theme` to an XDG icon theme name or absolute theme directory. For example:
 
 ```conf
-icons_theme = "Papirus"
+icon_theme = "Papirus"
 ```
 
-You can use a theme name or an absolute theme directory. Otter Shell checks it first, prefers SVG icons, then falls back to bundled icons when no match exists. Leave the value unset to use bundled defaults.
+An empty value leaves icon selection to the application's default resolver. Files follows desktop GTK/KDE icon preferences, including generated Papirus folder themes from Theme Gen; an explicit `icon_theme` overrides that detection. `otter-shell-fonts` installs fallback fonts under `/usr/share/fonts/otter-shell/` and depends on Inter and Noto Color Emoji font packages.
 
-## Window decorations
+## Opacity and blur
 
-You can choose how Otter XDG toplevels ask for decorations, and how client-side titlebars look when CSD is on.
-
-In otter-settings, open the **Theme** tab and use the **Decorations** and **CSD** sections. Or set keys in `theme.conf`:
+`opacity` is a percentage from 0 to 100. `blur` requests compositor background effects where supported:
 
 ```conf
-# Prefer server, client, client_floating, or none
-decorations_prefered_decoration_type = "server"
-
-# Client-side decoration chrome (used when CSD is active)
-csd_button_layout = ":sbc"
-csd_titlebar_height = 28
-csd_border_size = 1
+opacity = 95
+blur = true
 ```
 
-| Value | Meaning |
-|-------|---------|
-| `server` | Prefer compositor (SSD) decorations when supported |
-| `client` | Prefer application (CSD) decorations |
-| `client_floating` | Prefer CSD while floating; maximized windows follow the compositor |
-| `none` | No decoration preference |
+Blur is off by default and is not required by either layout. Unsupported compositors still render the normal surface fills.
 
-`csd_button_layout` uses GTK-style layout. `:` is the center. Letters before it go left; letters after go right. `c` = close, `b` = maximize, `s` = minimize. Default `:sbc` puts minimize, maximize, and close on the right.
+## App overrides
 
-CSD also has titlebar and button color tokens (`csd_titlebar_bg_active`, `csd_button_close_bg`, and related keys). Built-in presets fill those in.
+Apps can override selected theme values in their own config. Missing optional color keys inherit the shared theme. Settings marks present overrides with **App override** and offers **Reset** to remove only that key.
 
-## Background blur
+Do not assume that an empty string has the same meaning for every field. Use Settings or the application's documented config schema.
 
-Many Otter surfaces can ask the compositor to blur what sits behind translucent regions. Toggle it in otter-settings (Theme / Theme Gen blur controls) or in `theme.conf`:
+## Wallpaper-reactive colors
 
-```conf
-transparency_background_blur = true
-```
+[otter-theme-gen](/desktop/otter-theme-gen) watches the wallpaper state from [otter-wallpaper](/desktop/otter-wallpaper) and writes `generated-colors.conf`. Select that file as the color source through Settings. Generated colors do not replace layout, density, typography, or decoration choices.
 
-Default is on. Needs a compositor that supports the Otter background-effect protocol path. If blur is unavailable, surfaces still draw with their usual alpha.
+The **Theme Gen** tab controls the generator and optional templates for other apps. Hyprland template output uses `~/.config/hypr/otter-theme.lua`; enabling the template does not configure your compositor's imports for you.
 
-## Built-in presets
+## Hot reload
 
-In the otter-settings theme browser:
+Long-running applications watch `theme.conf` and the selected color, layout, and spacing files. Saving a valid edit refreshes the theme. A failed reload retains the previous valid theme rather than publishing partial state.
 
-Otter Shell, Otter Shell Islands, Catppuccin (Mocha/Latte/Frappe/Macchiato), Nord, Gruvbox, Dracula, Tokyo Night, One Dark.
-
-## Wallpaper-reactive themes (Theme Gen)
-
-Colors can follow your wallpaper. Run [otter-theme-gen](/desktop/otter-theme-gen) with [otter-wallpaper](/desktop/otter-wallpaper), then use the **Theme Gen** tab in [otter-settings](/desktop/otter-settings). It edits `otter-theme-gen.conf`. The daemon ships in `otter-shell`.
-
-When enabled, `otter-theme-gen` watches `$XDG_RUNTIME_DIR/otter-shell/wallpaper-state` and writes `~/.config/otter-shell/generated-colors.conf`. It leaves root `theme.conf` alone. You can sync colors to other apps through template outputs: terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), KDE color schemes, Papirus folder colors, `bottom`, btop, and more. Toggle each template in the Theme Gen tab, then click **Apply**.
-
-**Islands mode** applies Otter Shell Islands styling. The **Opacity** slider sets panel transparency.
+Normal reads of layered themes do not rewrite files. Loading an older flat theme can perform a one-time migration: the loader keeps a `.legacy` backup, writes custom color/layout/spacing files, and updates the root to select them. Settings and Theme Gen own intentional normalization and later theme changes. See [Configuration overview](/configuration/overview) for app-specific reload behavior.

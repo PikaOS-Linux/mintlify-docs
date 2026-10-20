@@ -4,11 +4,9 @@ sidebarTitle: "Assistant"
 description: "Local AI chat client for otter-assist. Encrypted threads, Markdown, and tool permission prompts. Ships in otter-shell-extras."
 ---
 
-`otter-assistant` is the chat window for [otter-assist](/apps/otter-assist). The daemon owns transport and tools. This app owns threads, permissions, Markdown, and code highlighting.
+`otter-assistant` is the chat window for [otter-assist](/apps/otter-assist). It manages threads and tool permissions and displays Markdown with code highlighting. The daemon handles transport and runs tools.
 
-<Note>
-  Install with `pikman install otter-shell-extras`. That pulls in `otter-assist`, `otter-assistant`, and `otter-assist-data` along with the speech tools.
-</Note>
+<Note>Install with `pikman install otter-shell-extras`. That pulls in `otter-assist`, `otter-assistant`, and `otter-assist-data` along with the speech tools.</Note>
 
 ## Launch
 
@@ -28,9 +26,9 @@ Successful exchanges save as encrypted thread files under `$XDG_DATA_HOME/otter-
 
 Web Search and Desktop Search ask before they run:
 
-| Action | Result |
-|--------|--------|
-| **Enter** | Allow once for this request |
+| Action         | Result                                                            |
+| -------------- | ----------------------------------------------------------------- |
+| **Enter**      | Allow once for this request                                       |
 | **Ctrl+Enter** | Save the matching `*_always_allow` flag in `otter-assistant.conf` |
 
 The request sends one-shot approval to `otter-assist`. Other clients stay gated unless their own config allows the tool.

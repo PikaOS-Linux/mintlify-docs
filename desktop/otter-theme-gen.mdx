@@ -45,15 +45,15 @@ vibrancy = 0.6
 global_opacity = 96
 ```
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `enabled` | `true` | Turn wallpaper-reactive theming on or off |
-| `mode` | `dark` | `dark` or `light` palette |
-| `islands_mode` | `false` | Make the Bar rail transparent and give each section its own generated surface |
-| `strategy` | `material_you` | Palette extraction style |
-| `contrast` | `0.7` | Palette contrast (0.0 to 1.0) |
-| `vibrancy` | `0.6` | Palette vibrancy (0.0 to 1.0) |
-| `global_opacity` | `96` | Panel and surface opacity (0 to 100) |
+| Key              | Default        | Description                                                                   |
+| ---------------- | -------------- | ----------------------------------------------------------------------------- |
+| `enabled`        | `true`         | Turn wallpaper-reactive theming on or off                                     |
+| `mode`           | `dark`         | `dark` or `light` palette                                                     |
+| `islands_mode`   | `false`        | Make the Bar rail transparent and give each section its own generated surface |
+| `strategy`       | `material_you` | Palette extraction style                                                      |
+| `contrast`       | `0.7`          | Palette contrast (0.0 to 1.0)                                                 |
+| `vibrancy`       | `0.6`          | Palette vibrancy (0.0 to 1.0)                                                 |
+| `global_opacity` | `96`           | Panel and surface opacity (0 to 100)                                          |
 
 `strategy` options: `material_you`, `analogous`, `vibrant`, `monochromatic`, `direct`, `temperature`.
 
@@ -78,11 +78,9 @@ Enable `template_kcolorscheme_enabled` to write `~/.local/share/color-schemes/Ot
 
 ### Papirus folder colors
 
-Enable `template_papirus_colors_enabled` to create and select a user-owned `Otter-Papirus-*` icon theme for GTK and Qt. It inherits installed Papirus icons and points folder names at the closest Papirus color variant. No root and no writes under `/usr/share`. Papirus must already be installed.
+Enable `template_papirus_colors_enabled` to create and select a user-owned `Otter-Papirus-*` icon theme for GTK and Qt. It inherits installed Papirus icons and points folder names at the closest Papirus color variant. This requires no root privileges and does not write under `/usr/share`. Papirus must already be installed.
 
-<Tip>
-  `otter-theme-gen` never rewrites root `theme.conf`. It reads the selected profile and root overrides, then writes color keys only to `generated-colors.conf`.
-</Tip>
+<Tip>`otter-theme-gen` never rewrites root `theme.conf`. It reads the selected profile and root overrides, then writes color keys only to `generated-colors.conf`.</Tip>
 
 ## Templates on disk
 

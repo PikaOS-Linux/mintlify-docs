@@ -17,6 +17,9 @@ description: "Magnification dock with pinned apps, auto-hide, window previews, a
 - Wheel paging when an app has more preview windows than one popup page
 - Right-click: Open, New Window, focus a window, Quit, Keep in Dock / Remove from Dock
 - Click an active app to minimize it. Badges show minimized window counts
+- Optional ordering of running apps by window position on Niri and Hyprland
+- Lua widget tiles from [plugins](/desktop/plugins) that list `provides = ["dock"]`, shown after the apps behind a separator
+- Hot reload of `otter-dock.conf` and the theme
 
 Pinned icons stay in the pinned region. Running-only icons sit after the separator.
 
@@ -28,15 +31,13 @@ otter-dock
 
 Run it as a session daemon. Autostart it the same way you start [otter-bar](/desktop/otter-bar). See [Session setup](/desktop/session-setup) for Hyprland, Sway, and Niri spawn examples.
 
-Needs `zwlr_layer_shell_v1`. Previews use `ext_image_copy_capture` when the compositor provides it. Icons still work without that protocol. Hover previews do not.
+The dock requires `zwlr_layer_shell_v1`. Hover previews also need `ext_image_copy_capture`; icons work without the capture protocol.
 
 ## Configuration
 
 Config: `~/.config/otter-shell/otter-dock.conf`
 
-<Tip>
-  The **Dock** tab in [otter-settings](/desktop/otter-settings) writes the same file.
-</Tip>
+<Tip>The **Dock** tab in [otter-settings](/desktop/otter-settings) writes the same file.</Tip>
 
 Key settings:
 
@@ -47,27 +48,34 @@ auto_hide_delay = 500
 show_on = all
 show_on_tags =
 icon_size = 48
+icon_padding = 4
+dock_padding = 6
 magnification_enabled = true
 magnification_scale = 200
 magnification_radius = 3
+sort_running_by_position = false
 pinned_apps = firefox,kitty,nautilus
 launch_animation = pulse
 middle_click_action = close
 ```
 
-| Key | Meaning |
-|-----|---------|
-| `position` | `bottom`, `left`, or `right` |
-| `auto_hide` | Hide until you hit the edge. Default off |
-| `auto_hide_delay` | Hide delay in milliseconds. Default 500 |
-| `show_on` | `all` (every output), `floating` (floating layouts only), or `tags` (see `show_on_tags`) |
-| `show_on_tags` | Comma-separated tags. Used when `show_on = tags` |
-| `icon_size` | Icon pixel size. Default 48 |
-| `magnification_scale` | Hover scale as a percent. Default 200 |
-| `magnification_radius` | How many neighbouring icons grow with the hovered one. Default 3 |
-| `pinned_apps` | Comma-separated desktop ids |
-| `launch_animation` | `pulse` or `none` |
-| `middle_click_action` | `close` or `none` |
+| Key                        | Meaning                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `position`                 | `bottom`, `left`, or `right`                                                                                             |
+| `auto_hide`                | Hide until you hit the edge. Default off                                                                                 |
+| `auto_hide_delay`          | Hide delay in milliseconds. Default 500                                                                                  |
+| `show_on`                  | `all` (every output), `floating` (floating layouts only), or `tags` (see `show_on_tags`)                                 |
+| `show_on_tags`             | Comma-separated tags. Used when `show_on = tags`                                                                         |
+| `icon_size`                | Icon pixel size. Default 48                                                                                              |
+| `icon_padding`             | Gap between icons in pixels. Default 4                                                                                   |
+| `dock_padding`             | Padding inside the dock strip in pixels. Default 6                                                                       |
+| `magnification_enabled`    | Grow icons on hover. Default on                                                                                          |
+| `magnification_scale`      | Hover scale as a percent. Default 200                                                                                    |
+| `magnification_radius`     | How many neighbouring icons grow with the hovered one. Default 3                                                         |
+| `sort_running_by_position` | Order unpinned running apps by their first tiled window on Niri and Hyprland. Pinned icons keep their order. Default off |
+| `pinned_apps`              | Comma-separated desktop ids                                                                                              |
+| `launch_animation`         | `pulse` or `none`                                                                                                        |
+| `middle_click_action`      | `close` or `none`                                                                                                        |
 
 Omit color keys to inherit from [theme.conf](/configuration/themes). Saving the theme updates dock colours without editing `otter-dock.conf`.
 

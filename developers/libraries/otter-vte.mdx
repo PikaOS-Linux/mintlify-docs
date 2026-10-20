@@ -1,35 +1,25 @@
 ---
 title: "otter-vte"
 sidebarTitle: "otter-vte"
-description: "Terminal cell rendering: DynamicCommandList, powerline glyphs, and CellRenderer."
+description: "otr terminal command storage, glyph operations, snapshots, and cell rendering."
 ---
 
-`otter-vte` handles terminal draw commands and cell rasterization. PTY sessions and Ghostty wiring stay in the app (`otter-term`).
+`otter-vte` is the reusable terminal rendering boundary. It depends on geometry and rendering, not a terminal application's UI. Import `otter_vte.command_list`, `ops`, `cell_glyphs`, `cell_renderer`, `renderer`, or `snapshot`.
 
-Attach `TextSystem` and you get powerline separators, block glyphs, and shaped text through `otter-render`.
+The cell renderer accepts explicit cell/selection/host interfaces and a borrowed draw context. It does not reach through arbitrary application pointers.
 
-## Pages in this library
+`DynamicCommandList` and `Renderer` are owned resources initialized with an allocator. Image-free terminal raster paths use `renderer.no_images`.
 
-<CardGroup cols={2}>
-  <Card title="Command list" icon="list" href="/developers/libraries/otter-vte/command-list">
-    `DynamicCommandList` and terminal-specific draw ops.
-  </Card>
-  <Card title="Glyphs and powerline" icon="shapes" href="/developers/libraries/otter-vte/glyphs-and-powerline">
-    `PowerlineOps`, `BlockOps`, and custom cell glyphs.
-  </Card>
-  <Card title="Cell renderer" icon="table-cells" href="/developers/libraries/otter-vte/cell-renderer">
-    `CellRenderer`, hooks, and `Renderer` facade.
-  </Card>
-</CardGroup>
+## Lua
 
-## Stack boundary
+`otter_vte_lua` exposes `otter.vte`: glyph rectangles, powerline classification, batching checks, and bounded plugin-owned pixel canvases. These operations stay inside the process, so they require no capability. They do not create a terminal session or PTY.
 
-| Layer | Owner |
-|-------|-------|
-| PTY I/O, scrollback, selection | App (`otter-term`) |
-| Cell grid → draw commands | `otter-vte` |
-| Command playback | `otter-render` `quad_renderer` |
+## Reference pages
 
-## Dependencies
+- [Dynamic command lists](/developers/libraries/otter-vte/command-list)
+- [Glyphs and powerline](/developers/libraries/otter-vte/glyphs-and-powerline)
+- [Cell renderer and snapshots](/developers/libraries/otter-vte/cell-renderer)
 
-`otter-geo`, `otter-render`.
+## Source reference
+
+`otr/otr.toml`, `otr/` in the component repository.

@@ -1,35 +1,31 @@
 ---
 title: "Inotify"
 sidebarTitle: "Inotify"
-description: "File and directory watching with otter-utils inotify.Watcher."
+description: "Watch files and directories with otr inotify resources."
 ---
 
-`inotify.Watcher` wraps Linux inotify for config reloads and app-list updates. Poll `getFd()` next to your Wayland socket and timer FDs. That is the same pattern `otter-conf.Watcher` uses.
+Import `otter_utils.inotify`. `Watcher.init()` creates an owned Linux watcher; call `deinit()` once when its owner shuts down.
 
-```zig
-const inotify = @import("otter_utils").inotify;
+| Method                                            | Purpose                                         |
+| ------------------------------------------------- | ----------------------------------------------- |
+| `add_watch(path, mask)`                           | Add or update a watch and return its descriptor |
+| `remove_watch(wd)` / `remove_watch_by_path(path)` | Remove a watch                                  |
+| `poll_fd()`                                       | Descriptor for your event loop                  |
+| `get_path(wd)`                                    | Path recorded for a descriptor                  |
+| `next_event()`                                    | Next borrowed event, or null when drained       |
+| `has_pending_events()`                            | Whether the current buffer has unread events    |
+| `dropped_event_count()`                           | Count rejected or dropped events                |
 
-var watcher = try inotify.Watcher.init(allocator);
-defer watcher.deinit();
+An `Event` is a `ref struct`. Its name points into the watcher's buffer and lasts only until the next `next_event()` call. Copy text you need to retain.
 
-_ = try watcher.addWatch("/path/to/file", inotify.Watcher.Mask.file_changes);
-_ = try watcher.addWatch("/path/to/dir", inotify.Watcher.Mask.dir_changes);
+Event helpers include `is_modified`, `is_deleted`, `is_created`, `is_moved`, and `is_ignored`.
 
-// After poll reports readability:
-while (watcher.nextEvent()) |event| {
-    if (event.isModified()) { /* reload */ }
-    if (event.isCreated()) { /* rescan dir */ }
-}
-```
+## Configuration watches
 
-## Event helpers
+For configuration files, prefer `otter_conf.watcher.Watcher.watch_config_path`. It watches the parent directory so atomic-save renames do not invalidate the watch. Drain a burst, then reload once. An ignored watch event alone is not a configuration change.
 
-| Method | Meaning |
-|--------|---------|
-| `isModified()` | File written and closed |
-| `isDeleted()` | File removed |
-| `isCreated()` | New file in watched directory |
-| `isMoved()` | Rename or move |
-| `isIgnored()` | Watch removed (file deleted or unmount) |
+Keep event draining inside your existing descriptor loop. Do not poll the filesystem on a periodic timer.
 
-`otter-conf` and `otter-desktop` both use this wrapper. Prefer importing from `otter_utils` in app code unless you need `otter-conf`'s path-indexed watcher.
+## Source reference
+
+`otr/inotify.otr` in the component repository.

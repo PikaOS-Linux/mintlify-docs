@@ -1,61 +1,38 @@
 ---
 title: "Applications"
 sidebarTitle: "Applications"
-description: "Icon lookup, desktop entries, AppList, and launcher in otter-desktop."
+description: "otr desktop entry discovery, owned text blobs, icon resolution, and child reaping."
 ---
 
-Icon lookup, `.desktop` parsing, the installed app list, and launch helpers. This is what the launcher and settings use to find apps.
+Import leaves under `otter_desktop.apps`.
 
-## Icon lookup
+| Module                                 | Purpose                                         |
+| -------------------------------------- | ----------------------------------------------- |
+| `desktop_entry`                        | Parse and own desktop-entry data                |
+| `app_list`, `watcher`                  | Scan, search, and watch application directories |
+| `launcher`, `file_args`                | Expand arguments and launch entries/actions     |
+| `icon_lookup`, `icon_theme`            | Resolve icon paths and themes                   |
+| `mime_catalog`, `xdg_mime`, `xdg_open` | MIME and default-handler integration            |
+| `xdg_paths`                            | Application search directories                  |
 
-```zig
-if (otter_desktop.findIcon(allocator, "firefox")) |path| {
-    defer allocator.free(path);
-}
+## Ownership and context
 
-if (otter_desktop.findIconInTheme(allocator, "Papirus", "battery-3")) |path| {
-    defer allocator.free(path);
-}
+`DesktopEntry` stores one owned text blob plus spans. Use `text(span)`, iterators, or `clone(alloc)` instead of retaining pointers into another entry.
 
-var cache = otter_desktop.IconCache.init(allocator);
-const path = cache.lookup("firefox");
-```
+`AppList.scan(env)` receives environment explicitly. Directory-specific variants support isolated fixtures.
 
-Search order:
+`IconResolver.init(env, alloc, theme)` owns resolution state. Theme/path caches are not permission to keep an image pointer across image-store mutations.
 
-1. Preferred themes (Papirus, Breeze, Adwaita, hicolor, etc.) with SVG preferred over PNG
-2. Remaining themes on disk
-3. Pixmaps directories
-4. `.desktop` `Icon=` fallback (exact filename, then directory scan for AppImages)
+Launch functions take a reaper and environment. Keep the reaper in the event loop so launched children are collected. `LaunchOptions` borrows overrides and URI lists for the call.
 
-Base paths include XDG data home, `/usr/share/icons`, and Flatpak export trees.
+## Lua
 
-Use `findIconInTheme` when a caller needs one named runtime theme or an absolute theme directory. It prefers SVG and leaves ownership of the returned path with the caller. Ordinary app icon lookup keeps the normal desktop theme order.
+- `otter.desktop.apps`: `list`, `find`, `search`, `actions`, `subscribe`; `launch` requires `spawn`.
+- `otter.desktop.xdg_open`: content-type and handler reads; `open`/`open_with` require `spawn`.
+- `otter.desktop.icons`: lookup/theme operations with a plugin-owned resolver.
 
-## Desktop entries
+A listed desktop entry is not itself a grant to execute it.
 
-```zig
-var entry = try otter_desktop.applications.desktop_entry.parse(allocator, path, .{});
-defer entry.deinit();
-// entry.name, entry.exec, entry.icon, Terminal flag, etc.
-```
+## Source reference
 
-Locale-aware `Name` and `Comment` resolution follows XDG rules.
-
-## Application list
-
-```zig
-var apps = try otter_desktop.applications.AppList.initWithWatcher(allocator);
-try apps.scan();
-apps.subscribe(onAppsChanged, &ctx);
-```
-
-`AppDirWatcher` uses `otter-utils` inotify on XDG applications directories.
-
-## Launcher
-
-```zig
-try otter_desktop.applications.launcher.launch(allocator, &entry);
-```
-
-Expands `%f`, `%u`, `%i` exec fields. `Terminal=true` entries spawn through detected terminal (`$TERMINAL`, then foot, otter-term, kitty, etc.).
+`otr/apps/desktop_entry.otr`, `otr/apps/app_list.otr`, `otr/apps/launcher.otr`, `otr/apps/icon_lookup.otr`, `otr/lua/` in the component repository.

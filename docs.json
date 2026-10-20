@@ -58,12 +58,14 @@
               "apps/otter-term",
               "apps/otter-files",
               "apps/otter-pkg",
+              "apps/otter-browser",
               "apps/otter-monitor",
               "apps/otter-screenshot",
               "apps/otter-rec",
               "apps/otter-clip",
               "apps/otter-search",
-              "apps/otter-shot"
+              "apps/otter-shot",
+              "apps/xdg-desktop-portal-otter"
             ]
           },
           {
@@ -86,6 +88,14 @@
               "apps/otter-clicker",
               "apps/otter-vox",
               "apps/otter-weather"
+            ]
+          },
+          {
+            "group": "System setup",
+            "pages": [
+              "apps/otter-installer",
+              "apps/otter-first-setup",
+              "apps/otter-welcome"
             ]
           },
           {
@@ -120,9 +130,22 @@
             ]
           },
           {
+            "group": "Lua extensions",
+            "pages": [
+              "developers/lua/widgets-and-providers",
+              "developers/lua/ui-scripts",
+              "developers/lua/bindings",
+              "developers/lua/runtime"
+            ]
+          },
+          {
             "group": "Libraries",
             "pages": [
               "developers/libraries",
+              "developers/libraries/otter-lua",
+              "developers/libraries/otter-http",
+              "developers/libraries/otter-crypto",
+              "developers/libraries/otter-cue",
               {
                 "group": "otter-utils",
                 "pages": [

@@ -4,7 +4,7 @@ sidebarTitle: "File manager"
 description: "Native Wayland file manager for local paths, SFTP, and SMB. Tabs, splits, thumbnails, archives, and trash."
 ---
 
-`otter-files` is a native Wayland file manager. Browse local disks, SFTP, and SMB. Tabs, split panes, thumbnails, archives, trash, and bulk rename come with it.
+`otter-files` is a native Wayland file manager with local and remote browsing, tabs, split panes, file operations, thumbnails, and portal file picking.
 
 ## Usage
 
@@ -16,51 +16,114 @@ otter-files --new-tab sftp://host/home
 
 Launch from [otter-launcher](/desktop/otter-launcher) or the **Otter Files** desktop entry. Locations accept local paths plus `file://`, `sftp://`, `smb://`, and `archive://` URIs.
 
-Archive URIs look like `archive:///path/file.zip!/member`. Opening a supported archive shows a read-only virtual folder. Back and Up work as usual.
+| Flag           | Description                                  |
+| -------------- | -------------------------------------------- |
+| `--new-window` | Open locations in a new window               |
+| `--new-tab`    | Open locations as tabs in an existing window |
+| `--select`     | Select item locations in their parent folder |
+| `--properties` | Show properties for item locations           |
+| `--help`       | Print usage and exit                         |
 
-| Flag | Description |
-|------|-------------|
-| `--new-window` | Open locations in a new window |
-| `--new-tab` | Open locations as tabs in an existing window |
-| `--select` | Select item locations in their parent folder |
-| `--properties` | Show properties for item locations |
-| `--help` | Print usage and exit |
+## Browse and select
+
+Choose Icons, Compact, List, or Details view. The sidebar provides Places, bookmarks, devices, and Trash. Use tabs for separate locations or press <kbd>F3</kbd> to toggle split panes. Press <kbd>Space</kbd> for Quick Preview.
+
+**Devices** lists usable data, removable, and network mounts. Boot/EFI partitions, AppImage bundles, portal/GVfs internals, and private runtime mounts stay out of that list. **File System** still opens the root filesystem.
+
+An open context menu captures wheel input, including scrolling an overflowing menu, without moving the file view behind it. Underlying file tooltips stay hidden until the menu closes.
+
+Drag from empty pane space to select visible files. Ctrl/Shift-drag adds to the selection. Dragging a selected file transfers the selection; an unmodified click without dragging selects only that file. Scrolling ends rectangle selection; edge auto-scroll is not available.
+
+**Open With** lets you choose an application for one launch. **Always Open** also saves that application as the MIME default through `xdg-mime`, preserving other associations.
+
+Open in Terminal follows `xdg-terminal-exec`, keeps the selected folder as the child working directory, and falls back to [otter-term](/apps/otter-term) when that helper is missing.
+
+## Folder icons
+
+An explicit `icon_theme` in [theme.conf](/configuration/themes) takes priority. Leave it empty to follow desktop GTK/KDE icon preferences, including the generated Papirus folder theme selected by [otter-theme-gen](/desktop/otter-theme-gen).
+
+Files refreshes icons when those settings change, including changes after startup. Configuration reloads also invalidate artwork regenerated under the same theme name. Detection and invalidation run on configuration events, not on every frame.
 
 ## Remote locations
 
-Press <kbd>Ctrl+K</kbd> or use the blank-area context menu to open **Connect to Server** for SFTP and SMB. Leave the SMB credential form empty to request anonymous access. The dialog does not store credentials. Bookmark a remote location yourself with <kbd>Ctrl+B</kbd> or the context menu if you want it saved.
+Press <kbd>Ctrl+K</kbd> or use the blank-area context menu to open **Connect to Server** for SFTP and SMB. Leave the SMB credential form empty to request anonymous access. The dialog does not store credentials. Bookmark a remote location explicitly with <kbd>Ctrl+B</kbd> or the context menu if you want it saved.
+
+SFTP uses libssh with OpenSSH-compatible configuration, identities, and agent support. SMB uses the native SMB2/3 transport. Remote properties are read-only; you cannot change remote permissions.
 
 UDisks2 mount, unmount, and eject go through the running desktop polkit agent.
 
 ## File operations
 
-Copy, move, rename, create, trash, delete, undo/redo, and conflict handling. Bulk Rename supports find/replace and templates (`{name}`, `{ext}`, `{n}`, `%n`, `###`). It preserves extensions by default, previews four entries, and will not overwrite existing names.
+Copy, move, rename, create, trash, permanently delete, and undo/redo from the UI. Conflicts open a resolution dialog. Navigation does not cancel queued copy or move jobs.
+
+Bulk Rename supports find/replace and templates (`{name}`, `{ext}`, `{n}`, `%n`, `###`). It preserves extensions by default, previews four entries, validates destination names, and does not overwrite existing files.
 
 Create a symbolic link from the selected-item context menu or <kbd>Ctrl+Shift+L</kbd>. Links are relative to the current folder and work locally or over native SFTP.
 
-Open in Terminal follows `xdg-terminal-exec`, keeps the selected folder as the child working directory, and falls back to [otter-term](/apps/otter-term) when that helper is missing.
+Local properties support permission editing. Trash lets you restore or permanently remove items. Original paths and deletion dates appear in Details view.
 
 ## Archives and thumbnails
 
-Create and extract tar (gzip/bzip2/xz/zstd), zip, 7z, and RAR/CBR. Archive members are browsable but not launched directly. Use **Extract Here** on the containing archive to open them.
+Opening a supported archive shows a read-only virtual folder. Archive URIs look like `archive:///path/file.zip!/member`. Back and Up work as usual. Archive members are not launched directly; use **Extract Here** on the containing archive first.
 
-`bsdtar`, `tar`, `zip`, and `unzip` are detected at runtime. Install `7z` and `unrar`/`rar` for 7z and RAR. RAR creation needs `rar`.
+Create and extract tar (gzip/bzip2/xz/zstd), zip, 7z, and RAR/CBR when the corresponding tools are installed. `bsdtar`, `tar`, `zip`, and `unzip` are detected at runtime. Install `7z` and `unrar`/`rar` for 7z and RAR. RAR creation needs `rar`.
 
-Image thumbnails decode natively. Video and other formats use bounded thumbnailers, including remote SFTP/SMB files by default.
+Image thumbnails decode natively. Video and other formats use bounded thumbnailers. Remote SFTP/SMB thumbnails are enabled by default, with a 16 MiB per-file limit.
+
+## Portal file picker
+
+The Otter desktop portal opens a dedicated Files picker for supported open, save, and folder-selection requests. It does not replace your ordinary file-manager window. Picker rows use single clicks for selection and double clicks for activation, independently of your normal Files click policy.
+
+## Keyboard shortcuts
+
+| Key                            | Action                                          |
+| ------------------------------ | ----------------------------------------------- |
+| Ctrl+L / Ctrl+F                | Focus location / search                         |
+| Alt+Left / Alt+Right / Alt+Up  | Back / forward / parent folder                  |
+| Ctrl+T / Ctrl+W / Ctrl+Shift+T | New tab / close tab / restore closed tab        |
+| Ctrl+N                         | New window                                      |
+| Ctrl+1 / 2 / 3 / 4             | Icons / Compact / Details / List view           |
+| Ctrl+H                         | Show or hide hidden files                       |
+| F2 / Ctrl+Shift+R              | Rename / bulk rename                            |
+| Ctrl+Shift+N                   | New folder                                      |
+| Ctrl+C / Ctrl+X / Ctrl+V       | Copy / cut / paste                              |
+| Delete / Shift+Delete          | Trash / permanently delete                      |
+| Ctrl+Z / Ctrl+Shift+Z          | Undo / redo                                     |
+| F3 / Space / F4                | Toggle split / Quick Preview / Open in Terminal |
+| F5                             | Refresh                                         |
 
 ## Configuration
 
-Config file: `~/.config/otter-shell/otter-files.conf`
+Config file: `$XDG_CONFIG_HOME/otter-shell/otter-files.conf`, normally `~/.config/otter-shell/otter-files.conf`.
 
-Edit it in [otter-settings](/desktop/otter-settings) on the **Files** tab (shown when `otter-files` is installed), or by hand.
-
-Remote thumbnails are on by default and capped by `remote_thumbnail_limit_mb` (16 MiB). Set `thumbnail_policy` to `local_only` or `never` to opt out.
+Edit it in [otter-settings](/desktop/otter-settings) on the **Files** tab, shown when `otter-files` is installed, or by hand.
 
 ```conf
+view_mode = icons
+click_policy = double
+sort_order = name
+folders_first = true
+show_hidden = false
+expand_places = false
+zoom = 100
 thumbnail_policy = always
+thumbnail_cache_limit_mb = 128
 remote_thumbnail_limit_mb = 16
+restore_session = false
+confirm_delete = true
+confirm_permanent_delete = true
+confirm_empty_trash = true
 ```
+
+Set `expand_places = true` to start each window with all Places visible. Set `thumbnail_policy` to `local_only` or `never` to opt out of remote thumbnails.
+
+## Current limitations
+
+- Dropping files onto a folder in the same window is not supported. Use cut/copy and paste instead.
+- The second split pane cannot browse an archive. If its remote location needs a password, focus that pane and refresh.
+- Archive creation and extraction have no percentage progress or cancel button.
+- Trash does not refresh automatically when another window trashes an item. Long original paths are truncated in the display.
 
 ## Dependencies
 
-The packaged `otter-files` depends on `desktop-file-utils`, `shared-mime-info`, and `ffmpegthumbnailer` (video thumbnails), plus Otter shared libraries and fonts.
+The packaged app depends on `desktop-file-utils`, `shared-mime-info`, `ffmpegthumbnailer`, `xdg-utils`, `dbus-bin`, and Otter fonts, with runtime libraries resolved by the package manager. Archive helper tools are detected separately.

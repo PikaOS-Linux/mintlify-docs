@@ -41,20 +41,20 @@ listener_2_on_resume = dpms:on
 
 Up to 8 listeners (`listener_1` through `listener_8`). Each has:
 
-| Field | Description |
-|-------|-------------|
-| `timeout` | Idle seconds before firing (0 = disabled) |
-| `on_timeout` | Command when user becomes idle |
-| `on_resume` | Command when activity resumes (only if `on_timeout` ran) |
+| Field        | Description                                              |
+| ------------ | -------------------------------------------------------- |
+| `timeout`    | Idle seconds before firing (0 = disabled)                |
+| `on_timeout` | Command when user becomes idle                           |
+| `on_resume`  | Command when activity resumes (only if `on_timeout` ran) |
 
 ### Built-in DPMS commands
 
-| Command | Effect |
-|---------|--------|
-| `dpms:off` | Turn displays off |
-| `dpms:on` | Turn displays on |
-| `dpms:standby` | Standby mode |
-| `dpms:suspend` | Suspend mode |
+| Command        | Effect            |
+| -------------- | ----------------- |
+| `dpms:off`     | Turn displays off |
+| `dpms:on`      | Turn displays on  |
+| `dpms:standby` | Standby mode      |
+| `dpms:suspend` | Suspend mode      |
 
 Any other value runs as a shell command via `/bin/sh -c`.
 

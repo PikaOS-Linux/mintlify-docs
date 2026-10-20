@@ -1,162 +1,123 @@
 ---
 title: "Writing plugins"
 sidebarTitle: "Plugins"
-description: "C ABI for bar widgets and launcher providers, plus opf to scaffold and pack them."
+description: "Build LuaJIT widgets and launcher providers with manifests, capabilities, and opf."
 ---
 
-Bar and launcher load third-party widgets as `.so` files. A plugin does not draw pixels. It emits Surface Description nodes through a small C ABI, and the host renders them.
+Otter Shell v0.13.0 hosts extensions through LuaJIT. The Zig `.so` plugin ABI is unsupported. Each plugin has a `plugin.toml` manifest and Lua source. Native hosts own layout, input routing, and rendering; scripts describe frames through `sd.*`.
 
-User-facing install, enable toggles, and the example plugins: [Plugins](/desktop/plugins). This page is the write-your-own side.
+For installation and Settings controls, see [Plugins](/desktop/plugins).
 
-`otter-shell` already ships `otter-shell-plugins` (examples) and `otter-plugin-factory` (`opf`). You can also install them on their own:
+## Choose an extension
+
+| You want                     | Contract                            | Starter                                  |
+| ---------------------------- | ----------------------------------- | ---------------------------------------- |
+| Bar widget                   | `measure`, `draw`, optional `event` | `opf new bar-widget my-chip`             |
+| Launcher results             | `query`, `activate`, optional `row` | `opf new launcher-provider my-provider`  |
+| Headless event-driven plugin | Entry script, optional exports      | `opf new plugin my-service`              |
+| Whole Lua app                | `draw`, optional `event`            | `opf new app my-app`                     |
+| Replace a supported app's UI | `frame`, optional `action`          | [UI scripts](/developers/lua/ui-scripts) |
+
+The `app` starter uses `otter-lua run`, whose current backend is headless. For a Lua UI in a real Wayland window, start with the native shell in [Creating an app](/developers/creating-an-app).
+
+## Scaffold and check
+
+Install the factory:
 
 ```bash
-pikman install otter-shell-plugins otter-plugin-factory
+pikman install otter-plugin-factory
 ```
-
-## Layout and discovery
-
-Packed plugins look like this:
-
-```
-/usr/lib/otter-shell/plugins/<id>/
-  plugin.conf
-  libotter_plugin_<snake_id>.so
-```
-
-Hosts search in this order. First match per id wins:
-
-1. `OTTER_PLUGIN_PATH` (colon-separated roots)
-2. `$XDG_DATA_HOME/otter-shell/plugins`
-3. `~/.local/share/otter-shell/plugins`
-4. `/usr/lib/otter-shell/plugins`
-5. `/usr/share/otter-shell/plugins`
-
-Bar and launcher layout names are always `plugin:<id>`. The bare id lives in `plugin.conf`.
-
-Enable gates live in `~/.config/otter-shell/plugins.conf` as `<id>_enabled = true|false`. Hosts read that file before `dlopen`. Most plugins treat a missing key as enabled. The packaged `snippet-provider` is opt-in and defaults to disabled. Per-plugin files under `~/.config/otter-shell/plugins/<id>.conf` are reserved for schemas with `provides_settings = true`. That settings UI is not in yet.
-
-## Manifest (`plugin.conf`)
-
-```conf
-id = "hello-label"
-name = "Hello label"
-version = "0.1.1"
-abi_version = 1
-library = "libotter_plugin_hello_label.so"
-provides_bar_widget = true
-provides_launcher_provider = false
-provides_launcher_sd_rows = false
-provides_settings = false
-```
-
-## Factory CLI (`opf`)
-
-[`otter-plugin-factory`](https://git.pika-os.com/otter-shell/otter-plugin-factory) is a separate package from the examples. After install, `opf` is on `PATH`. From a checkout, put `bin/` on `PATH` instead.
 
 ```bash
 opf new bar-widget my-chip
-opf new launcher-provider my-provider
-
 cd my-chip
 opf build
-opf pack                 # zig-out/plugins/<id>/{plugin.conf,.so}
-opf check                # manifest + otter_plugin_* exports
+opf check
+opf pack
+opf check --build
 ```
 
-Copy `zig-out/plugins/<id>/` into `~/.local/share/otter-shell/plugins/` or set `OTTER_PLUGIN_PATH`. Factory `docs/publishing.md` covers the examples-package layout.
+- `build` syntax-checks every `.lua` file. It does not produce a native library or ship Lua bytecode.
+- `check` validates the manifest, loads the entry script, and checks its exports. Widgets are measured and drawn; providers are queried.
+- `pack` copies the manifest, Lua sources, and README/license files into `dist/plugins/my-chip/`.
+- `check --build` packs first, then checks the packed copy too.
 
-## ABI v1
+`opf check` does not spawn programs, access your files, or run timers. Its filesystem, timer, and process modules are inert substitutes; other service modules can be stubs. Use it to check the contract; test live service integration in the host.
 
-Plugins export C symbols. Zig plugins can `@import` a mirrored `otter_plugin_abi` module. ABI major is `OTTER_PLUGIN_ABI_VERSION` (`1`).
+## Manifest
 
-Required exports:
+```toml
+name = "my-chip"
+version = "0.1.0"
+entry = "init.lua"
+kind = "widget"
+provides = ["bar"]
+capabilities = []
+description = "A small clickable status chip"
+```
 
-| Symbol | Role |
-|---|---|
-| `otter_plugin_abi_version` | Must return `1` |
-| `otter_plugin_init` / `otter_plugin_deinit` | Lifetime |
-| `otter_plugin_query` | Fill `OtterPluginManifest` |
+`entry` defaults to `init.lua`; `kind` defaults to `plugin`. Accepted kinds are `widget`, `plugin`, and `app`. `provides` lets hosts select compatible plugins before running their code. Launcher providers require `kind = "plugin"` and `provides = ["launcher"]`; dock extensions need `provides = ["dock"]`.
 
-Bar, when `provides_bar_widget` is true:
+The parser accepts the manifest's supported string fields and string arrays, not arbitrary TOML. Unknown keys are errors. There is no `abi_version`, native `library`, or `provides_bar_widget` flag.
 
-- `otter_plugin_bar_attach` returns an `OtterPluginBarInstance` with a vtable
-- Vtable: `preferred_width`, `contribute`, `destroy`, optional `on_event`
+Use the same name for the directory and manifest when creating new plugins. Discovery, `plugin:<id>` layout names, and `plugins.conf` policy use the directory name.
 
-Launcher, when provider or SD-row flags are set:
+## Install and discover
 
-- `otter_plugin_launcher_query` / `otter_plugin_launcher_activate`
-- Optional `otter_plugin_launcher_contribute_row` for custom SD rows
+```text
+my-chip/
+  plugin.toml
+  init.lua
+  helpers.lua
+```
 
-Host API during contribute:
+Copy `dist/plugins/my-chip/` into `${XDG_DATA_HOME:-$HOME/.local/share}/otter-shell/plugins/`, or point `OTTER_PLUGIN_PATH` at `dist/plugins` for development.
 
-- `sd_rect` / `sd_label` / `sd_hit_button`
-- Optional `sd_text_input` for IME-backed fields. Null-check on older hosts.
-- `request_frame`, `log`
+Hosts search these roots in order; the first matching directory name wins:
 
-`BarVTable.on_event` can receive click, hover, focus/blur, and text-input (buffer/preedit flags).
+1. Each colon-separated `OTTER_PLUGIN_PATH` root.
+2. `$XDG_DATA_HOME/otter-shell/plugins`, defaulting to `~/.local/share/otter-shell/plugins`.
+3. `/usr/lib/otter-shell/plugins`.
+4. `otter-shell/plugins` under each `$XDG_DATA_DIRS` entry, defaulting to `/usr/local/share` and `/usr/share`.
 
-Headers and Zig mirrors live in `otter-bar`, `otter-launcher`, and `otter-shell-plugins` (`include/otter_plugin_abi.h`, `abi/abi.zig`).
+`OTTER_PLUGIN_SYSTEM_ROOTS` replaces the system roots for tests and development. An empty value excludes system plugins. Configuration directories hold policy, not plugin code.
 
-## Examples in `otter-shell-plugins`
-
-| Layout id | Host | What it shows |
-|---|---|---|
-| `plugin:hello-label` | bar | Smallest click chip. `on_event` toggles Hello and Clicked. |
-| `plugin:bar-search` | bar | `sd_text_input` plus text-input-v3 IME (preedit, commit, focus) |
-| `plugin:cmd-watch` | bar | Interval command to a label |
-| `plugin:disk-free` | bar | `statfs` free space plus a usage bar |
-| `plugin:idle-inhibit` | bar | logind idle inhibit toggle on click |
-| `plugin:snippet-provider` | launcher | Results provider plus custom SD rows |
-
-`otter-shell-plugins` Depends on `otter-bluetooth-plugin`. That separate package installs `plugin:bluetooth-applet` under `/usr/lib/otter-shell/plugins/bluetooth-applet/` (`provides_bar_widget`). Advanced device management uses Blueman. Source repo is [bluetooth-applet-plugin](https://git.pika-os.com/otter-shell/bluetooth-applet-plugin); the Debian binary is `otter-bluetooth-plugin`.
-
-### hello-label
-
-Smallest SD chip that gets a real click from the host:
-
-`bar_input_dispatch` to the plugin slot to `BarVTable.on_event(CLICK)`.
-
-Left click toggles the label text (Hello / Clicked) and background tint, then calls `host.request_frame`. No side-channel file.
+Add a bar widget to `otter-bar.conf`:
 
 ```conf
-# otter-bar.conf
-layout_right = plugin:hello-label, clock
+layout_right = plugin:my-chip, clock
 ```
 
-### bar-search
+## Enable and grant capabilities
 
-Bar text field using host `sd_text_input` with Wayland text-input-v3. Focus the field, type, and confirm IME preedit/commit. Escape blurs. `$XDG_RUNTIME_DIR/otter-bar-search` is fallback only on old hosts.
+Policy lives in `$XDG_CONFIG_HOME/otter-shell/plugins.conf`, defaulting to `~/.config/otter-shell/plugins.conf`:
 
 ```conf
-layout_center = plugin:bar-search
+my-chip_enabled = true
+my-chip_capabilities = ""
+my-provider_enabled = true
+my-provider_capabilities = spawn
 ```
 
-## Local development
+A plugin receives only capabilities requested in its manifest **and** permitted by policy. A missing `_capabilities` key permits every declared capability; an empty value permits none. `*` permits all declared capabilities, not undeclared ones.
 
-```bash
-git clone https://git.pika-os.com/otter-shell/otter-shell-plugins.git
-cd otter-shell-plugins
-zig build -Doptimize=ReleaseFast pack
-export OTTER_PLUGIN_PATH="$PWD/zig-out/plugins"
-```
+Most plugins default to enabled. Launcher providers `calc`, `emoji`, `clip`, and `search` default to disabled because native launcher extensions already provide those results. `snippet-provider` is also opt-in. Custom providers are not universally disabled.
 
-ABI smoke, no Wayland:
+See [Bindings and capabilities](/developers/lua/bindings) before granting process launch or file access.
 
-```bash
-zig build -Doptimize=ReleaseFast plugin-abi-smoke -- zig-out/plugins/hello-label/libotter_plugin_hello_label.so
-```
+## Reload and failures
 
-Bar plugins: use `otter-bar`'s `zig build -Doptimize=ReleaseFast plugin-abi-smoke -- <so>`.
+The host watches plugin Lua files and manifests. Reload builds a fresh candidate instance. A previously drawn widget must also measure and draw successfully before replacement. A failed candidate leaves the running instance intact and records the error.
 
-## Trust
+A runtime error, memory-limit failure, or watchdog timeout unloads only the failing plugin. Its timers, child-process resources, watches, and subscriptions are released. Fixing its files or requesting **Reload** can load it again.
 
-Installed `.so` plugins are fully trusted and share the host process. Ship examples through `otter-shell-plugins`, or load plugins you built yourself.
+Settings' **Plugins** page shows requested and granted capabilities, host status, heap use, reload/failure counts, recent logs, and reload controls. [Runtime safety](/developers/lua/runtime) explains isolation and limits.
 
-## Related repos
+## Continue
 
-- [otter-shell-plugins](https://git.pika-os.com/otter-shell/otter-shell-plugins): examples package source
-- [bluetooth-applet-plugin](https://git.pika-os.com/otter-shell/bluetooth-applet-plugin): source for Debian `otter-bluetooth-plugin` (`plugin:bluetooth-applet`)
-- [otter-plugin-factory](https://git.pika-os.com/otter-shell/otter-plugin-factory): `opf` CLI and agent skills
-- [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith): Debian packaging
-- [otter-bar](https://git.pika-os.com/otter-shell/otter-bar) / [otter-launcher](https://git.pika-os.com/otter-shell/otter-launcher): host runtimes
+- [Widgets and providers](/developers/lua/widgets-and-providers): export contracts, input, tooltips, menus, and launcher rows.
+- [UI scripts](/developers/lua/ui-scripts): supported app UI replacement and hot reload.
+- [Bindings and capabilities](/developers/lua/bindings): built-in modules and native service bindings.
+- [Runtime safety](/developers/lua/runtime): sandbox, heap cap, CPU watchdog, and privileged scripts.
+
+Source references: [otter-lua](https://git.pika-os.com/otter-shell/otter-lua), [factory's otr guide](https://git.pika-os.com/otter-shell/otter-plugin-factory/src/branch/main/otr/README.md), and [Lua example plugins](https://git.pika-os.com/otter-shell/otter-shell-plugins/src/branch/main/otr/plugins).

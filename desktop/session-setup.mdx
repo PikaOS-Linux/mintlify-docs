@@ -4,30 +4,30 @@ sidebarTitle: "Session setup"
 description: "What to autostart at login, how to bind hotkeys, and where otter-greeter fits in."
 ---
 
-Otter Shell runs on your Wayland compositor. The metapackage installs the apps. It does not configure the compositor. Use this page for autostart and hotkeys.
+Otter Shell runs on your Wayland compositor. The metapackage installs the apps but leaves compositor configuration to you. Add session daemons to autostart and bind hotkeys for apps you open on demand.
 
 ## What runs at login
 
 Autostart these for a working desktop:
 
-| Daemon | Required | Purpose |
-|--------|----------|---------|
-| `otter-bar` | Recommended | Status bar, system tray, workspace indicator |
-| `otter-wallpaper` | Recommended | Desktop background |
-| `otter-theme-gen` | Optional | Wallpaper-reactive color layer (use with `otter-wallpaper`) |
-| `otter-notifications` | Recommended | `notify-send` and app notifications |
-| `otter-osd` | Recommended | Volume/brightness/lock-key overlays |
-| `otter-idle` | Recommended | Screen lock and DPMS on idle |
-| `otter-polkit` | Recommended | Authentication for privileged actions |
-| `otter-nightlight` | Optional | Night light / color temperature (bar widget needs the daemon) |
-| `otter-dock` | Optional | Magnifying application dock |
-| `otter-taskbar` | Optional | Windows-style taskbar (Start, tray, calendar) |
-| `otter-clip daemon` | Optional | Clipboard history |
-| `otter-search` | Optional | File and content search (launcher `file` / `grep` modes) |
-| `otter-weather --watch 900 --write-cache` | Optional | Bar weather widget data |
-| `otter-jade` | Optional | Desktop pet |
-| `otter-transcribe` | Optional | Speech transcription (needs `otter-shell-extras`) |
-| `otter-assist` | Optional | Local AI backend for Otter Assistant (`otter-shell-extras`) |
+| Daemon                                    | Required    | Purpose                                                       |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------- |
+| `otter-bar`                               | Recommended | Status bar, system tray, workspace indicator                  |
+| `otter-wallpaper`                         | Recommended | Desktop background                                            |
+| `otter-theme-gen`                         | Optional    | Wallpaper-reactive color layer (use with `otter-wallpaper`)   |
+| `otter-notifications`                     | Recommended | `notify-send` and app notifications                           |
+| `otter-osd`                               | Recommended | Volume/brightness/lock-key overlays                           |
+| `otter-idle`                              | Recommended | Screen lock and DPMS on idle                                  |
+| `otter-polkit`                            | Recommended | Authentication for privileged actions                         |
+| `otter-nightlight`                        | Optional    | Night light / color temperature (bar widget needs the daemon) |
+| `otter-dock`                              | Optional    | Magnifying application dock                                   |
+| `otter-taskbar`                           | Optional    | Windows-style taskbar (Start, tray, calendar)                 |
+| `otter-clip daemon`                       | Optional    | Clipboard history                                             |
+| `otter-search`                            | Optional    | File and content search (launcher `file` / `grep` modes)      |
+| `otter-weather --watch 900 --write-cache` | Optional    | Bar weather widget data                                       |
+| `otter-jade`                              | Optional    | Desktop pet                                                   |
+| `otter-transcribe`                        | Optional    | Speech transcription (needs `otter-shell-extras`)             |
+| `otter-assist`                            | Optional    | Local AI backend for Otter Assistant (`otter-shell-extras`)   |
 
 Do not autostart one-shot apps: `otter-launcher`, `otter-overview`, `otter-switcher`, `otter-keybindhelp`, `otter-logout`, `otter-screenshot`, `otter-pkg`, `otter-files`. Bind hotkeys or launch from the menu instead.
 
@@ -117,28 +117,26 @@ Config: `/etc/otter-shell/otter-greeter.conf`. See [otter-greeter](/desktop/otte
 3. **otter-logout**: Power menu for lock, logout, suspend, reboot, shutdown
 4. **otter-polkit**: Password dialog for elevated privileges
 
-| Action | Command |
-|--------|---------|
+| Action       | Command                 |
+| ------------ | ----------------------- |
 | Lock session | `loginctl lock-session` |
-| Power menu | `otter-logout` |
+| Power menu   | `otter-logout`          |
 
 ## Protocol requirements
 
-| Component | Protocol / dependency |
-|-----------|---------------------|
-| Bar, launcher, overview, dock, taskbar, night light UI, notifications, OSD, logout, lock, keybind help | `zwlr_layer_shell_v1` (wlroots layer shell) |
-| Night light gamma | `wlr-gamma-control-unstable-v1` |
-| Lock screen | `ext-session-lock-v1` |
-| Screenshot, pick, shot | `ext_image_copy_capture_v1` |
-| Idle daemon | `ext-idle-notify-v1` (optional; compositor IPC fallbacks exist) |
+| Component                                                                                        | Protocol / dependency                                           |
+| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Bar, launcher, overview, dock, taskbar, night light UI, notifications, OSD, logout, keybind help | `zwlr_layer_shell_v1` (wlroots layer shell)                     |
+| Night light gamma                                                                                | `wlr-gamma-control-unstable-v1`                                 |
+| Lock screen                                                                                      | `ext-session-lock-v1`                                           |
+| Screenshot, pick, shot                                                                           | EXT image-copy capture, with WLR screencopy fallback            |
+| Idle daemon                                                                                      | `ext-idle-notify-v1` (optional; compositor IPC fallbacks exist) |
 
 If something fails, check compositor protocol support first.
 
 ## Next steps
 
-<Tip>
-  After autostart, open **`otter-settings`** for bar layout, theme, and terminal fonts.
-</Tip>
+<Tip>After autostart, open **`otter-settings`** for bar layout, theme, and terminal fonts.</Tip>
 
 - [otter-settings](/desktop/otter-settings): graphical config editor
 - [Keybinds](/configuration/keybinds): compositor hotkey reference

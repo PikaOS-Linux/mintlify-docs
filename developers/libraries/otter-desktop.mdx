@@ -1,54 +1,30 @@
 ---
 title: "otter-desktop"
 sidebarTitle: "otter-desktop"
-description: "Desktop integration: icons, .desktop files, D-Bus, PipeWire, PAM, and sysinfo."
+description: "otr D-Bus, application discovery, system monitoring, PAM, and separate PipeWire services."
 ---
 
-`otter-desktop` is how Otter Shell talks to the host: icon themes, `.desktop` entries, session services, audio, brightness, system metrics.
+`otter-desktop` supplies desktop integration through leaf modules grouped under `otter_desktop.dbus`, `.apps`, `.sys`, and `.pam`.
 
-The bar, settings, greeter, lock, and monitor each import a slice of this library.
+Services own their handles and receive environment/I/O explicitly when needed. Callers process readiness and observe state rather than storing callback/userdata pointers into movable application structs.
 
-## Quick example
+## Package boundaries
 
-```zig
-const desktop = @import("otter_desktop");
+- `otter_desktop`: D-Bus, XDG applications/icons, system state, optional PAM.
+- `otter_desktop_pipewire` (`otr/pipewire/`): audio client, playback, capture, video sources.
+- `otter_desktop_lua` (`otr/lua/`): host-registered Lua desktop modules.
 
-var cache = desktop.IconCache.init(allocator);
-defer cache.deinit();
-const icon = cache.lookup("firefox");
-```
+PipeWire is static by default; the separate package can select `pipewire=system`. Applications not using audio avoid that dependency. D-Bus uses vendored basu; PAM remains option-gated.
 
-## Pages in this library
+Lua modules expose specific reads and capability-gated actions. A plugin cannot infer permission to launch, change audio, or power off from permission to inspect public state.
 
-<CardGroup cols={2}>
-  <Card title="Applications" icon="grid" href="/developers/libraries/otter-desktop/applications">
-    Icon lookup, `.desktop` parsing, app list, launcher.
-  </Card>
-  <Card title="D-Bus clients" icon="bus" href="/developers/libraries/otter-desktop/dbus-clients">
-    UPower, MPRIS, NetworkManager, notifications, tray, polkit.
-  </Card>
-  <Card title="System services" icon="gauge" href="/developers/libraries/otter-desktop/system-services">
-    Brightness, SysInfo, PipeWire, SCX, Falcond, Monitor collector.
-  </Card>
-  <Card title="Greeter and auth" icon="lock" href="/developers/libraries/otter-desktop/greeter-and-auth">
-    PAM, session catalog, logind, power actions.
-  </Card>
-</CardGroup>
+## Reference pages
 
-## Build flags
+- [D-Bus clients](/developers/libraries/otter-desktop/dbus-clients)
+- [Applications and icons](/developers/libraries/otter-desktop/applications)
+- [System services](/developers/libraries/otter-desktop/system-services)
+- [Greeter and authentication](/developers/libraries/otter-desktop/greeter-and-auth)
 
-| Flag | Effect |
-|------|--------|
-| `-Denable_dbus=false` | Drop D-Bus clients and dependents |
-| `-Denable_pipewire=false` | Drop PipeWire audio |
-| `-Denable_pam=false` | Drop PAM auth |
+## Source reference
 
-Check `desktop.has_dbus`, `has_pipewire`, `has_pam` at comptime when optional.
-
-<Note>
-  `sd_bus_process()` handles one message per call. Loop until the queue is drained.
-</Note>
-
-## Dependencies
-
-`otter-utils`. Vendored basu (sd-bus) and PipeWire when enabled.
+`otr/otr.toml`, `otr/` in the component repository.

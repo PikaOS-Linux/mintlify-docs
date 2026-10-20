@@ -1,29 +1,37 @@
 ---
 title: "Theme helpers"
 sidebarTitle: "Theme helpers"
-description: "SplatHash, theme_palette, and app_configs in otter-tools-core."
+description: "Native otr SplatHash sampling, semantic palette generation, and small-tool config helpers."
 ---
-
-Color sampling and small-tool config schemas. These stay out of `otter-theme` so CLI helpers do not pull the full theme stack.
 
 ## SplatHash
 
-`splathash` samples dominant colors from image regions. `otter-theme-gen` and `otter-shot` gradients use it to build palettes from screenshots or wallpapers.
+SplatHash modules live under `otter_tools_core.splathash`: `encode`, `decode`, `pack`, `gaussian`, `oklab`, and generated lookup tables.
 
-## Semantic palettes (`theme_palette`)
+Import a leaf module for the operation you need. There is no aggregate `splathash` barrel; `SeedColor` belongs to `splathash.decode`.
 
-Builds coordinated color sets from a seed accent. Feeds `otter-theme-gen` and shot gradients without pulling full `otter-theme` into every small tool.
+Sampling and color conversion stay separate from image loading. Supply decoded/sampled input from the render package when extracting wallpaper colors.
 
-## App config sync
+## Semantic palettes
 
-`app_configs.zig` structs follow the same rules as `otter-config-types`:
+`otter_tools_core.theme_palette` and its supporting modules implement palette roles and generation. Supporting modules include `roles`, `trig`, `material_you`, `analogous`, `vibrant`, `monochromatic`, `direct`, and `temperature`.
 
-- Defaults on every field
-- `?Color = null` for theme-mapped colors
-- Loaded with `otter-conf` in the app, edited in `otter-settings`
+Palette generation supplies colors. It must not rewrite profile geometry, typography, density, or other layout decisions.
 
-Keeping schemas here (not in `otter-config-types`) marks them as small-tool configs separate from desktop daemons.
+## Small-tool configuration
 
-## Boundaries
+`app_configs` supplies schemas for small tools. `config` supplies shared user/system path and load/save behavior with explicit environment:
 
-Don't add Wayland or render imports here. If a helper needs pixels, decode in the app and pass RGBA slices into `splathash` or `theme_palette`.
+- `user_path` / `system_path` build config locations.
+- `load_or_create` loads application defaults and user state.
+- `save_user` writes the user config.
+
+String-bearing configs use `otter_conf.text.Text` and consuming cleanup. Do not write normalized files under `/etc/otter-shell` from a user application.
+
+## Lua boundary
+
+The tools Lua package exposes selected calculation/color/calendar/weather/search helpers. It does not expose a general native SplatHash or theme-palette constructor. Use `otter.theme` for served theme snapshots and controlled preset changes.
+
+## Source reference
+
+`otr/splathash/`, `otr/theme_palette.otr`, `otr/theme_palette/`, `otr/app_configs.otr`, `otr/config.otr` in the component repository.

@@ -1,80 +1,32 @@
 ---
 title: "App config modules"
-sidebarTitle: "Modules"
-description: "Per-app config structs in otter-config-types."
+sidebarTitle: "App config modules"
+description: "Application leaf modules and small-tool schemas in the otr packages."
 ---
 
-One `src/*.zig` file per app or daemon. Each exports a `Config` struct, plus nested widget configs when the app has them.
+## Shared application schemas
 
-| Module | Application | Notes |
-|--------|-------------|-------|
-| `bar` | `otter-bar` | `LayoutConfig`, `ClockConfig`, `WorkspacesConfig`, `BatteryConfig`, widgets |
-| `launcher` | `otter-launcher` | Appearance, sort order, keybinds |
-| `notifications` | `otter-notifications` | Timeout, position, styling |
-| `wallpaper` | `otter-wallpaper` | Mode, paths, transitions |
-| `osd` | `otter-osd` | Volume/brightness overlay |
-| `jade` | `otter-jade` | Layer-shell pet |
-| `logout` | `otter-logout` | Power menu overlay |
-| `overview` | `otter-overview` | Workspace overlay: axis, card scale, captures, empty-workspace policy |
-| `dock` | `otter-dock` | Position, auto-hide, magnification, pinned apps |
-| `taskbar` | `otter-taskbar` | Height, clock, tray, pinned apps, Start menu size |
-| `nightlight` | `otter-nightlight` | Schedule and color temperatures |
-| `polkit` | `otter-polkit` | Auth dialog chrome |
-| `lock` | `otter-lock` | Colors, layout, PAM, focus output |
-| `greeter` | `otter-greeter` | Login UI tokens |
-| `idle` | `otter-idle` | Idle timeouts and dim |
-| `monitor` | `otter-monitor` | `refresh_interval_seconds` (1..3600) |
-| `transcribe` | `otter-transcribe` | Model and device prefs |
-| `term` | `otter-term` | Font, scrollback, palette |
-| `theme_gen` | `otter-theme-gen` | Generation options |
-| `assist` | `otter-assist` | Backend settings (`otter-shell-extras`) |
-| `clicker` | `otter-clicker` | Interval, button, click type, fixed position |
-| `search` | `otter-search` | Roots, budgets, content indexing, `max_results` |
+Each module below is imported as `otter_config_types.<name>` and exposes `Config` plus its supporting types.
 
-### Monitor example
+| Group                      | Modules                                                                |
+| -------------------------- | ---------------------------------------------------------------------- |
+| Panels and navigation      | `bar`, `launcher`, `dock`, `taskbar`, `overview`                       |
+| Session and authentication | `greeter`, `lock`, `polkit`, `idle`, `logout`                          |
+| Feedback and display       | `notifications`, `osd`, `wallpaper`, `nightlight`, `theme_gen`         |
+| Applications and services  | `term`, `jade`, `transcribe`, `assist`, `monitor`, `search`, `clicker` |
 
-```zig
-pub const Config = struct {
-    refresh_interval_seconds: u16 = 3, // clamped 1..3600 at runtime
-};
-```
+Struct nesting and field names define the flat config keys. Read the schema rather than deriving a key from a UI label.
 
-### Assist example
+## Small tools
 
-```zig
-pub const Backend = enum { cpu, vulkan };
+Additional small-tool schemas live in `otter_tools_core.app_configs`, including `Calc`, `Emoji`, `Picker`, `Timer`, `Weather`, `Note`, `Calendar`, `Clip`, `Recorder`, and `Vox`. They are not modules in `otter_config_types`.
 
-pub const Config = struct {
-    backend: Backend = .vulkan,
-    vulkan_device: i32 = -1,
-    idle_seconds: u32 = 120,
-    knowledge_enabled: bool = true,
-    web_enabled: bool = true,
-    web_always_allow: bool = false,
-    weather_enabled: bool = true,
-    desktop_search_enabled: bool = true,
-    desktop_search_always_allow: bool = false,
-    pika_search_url: []const u8 = "https://search.pika-os.com/search?lang=en",
-    knowledge_index_dir: []const u8 = "/usr/lib/otter-assist/indexes",
-    max_tool_calls: u8 = 4,
-    max_web_searches: u8 = 2,
-};
-```
+## File names
 
-### Search example
+Do not assume every file is `otter-<app>.conf`. The Lua schema `file(app)` reports the app's actual file name. Greeter uses `/etc/otter-shell/otter-greeter.conf`; user application paths resolve through XDG helpers.
 
-```zig
-pub const Config = struct {
-    enable_xdg_user_dirs: bool = true,
-    enable_home_config: bool = true,
-    enable_home_shallow: bool = true,
-    content_indexing: bool = true,
-    max_content_file_bytes: u64 = 10 * 1024 * 1024,
-    cache_budget_max_bytes: u64 = 256 * 1024 * 1024,
-    max_files_per_root: u64 = 75_000,
-    max_results: u32 = 10, // daemon clamps to 50
-    root: conf.Dynamic(Root, "root") = .{},
-};
-```
+`defaults` and `parse` Lua tables retain nested sections and use arrays for Dynamic entries. Enum values become tag strings and colors become `#RRGGBBAA` strings.
 
-Small tool configs (`calc`, `emoji`, `clip`, etc.) live in `otter-tools-core` `app_configs.zig`, not here.
+## Source reference
+
+`otr/otr.toml`, `otr/lua/config.otr`, `otr/fields.otr` in the component repository.

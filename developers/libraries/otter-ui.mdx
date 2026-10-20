@@ -1,105 +1,30 @@
 ---
 title: "otter-ui"
 sidebarTitle: "otter-ui"
-description: "Build Otter Shell UIs with Surface Description: layout, controls, input, and bar widgets."
+description: "otr Surface Description frames, controls, drawing helpers, and service-aware widgets."
 ---
 
-`otter-ui` is how Otter Shell apps draw UI. For new apps, use **Surface Description**: build a `SurfaceNode` tree each frame, let `UiFrame` lay it out, emit draw commands, and register hit targets.
+`otter-ui` supplies native Surface Description layout, input, controls, and reusable bar widgets. Import `otter_ui.ui_frame`; its frame facade exports `Node`, `Id`, `UiState`, specs, and dispatch types.
 
-`otter-bar` and a few older code paths still use **widget structs** with comptime registries. Everything else (settings, monitor, lock, greeter, new toplevel windows) should use Surface Description.
+A node tree and `UiFrame(caps)` are frame-scoped borrowed values. Keep long-lived state in `UiState(caps)` and your app model. Images use `ImageHandle` values resolved through the frame's image store.
 
-## Two UI paths
+There is no `@import("otter_ui")` root API. Import other packages directly when you need geometry, render resources, themes, or Wayland types.
 
-| Path | Use when | Examples |
-|------|----------|----------|
-| **Surface Description** | New app UI, forms, dialogs, scrollable panels | `otter-settings`, `otter-monitor`, `otter-lock`, `otter-greeter-ui` |
-| **Bar widgets + registries** | Config-driven horizontal widget rows in daemons | `otter-bar` |
+## Optional integrations
 
-Both paths rasterize through the same `otter-render` `CommandList` and `quad_renderer`.
+`otter_ui_lua` provides `otter.ui`, `otter.ui.style`, `otter.ui.draw`, and `otter.ui.widgets`; it does not make the whole native object model callable from Lua. The host-side `SdSink(caps)` replays Lua SD frames into native UI commands.
 
-## Surface Description in one frame
+`otter_ui_volume` connects the volume widget to `otter_desktop_pipewire`. Ordinary `otter_ui` users do not have to link PipeWire or LuaJIT.
 
-```zig
-const ui = @import("otter_ui");
+## Reference pages
 
-const caps = ui.ui_frame.Capacities{ .elements = 64, .hit_regions = 64, .overlays = 8 };
-var state: ui.UiState(caps) = .{};
+- [Surface Description lifecycle](/developers/libraries/otter-ui/surface-description)
+- [Layout model](/developers/libraries/otter-ui/layout)
+- [Nodes and controls](/developers/libraries/otter-ui/nodes)
+- [Input and overlays](/developers/libraries/otter-ui/input-and-overlays)
+- [Drawing primitives](/developers/libraries/otter-ui/drawing-primitives)
+- [Bar widgets](/developers/libraries/otter-ui/bar-widgets)
 
-var frame = state.begin(.{
-    .viewport = .{ .x = 0, .y = 0, .width = width, .height = height },
-    .scale = surface.scale,
-    .font = font,
-    .theme = &theme,
-});
+## Source reference
 
-const save_id = ui.SurfaceId.namedComptime("save");
-const children = [_]ui.SurfaceNode{
-    ui.SurfaceNode.label(ui.SurfaceId.namedComptime("title"), "Settings", 18, null),
-    ui.SurfaceNode.button(save_id, "Save"),
-};
-const root = ui.SurfaceNode.column(ui.SurfaceId.namedComptime("root"), .{
-    .width = .fill,
-    .height = .fill,
-    .gap = 8,
-    .padding = ui.Padding.uniform(12),
-}, &children);
-
-_ = try frame.render(&root, frame.viewport);
-try frame.finish();
-
-state.rasterize(surface, damage_rects, full_redraw);
-
-if (state.hitTest(pointer)) |hit| {
-    if (hit.id.eql(save_id)) { /* handle click */ }
-}
-```
-
-## Pages in this library
-
-<CardGroup cols={2}>
-  <Card title="Surface Description" icon="layer-group" href="/developers/libraries/otter-ui/surface-description">
-    `UiState`, frame lifecycle, capacities, text shaping, rasterization.
-  </Card>
-  <Card title="Layout model" icon="table-columns" href="/developers/libraries/otter-ui/layout">
-    `NodeKind`, `LayoutSpec`, `SizeRule`, rows, columns, grids, scrolling.
-  </Card>
-  <Card title="Nodes and controls" icon="square" href="/developers/libraries/otter-ui/nodes">
-    Every leaf type, its spec fields, and default hit behavior.
-  </Card>
-  <Card title="Input and overlays" icon="hand-pointer" href="/developers/libraries/otter-ui/input-and-overlays">
-    Hit testing, `dispatch`, focus, popups, tooltips, `UniformList`.
-  </Card>
-  <Card title="Drawing primitives" icon="paintbrush" href="/developers/libraries/otter-ui/drawing-primitives">
-    `drawing.zig` helpers for custom drawing outside Surface Description.
-  </Card>
-  <Card title="Bar widgets" icon="bars" href="/developers/libraries/otter-ui/bar-widgets">
-    `FieldRegistry`, bar widget types, when to skip Surface Description.
-  </Card>
-</CardGroup>
-
-## Key types
-
-| Type | Module | Role |
-|------|--------|------|
-| `UiState(capacities)` | `ui_frame` | Owns commands, elements, hit regions, overlays per frame |
-| `UiFrame` | `ui_frame` | Per-frame layout and draw context from `state.begin()` |
-| `SurfaceNode` / `Node` | `ui_frame_spec_types` | Declarative node: kind, layout, content, children |
-| `SurfaceId` / `Id` | `ui_frame_core_types` | Stable element identity for hits and focus |
-| `FrameOptions` | `ui_frame_core_types` | Viewport, theme, font, input snapshot, text shaping |
-| `UniformList` | `ui_frame_list_types` | Virtualize fixed-height rows without heap allocation |
-| `InputBuffer(cap)` | `input_buffer` | UTF-8 text buffer for `textInput` nodes |
-| `drawing` | `drawing.zig` | Stateless draw helpers used by node emitters |
-
-## Dependencies
-
-`otter-ui` links `otter-geo`, `otter-render`, `otter-theme`, `otter-wayland`, `otter-desktop`, `otter-tools-core`, and `otter-utils`. Load a `Theme` and `Font` and pass them through `FrameOptions` so controls pick up colors from `theme.conf`.
-
-## Reference apps
-
-| App | What to read |
-|-----|--------------|
-| `otter-settings` | Large form UI, tabs, dropdowns, color pickers |
-| `otter-monitor` | Sidebar, tables, search, graphs, quit dialogs |
-| `otter-lock` / `otter-greeter` | `auth_surface` built on Surface Description |
-| `otter-note` | Layer popup with `textInput` and markdown preview |
-| `otter-bar` | Widget registries and `widgets/specs/` |
+`otr/otr.toml`, `otr/` in the component repository.

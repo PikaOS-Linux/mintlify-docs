@@ -1,0 +1,114 @@
+---
+title: "xdg-desktop-portal-otter"
+sidebarTitle: "Desktop portal"
+description: "Native Otter Shell portal backend for file picking, screen sharing, permissions, and desktop integration."
+---
+
+`xdg-desktop-portal-otter` supplies native Otter Shell dialogs and desktop integration to applications using XDG portals, including sandboxed apps. Applications still talk to the public `xdg-desktop-portal` frontend; it activates the Otter backend over the session bus.
+
+The backend comes with `otter-shell-core` and therefore `otter-shell`. To install it separately:
+
+```bash
+pikman install xdg-desktop-portal-otter
+```
+
+The package includes the backend, `otter-portal-dialog`, D-Bus activation, a systemd user service, and backend-selection files. It depends on the public frontend and native helper apps, including Files, Wallpaper, Screenshot, and Pick.
+
+## Select the backend
+
+The installed `/usr/share/xdg-desktop-portal/otter-portals.conf` selects Otter for all portal interfaces. Desktop-specific selection applies when `XDG_CURRENT_DESKTOP` includes `Otter`.
+
+For another desktop name, create or edit `$XDG_CONFIG_HOME/xdg-desktop-portal/portals.conf` (normally `~/.config/xdg-desktop-portal/portals.conf`):
+
+```ini
+[preferred]
+default=otter;
+```
+
+An existing user selection file takes precedence over desktop defaults. Review it before changing it; this choice selects Otter for all interfaces, not only file picking.
+
+At session startup, import the compositor's display environment so activated services can connect to it:
+
+```bash
+dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+```
+
+Both frontend and backend are D-Bus-activated user services. Do not enable them as persistent login services. After changing backend selection, restart them or log out and back in:
+
+```bash
+systemctl --user restart xdg-desktop-portal-otter.service xdg-desktop-portal.service
+```
+
+<Warning>Restarting portal services interrupts active portal sessions, including screen sharing. Finish those sessions first.</Warning>
+
+Otter Shell does not ship a compositor. Portal support depends on the capabilities your compositor and desktop services expose.
+
+## Supported operations and limits
+
+The backend advertises 21 interfaces so requests stay with Otter rather than silently falling through to another desktop's backend. Advertisement is not a promise that every method, option, or compositor capability is available. Unsupported requests fail explicitly; the backend does not forward them to GTK, GNOME, KDE, or another portal backend.
+
+| Area                                              | Native behavior and limits                                                                                                      |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| FileChooser                                       | Open, save, and folder-selection requests through [Files](/apps/otter-files)                                                    |
+| Settings                                          | Shared Otter Shell theme and appearance change signals                                                                          |
+| Screenshot                                        | Fullscreen, active-window, region selection, and color picking when capture capabilities permit                                 |
+| Wallpaper                                         | Local background images through `otter-wallpaper --set`; remote URIs and lockscreen-only requests are unsupported               |
+| Notification                                      | Delivery, updates, removal, actions, icons, and priority through the notification service                                       |
+| ScreenCast and RemoteDesktop                      | Consented screen/window capture and remote input; see below                                                                     |
+| Access, Account, AppChooser, DynamicLauncher, Usb | Native consent or selection; the frontend performs launcher installation and USB device opening                                 |
+| Background, Email, Secret, Lockdown               | Background decisions/autostart, desktop mail composition, per-app secrets, and persisted policy constraints                     |
+| Inhibit                                           | Idle and sleep inhibition; logout and user-switch inhibition are unsupported                                                    |
+| GlobalShortcuts                                   | Registers approved actions when the optional compositor protocol exists; it does not assign keys or rewrite compositor bindings |
+| InputCapture                                      | Requires the optional compositor capture protocol and output geometry; unavailable capabilities are not advertised as usable    |
+| Print                                             | Native preparation and print-to-file; printer discovery, submission, and conversion need optional CUPS tools                    |
+
+Malformed calls and unknown methods are rejected against the backend contract. Unsupported operations return errors rather than success with missing data.
+
+## Native file picker
+
+FileChooser requests use a private OTFP socket bridge to `/usr/bin/otter-files`. The backend checks the picker's user and executable identity, makes a bounded connection attempt, and can start the picker service and retry once.
+
+The picker opens a dedicated window. It does not replace ordinary Files windows. Supported requests include open/save, multiple selection, directory selection, filters, initial locations, and choices. Unrepresentable requests fail instead of silently dropping options. Pending or stale directory listings cannot be accepted.
+
+If picking fails, check that the packaged `otter-files` is installed at its normal path and that the activated services received `WAYLAND_DISPLAY`.
+
+## Screen sharing
+
+ScreenCast offers native monitor/window selection with thumbnails and exports the selected source as a PipeWire video stream. Source availability follows detected capture capabilities. PipeWire, a working session bus, and a compositor capture path are required.
+
+On the EXT image-copy capture path, each stream keeps one capture session and reuses its capture buffer. Frames follow compositor damage rather than reopening a capture session for every frame. The PipeWire source retains the latest frame and supplies it when a consumer starts streaming, so an unchanged desktop has an initial image without waiting for another screen update.
+
+Other capture paths remain capability-dependent. A missing capture capability is not replaced with a synthetic desktop image.
+
+### Restore tokens
+
+ScreenCast can return restore data for the frontend to keep behind an application's restore token. The backend grants at most `persist_mode=1`: reuse while that application runs, not permanent permission across application restarts. A request for longer persistence is limited to that scope.
+
+When the application supplies a valid token and the same source is still available and allowed by its request, the backend can reuse it without showing the source picker again. Otherwise it opens the picker. Combined RemoteDesktop capture does not grant this persistence.
+
+Compatibility depends on the compositor and application. Screen sharing with Niri and Discord still needs confirmation in a real session.
+
+## Remote desktop
+
+RemoteDesktop requests show native device and clipboard consent. Keyboard and pointer input use EIS or portal Notify calls backed by Wayland virtual devices. Notify input is no longer accepted once EIS takes over. Capture can share the same consented session, with absolute pointer input mapped to its stream.
+
+Clipboard transfers are limited to consented sessions and require the relevant data-control capabilities. InputCapture is a separate, capability-dependent interface; selecting this backend does not make unsupported input protocols available.
+
+## Check activation
+
+Read the desktop color-scheme setting through the public frontend:
+
+```bash
+gdbus call --session --dest org.freedesktop.portal.Desktop \
+  --object-path /org/freedesktop/portal/desktop \
+  --method org.freedesktop.portal.Settings.Read \
+  org.freedesktop.appearance color-scheme
+```
+
+Inspect frontend and backend logs if activation or a request fails:
+
+```bash
+journalctl --user -u xdg-desktop-portal.service -u xdg-desktop-portal-otter.service
+```
+
+Check backend selection, the activated services' Wayland environment, helper availability, and compositor capabilities before assuming an application bug.

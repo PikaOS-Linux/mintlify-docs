@@ -1,64 +1,41 @@
 ---
 title: "Presets and loading"
-sidebarTitle: "Presets"
-description: "Bundled theme presets and theme.conf loading in otter-theme."
+sidebarTitle: "Presets and loading"
+description: "Theme loading, legacy migration, presets, ownership, and graph-aware hot reload."
 ---
 
-Twelve comptime presets in `presets.zig`. Load them by name, or let `theme.conf` pick one.
+## Presets
 
-## Bundled presets
+Import `otter_theme.presets`. `presets` is an eleven-entry static table; `find_preset(name)` returns an optional preset value. Presets supply colors, while profiles supply broader theme structure.
 
-| Preset | Style |
-|--------|-------|
-| Otter Shell | Default matte continuous bar |
-| Otter Shell Islands | Grouped floating bar |
-| Catppuccin Mocha / Latte / Frappe / Macchiato | Catppuccin family |
-| Nord | Arctic blue dark |
-| Gruvbox Dark / Light | Retro |
-| Dracula | Purple dark |
-| Tokyo Night | Cool blue dark |
-| One Dark | Atom-inspired dark |
+## Load a theme
 
-```zig
-const presets = @import("otter_theme").presets;
+`loader.load_theme(env, alloc)` returns a `Theme`. `load_theme_from_path` reads an explicit root. Functions that resolve HOME or XDG paths take `std.Env` explicitly.
 
-if (presets.findPreset("Nord")) |preset| {
-    const theme = preset.theme;
-}
-```
+`load_theme_graph` and `load_theme_graph_from_path` return the resolved theme plus owned dependency paths. `LoadedTheme.deinit()` consumes both.
 
-Settings writes built-in preset colors to `preset-colors.conf`. `otter-theme-gen` writes wallpaper colors to `generated-colors.conf`. Root `theme.conf` selects one of those layers with an ordered import and keeps explicit user overrides separate.
+`get_theme_config_path(env, &mut buf)` resolves the user root, respecting an absolute `XDG_CONFIG_HOME`. `get_system_theme_path(&mut buf)` resolves the system fallback.
 
-## Loading
+Loading an existing layered theme is read-only. One exception is legacy flat-theme migration: `load_theme_graph_from_path` can save the old root as `<path>.legacy`, write `custom-colors.conf`, `custom-layout.conf`, and `custom-spacing.conf`, then rewrite the root to select those layers. Use a temporary fixture directory when testing legacy loads.
 
-Root file selection:
+`normalize_theme_config` is a separate write operation reserved for designated Settings/Theme Gen workflows, not ordinary app startup or reload callbacks.
 
-1. `~/.config/otter-shell/theme.conf`
-2. `/etc/otter-shell/theme.conf`
-3. No root file, so compiled Current defaults stand alone
+## Hot reload
 
-Once a root is selected, values resolve from compiled Current defaults, then profile and density imports, optional color layer, and finally explicit root fields.
+Use `otter_theme.theme_watcher.ThemeWatcher`:
 
-```zig
-const theme = otter_theme.loadTheme(allocator);
+1. Initialize with environment and allocator, or `init_from_path` for a fixture root.
+2. Watch `get_fd()` in the app loop.
+3. Drain changes and reload the complete graph.
+4. Retain the previous valid theme if parsing or import resolution fails.
+5. Refresh watched dependencies with the environment after a successful graph change.
 
-var buf: [std.fs.max_path_bytes]u8 = undefined;
-if (otter_theme.getThemeConfigPath(&buf)) |path| {
-    // watch with inotify for hot-reload
-}
-```
+`ThemeWatcher` does not keep a hidden environment singleton. It watches the root and loaded layer/import paths.
 
-`loadThemeFromPath` parses a specific file without the fallback chain.
+## Lua preset writes
 
-## Example theme.conf
+`otter.theme.use_preset(name, on_done)` requires `theme-write`. It queues durable writes outside the Lua watchdog budget and reports completion through the host loop. Only one preset write runs at a time. Read-only subscribers do not gain write access.
 
-```conf
-import = "profiles/current.conf"
-import = "profiles/density-standard.conf"
-import = "generated-colors.conf"
+## Source reference
 
-# Explicit root overrides load last.
-colors_accent = "#89b4faff"
-```
-
-`ThemeWatcher` watches the root file and every imported path. It also catches an imported `generated-colors.conf` created after startup. A failed reload keeps the previous valid theme.
+`otr/presets.otr`, `otr/loader.otr`, `otr/theme_watcher.otr`, `otr/lua/theme.otr` in the component repository.

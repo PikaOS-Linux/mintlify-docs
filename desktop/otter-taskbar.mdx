@@ -4,7 +4,7 @@ sidebarTitle: "Taskbar"
 description: "Windows-style taskbar with grouped windows, Start, clock, tray, and hover previews."
 ---
 
-`otter-taskbar` is a bottom taskbar. Windows group by application. Start, the clock, and the tray sit on one layer-shell strip. The bar reserves space so tiled windows stop above it. Part of the `otter-shell` metapackage.
+`otter-taskbar` groups windows by application on a bottom layer-shell strip alongside **Start**, the clock, and the tray. It reserves space so tiled windows stop above it. The taskbar is part of the `otter-shell` metapackage.
 
 ## Features
 
@@ -18,8 +18,11 @@ description: "Windows-style taskbar with grouped windows, Start, clock, tray, an
 - Drop a `text/uri-list` or GNOME copied-files payload on an app button to launch that app with those URIs
 - Middle-click a pinned button to launch a new instance. Right-click for Launch, New Window, desktop actions, per-window focus, Close, and Pin/Unpin
 - Drag pinned buttons to reorder them. Only the user taskbar config is rewritten
+- Optional workspace buttons (ext-workspace, Otter tags, Niri, and Hyprland)
+- Optional ordering of running apps by window position on Niri and Hyprland
+- Lua widgets between the app buttons and the tray (see [Lua widgets](#lua-widgets))
 
-On compositors that only expose `ext-foreign-toplevel-list-v1`, groups and previews still show, but window actions are missing. Show Desktop and focused-window minimize need wlr foreign-toplevel.
+On compositors that only expose `ext-foreign-toplevel-list-v1`, groups and previews still show, but window actions are missing. Compositors with `otter-tag-v1` version 4 also get focus and Close. Show Desktop and focused-window minimize need wlr foreign-toplevel.
 
 ## Usage
 
@@ -35,9 +38,7 @@ Needs `zwlr_layer_shell_v1`. Auto-hide is off by default. When you turn it on, t
 
 Config: `~/.config/otter-shell/otter-taskbar.conf`
 
-<Tip>
-  The **Taskbar** tab in [otter-settings](/desktop/otter-settings) writes the same file.
-</Tip>
+<Tip>The **Taskbar** tab in [otter-settings](/desktop/otter-settings) writes the same file.</Tip>
 
 Key settings:
 
@@ -47,35 +48,58 @@ auto_hide = false
 auto_hide_delay = 500
 button_width = 160
 icon_size = 24
+sort_running_by_position = false
 pinned_apps =
 show_labels = true
+button_background = true
+show_workspaces = false
 clock_enabled = true
 clock_time_format = %H:%M
 clock_date_format = %d/%m/%Y
 system_tray_enabled = true
 system_tray_icon_size = 18
+lua_widgets =
+lua_widget_capabilities =
 preview_refresh_ms = 1000
 start_menu_width = 420
 start_menu_height = 560
 ```
 
-| Key | Meaning |
-|-----|---------|
-| `height` | Bar height in pixels. Default 48 |
-| `auto_hide` | Opt-in. Default `false` |
-| `auto_hide_delay` | Hide delay in milliseconds. Default 500 |
-| `button_width` | Task button width. Default 160 |
-| `icon_size` | App icon size. Default 24 |
-| `pinned_apps` | Comma-separated desktop ids. Empty by default |
-| `show_labels` | Show window titles on buttons. Default on |
-| `clock_enabled` | Show the clock. Default on |
-| `clock_time_format` / `clock_date_format` | strftime formats |
-| `system_tray_enabled` | Show the tray. Default on. Needs D-Bus at build time |
-| `system_tray_icon_size` | Tray icon size. Default 18 |
-| `preview_refresh_ms` | Hover preview refresh interval. Default 1000 |
-| `start_menu_width` / `start_menu_height` | Start panel size. Defaults 420 and 560 |
+| Key                                       | Meaning                                                                                                                    |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `height`                                  | Bar height in pixels. Default 48                                                                                           |
+| `auto_hide`                               | Opt-in. Default `false`                                                                                                    |
+| `auto_hide_delay`                         | Hide delay in milliseconds. Default 500                                                                                    |
+| `button_width`                            | Task button width. Default 160                                                                                             |
+| `icon_size`                               | App icon size. Default 24                                                                                                  |
+| `sort_running_by_position`                | Order unpinned running apps by their first tiled window on Niri and Hyprland. Pinned buttons keep their order. Default off |
+| `pinned_apps`                             | Comma-separated desktop ids. Empty by default                                                                              |
+| `show_labels`                             | Show window titles on buttons. Default on                                                                                  |
+| `button_background`                       | Draw a background behind app buttons. Default on                                                                           |
+| `show_workspaces`                         | Add clickable workspace buttons. Default off                                                                               |
+| `clock_enabled`                           | Show the clock. Default on                                                                                                 |
+| `clock_time_format` / `clock_date_format` | strftime formats                                                                                                           |
+| `system_tray_enabled`                     | Show the tray. Default on. Needs D-Bus at build time                                                                       |
+| `system_tray_icon_size`                   | Tray icon size. Default 18                                                                                                 |
+| `lua_widgets`                             | Comma-separated Lua widgets: `lua:<dir>` or `plugin:<id>`. Empty by default                                                |
+| `lua_widget_capabilities`                 | Capabilities granted to Lua widgets, comma-separated. Default none                                                         |
+| `preview_refresh_ms`                      | Hover preview refresh interval. Default 1000                                                                               |
+| `start_menu_width` / `start_menu_height`  | Start panel size. Defaults 420 and 560                                                                                     |
+
+For compact icon-only buttons, set `show_labels = false` and `button_background = false`. Hover and keyboard focus stay visible.
 
 Omit color keys to inherit from [theme.conf](/configuration/themes).
+
+### Lua widgets
+
+List widgets in `lua_widgets`:
+
+```conf
+lua_widgets = lua:/path/to/widget,plugin:cmd-watch
+lua_widget_capabilities = spawn
+```
+
+`plugin:<id>` uses the shared [plugin](/desktop/plugins) search path. Each widget gets only the declared capabilities that `lua_widget_capabilities` names. A `tooltip` export shows above the widget on hover. A `menu` export opens a native popup menu on left click. A hit tagged `sd.hit(id, "text")` is a text field that takes the keyboard on click.
 
 ## Dependencies
 

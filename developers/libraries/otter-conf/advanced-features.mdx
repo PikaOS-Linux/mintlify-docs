@@ -1,91 +1,42 @@
 ---
 title: "Advanced features"
-sidebarTitle: "Advanced"
-description: "Nested structs, custom types, Dynamic fields, and import in otter-conf."
+sidebarTitle: "Advanced features"
+description: "Nested structs, custom values, indexed fields, and imports in otr configuration."
 ---
 
-Nested structs, custom parse types, indexed `Dynamic` tables, and `import` for splitting a config across files.
+## Nested fields
 
-## Nested structs
+The parser recursively flattens public nested struct fields. A section `clock` containing `time_format` becomes `clock_time_format`. Define defaults at every level.
 
-Sub-structs flatten with a prefix:
+## Custom values
 
-```zig
-const ClockConfig = struct {
-    enabled: bool = true,
-    text_color: Color = Color.white,
-};
+A custom value type provides public `parse(s: str)` returning an error union and `to_str(self)` returning a NUL-padded fixed byte array. `otter_geo.color.Color` implements this contract.
 
-const Config = struct {
-    clock: ClockConfig = .{},
-};
-```
+Set `strict_custom_values` when an invalid custom value must fail instead of keeping the default.
 
-```conf
-clock_enabled = true
-clock_text_color = "#FF0000FF"
-```
+## Indexed entries
 
-Direct field names win over prefix matches.
+Import `otter_conf.dynamic`. `Dynamic(Elem, prefix)` represents indexed entries such as `button_0_name` and `button_0_command`.
 
-## Custom value types
+- `init(alloc)` creates its owned list.
+- `len()` and `slice()` expose entries.
+- `deinit()` releases entries and their owned fields.
+- Indices are bounded to `0..4095` by `support.max_dynamic_entries`.
 
-Structs with `parse` and `toStr` parse as single string values:
+Elements containing owned text need their own consuming `deinit`, like top-level configs.
 
-```zig
-const Color = packed struct(u32) {
-    pub fn parse(str: []const u8) !Color { ... }
-    pub fn toStr(self: Color) [9]u8 { ... }
-};
-```
+## Imports
 
-```conf
-background = "#FFFFFFFF"
-```
+Import resolution is opt-in through `loader.load_with_imports` or `otter_conf.imports`. A plain `load` does not resolve imported files.
 
-Parse errors keep the field default.
+`imports.resolve` returns merged content and owned paths. `resolve_with_limit` applies a merged-output size bound. Nesting is capped at 128 levels.
 
-## Dynamic collections
+Watch all returned paths, not only the root file. Keep import path ownership separate from the config when moving values out of a load result.
 
-`Dynamic(T, prefix)` is for indexed bind maps and similar tables:
+## Schema-free reads
 
-```zig
-const Bind = struct {
-    mods: u32 = 0,
-    key: []const u8 = "",
-    action: []const u8 = "",
-};
+`parser.entries(alloc, content)` returns typed key/value records for readers without a schema. This differs from parsing a config: your caller decides how to interpret and retain each entry.
 
-const Config = struct {
-    binds: otter_conf.Dynamic(Bind, "bind") = .{},
-};
-```
+## Source reference
 
-Accepted forms:
-
-```conf
-bind = "Super+q,killclient"
-bind_0 = "Super+Return,spawn,kitty"
-bind_1_mods = 4
-bind_1_key = "q"
-bind_1_action = "killclient"
-```
-
-Call `config.binds.deinit(gpa)` to free the arena-backed slice.
-
-## Import
-
-Split config across files:
-
-```conf
-import = "binds.conf"
-import = "rules.conf"
-name = "main"
-```
-
-```zig
-var res = try otter_conf.loadWithImports(Config, gpa, path, .{});
-defer res.deinit(gpa);
-```
-
-Relative imports resolve from the parent file's directory. Circular imports return `error.CircularImport`. Nesting is capped at 128 files.
+`otr/dynamic.otr`, `otr/imports.otr`, `otr/parser.otr`, `otr/support.otr` in the component repository.

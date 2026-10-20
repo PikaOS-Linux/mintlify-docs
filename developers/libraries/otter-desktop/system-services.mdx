@@ -1,53 +1,41 @@
 ---
 title: "System services"
-sidebarTitle: "System"
-description: "Brightness, SysInfo, PipeWire, SCX, Falcond, and Monitor in otter-desktop."
+sidebarTitle: "System services"
+description: "otr system monitoring, brightness, and optional PipeWire package APIs."
 ---
 
-Local system access that is not D-Bus: backlight, `/proc` metrics, PipeWire, scheduler helpers, and the monitor collector.
+## System state
 
-## Brightness
+Import `otter_desktop.sys.sysinfo`, `monitor`, `brightness`, or `falcond`.
 
-Sysfs backlight control with connector-to-device matching for internal panels (eDP, LVDS, DSI).
+`Monitor.refresh(env)` loads the application catalog when needed; `refresh_loaded` reuses it. Process/catalog storage grows with observed data rather than a fixed maximum process table.
 
-```zig
-var brightness = otter_desktop.Brightness.init();
-try brightness.openForConnector("eDP-1");
-brightness.setBrightness(50);
-brightness.adjustBrightness(-10);
-```
+Brightness operations cover panels, keyboard LEDs, and supported DDC paths. I/O and child reaping are explicit inputs to operations that use external helpers.
 
-## SysInfo
+## PipeWire package
 
-CPU percent, memory, disk, load averages, uptime, and CPU temperature from `/proc` and `/sys`. Intel coretemp and AMD k10temp/zenpower sensors only (ignores GPU/network thermal nodes).
+Audio/video modules are in `otter_desktop_pipewire`, not the main `otter_desktop` package.
 
-```zig
-var sysinfo = otter_desktop.SysInfo.init();
-sysinfo.subscribe(onChange, &ctx);
-if (sysinfo.poll()) { /* subscribers notified */ }
-```
+- `pipewire`: device/default state and controls.
+- `playback`: one-shot or streamed floating-point audio.
+- `capture`: capture support used by transcription.
+- `video_source`: exported video frames.
 
-## PipeWire
+C glue translates callbacks into records processed by the otr owner. Resources may move with their owner; they are not arbitrary shared mutable handles. Playback deinitialization drains queued audio according to the stream contract.
 
-Per-device volume, mute, default sink/source switching, and hot-plug via native libpipewire. Volume steps use `roundToStep()` to avoid float drift.
+The package uses vendored static PipeWire by default. `-D pipewire=system` selects the system library.
 
-Requires `-Denable_pipewire=true` (default).
+## Lua
 
-## SCX Loader
+| Module                     | Reads                                                                    | Actions      |
+| -------------------------- | ------------------------------------------------------------------------ | ------------ |
+| `otter.desktop.sysinfo`    | Memory, CPU, temperatures, disks, load, uptime, sensors                  | None         |
+| `otter.desktop.monitor`    | Refreshed processes, applications, cores, GPUs, disks, networks, history | None         |
+| `otter.desktop.brightness` | Devices and current levels                                               | `brightness` |
+| `otter.desktop.volume`     | Sinks, sources, defaults, subscriptions                                  | `audio`      |
 
-Monitor and switch schedulers (`bpfland`, `scx_lavd`, etc.) through `scx_loader` D-Bus service.
+The host provides its environment when registering native-service modules. Volume opens PipeWire lazily; it is not implied by importing native UI primitives.
 
-## Falcond
+## Source reference
 
-Reads Falcond daemon status file via inotify. Surfaces performance mode and active SCX profile to the bar `falcond` widget.
-
-## Monitor collector
-
-`desktop.Monitor` polls procfs and sysfs with bounded buffers for `otter-monitor`:
-
-- Processes and applications
-- CPU, memory, GPU (sysfs or NVML)
-- Disk and network
-- 60-sample history rings
-
-Collection logic stays here so the monitor app can focus on UI.
+`otr/sys/`, `otr/pipewire/otr.toml`, `otr/pipewire/playback.otr`, `otr/lua/` in the component repository.

@@ -4,7 +4,7 @@ sidebarTitle: "Calculator"
 description: "Evaluate math expressions from the terminal or launcher. Pass --copy to send the result to clipboard via otter-copy."
 ---
 
-`otter-calc` evaluates math expressions from the command line. Type an expression, get the result. Pass `--copy` to put it on the clipboard.
+`otter-calc` evaluates math expressions from the command line. Pass `--copy` to put the result on the clipboard.
 
 ## Usage
 
@@ -26,8 +26,4 @@ copy_result = false
 
 - `copy_result`: `true` always copies the result without passing `--copy`
 
-<Note>
-  `--copy` uses the shared Otter clipboard helper (`otter-copy`). In packaged
-  installs, `wl-copy` is shadowed to `otter-copy` so clipboard integration works
-  transparently.
-</Note>
+<Note>`--copy` uses the shared Otter clipboard helper (`otter-copy`). In packaged installs, `wl-copy` is shadowed to `otter-copy` so clipboard integration works transparently.</Note>

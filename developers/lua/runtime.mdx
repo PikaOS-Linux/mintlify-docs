@@ -1,0 +1,66 @@
+---
+title: "Lua runtime safety"
+sidebarTitle: "Runtime safety"
+description: "Understand LuaJIT sandboxing, memory caps, thread-CPU budgets, and privileged script rules."
+---
+
+Otter Shell's LuaJIT host isolates each plugin in its own `lua_State`. Native code retains ownership of rendering and services. This is an in-process language sandbox, **not an OS process sandbox**. Only install plugins you trust and review their capabilities.
+
+## Sandbox
+
+The runtime opens base, table, string, math, and bit libraries. It removes dynamic code-loading and environment escape APIs, including `load`, `loadstring`, `loadfile`, `dofile`, `string.dump`, `newproxy`, `collectgarbage`, `getfenv`, `setfenv`, and `module`.
+
+It never opens `io`, `os`, `package`, or `debug`. The `jit` global is removed after compiler setup. LuaJIT FFI is compiled out. Entry chunks and local modules load in text mode; Lua bytecode is refused.
+
+A host-controlled `require` exposes registered native bindings and local Lua modules. Local modules cannot resolve outside the script root. Script files must be regular files, verified on their open descriptors, so a FIFO disguised as `.lua` cannot block a load.
+
+Capability checks limit access to [native bindings](/developers/lua/bindings). They do not confine external programs launched with `spawn`.
+
+## Memory cap
+
+A tracked Lua allocator enforces `runtime.Options.cap_bytes`, which defaults to 32 MiB, while Lua runs. Host-side state pushes receive headroom to avoid allocation failure escaping into an unprotected Lua panic.
+
+This is a Lua allocation cap, not a cap on total process RSS, native library allocations, or child-process memory. Hosts can choose different runtime options.
+
+Frames are bounded separately: at most 4096 nodes and 64 KiB of text. Built-in timers, processes, file watches, file reads, and captured output also have fixed limits.
+
+## Thread-CPU watchdog
+
+Every guarded Lua call uses a per-thread POSIX timer based on **thread CPU time**, not wall-clock time. The default budget is **50 ms**, with a **20 ms grace interval**. A script does not consume its CPU budget merely because the desktop is busy and its thread waits to be scheduled.
+
+- The first expiry requests an interpreter hook that raises a watchdog error.
+- A JIT-compiled trace cannot be interrupted by that hook. If it still runs after the grace interval, the guard aborts back to the protected call and abandons the runtime.
+- The bundled LuaJIT string matcher is patched to poll the stop flag, so expensive pattern matching can raise a normal watchdog error too.
+- If the requested watchdog timer cannot be created, the call is refused rather than run unguarded.
+
+One budget covers an event-delivery batch, not each callback separately. Keep callbacks short and use native asynchronous services instead of long computation inside Lua.
+
+Do not treat the watchdog as a deadline for arbitrary native binding or child-process work. Binding authors must bound their own work and release native resources correctly.
+
+## Faults and reload
+
+A failed plugin call unloads that plugin, preserves its failure message, and releases its instance-owned timers, process resources, watches, and subscriptions. Other plugins remain loaded. Fixing the files or requesting reload can recover it.
+
+Reload is transactional. A candidate gets a new runtime; a previously drawn widget must measure and draw successfully before replacement. Failed candidates keep the old working instance.
+
+UI scripts similarly load and render a candidate against current host state before replacement. A failed UI update retains the previous frame. An abandoned UI runtime can be rebuilt when new state arrives.
+
+## Privileged surfaces
+
+A host marked privileged rejects user UI code and environment overrides:
+
+- Search only `/usr/local/share/otter-shell/ui` and `/usr/share/otter-shell/ui`.
+- Ignore `OTTER_UI_DIR`, user XDG data locations, and user `ui.conf` choices.
+- Require the script, local modules, and every directory in their paths to be root-owned and writable by no other user.
+- Refuse symlinks in those paths.
+- Recheck the opened file descriptor before reading script contents.
+
+These checks apply to privileged **UI-script lookup**. They do not mean an ordinary user plugin runs with elevated privileges.
+
+## Host integration rules
+
+Lua callbacks run on the host thread through guarded delivery, never directly from C callbacks or worker threads. Bindings use checked generational integer handles instead of exposing pointers. Each instance releases its own native resources on unload/reload.
+
+LuaJIT errors unwind past native frames. Native binding code must validate inputs before acquiring resources and must not hold a pending `defer` across a raising LuaJIT call. The runtime's unwind gate checks those call boundaries.
+
+Source references: `otter-lua/otr/runtime.otr` (`Options` and sandbox prelude), `otr/c/guard.c`, `otr/read_file.otr`, `otr/search.otr`, `otr/plugins.otr`, and `vendor/luajit-watchdog.patch`.

@@ -8,10 +8,10 @@ description: "Wayland display manager with PAM login, fingerprint auth, and Acco
 
 ## Components
 
-| Binary | Role |
-|--------|------|
-| `otter-greeterd` | Root daemon: PAM, logind seats, AccountsService, IPC, session launch |
-| `otter-greeter-ui` | Unprivileged Wayland login UI |
+| Binary             | Role                                                                 |
+| ------------------ | -------------------------------------------------------------------- |
+| `otter-greeterd`   | Root daemon: PAM, logind seats, AccountsService, IPC, session launch |
+| `otter-greeter-ui` | Unprivileged Wayland login UI                                        |
 
 The greeter UI runs on **Hyprland** for the login screen only. Your session compositor is separate.
 
@@ -37,12 +37,12 @@ Package install creates a dedicated system user named `otter-greeter`.
 
 Main config: `/etc/otter-shell/otter-greeter.conf`
 
-| Setting | Default |
-|---------|---------|
+| Setting            | Default                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------- |
 | Greeter compositor | `/usr/bin/start-hyprland -- --config /etc/otter-shell/otter-greeter-hyprland.conf` |
-| Display VT | `7` |
-| State path | `/var/lib/otter-greeter/state.conf` |
-| Runtime sockets | `/run/otter-greeter/<seat>.sock` |
+| Display VT         | `7`                                                                                |
+| State path         | `/var/lib/otter-greeter/state.conf`                                                |
+| Runtime sockets    | `/run/otter-greeter/<seat>.sock`                                                   |
 
 The greeter discovers Wayland sessions from configured `.desktop` directories. X11 sessions are ignored.
 

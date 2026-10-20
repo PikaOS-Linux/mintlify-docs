@@ -1,56 +1,41 @@
 ---
 title: "Tokens"
 sidebarTitle: "Tokens"
-description: "Theme color, bar, popup, spacing, and surface tokens in otter-theme."
+description: "Theme color roles and resolved layout metrics in the otr API."
 ---
 
-`Theme` groups tokens by role. Everything has a default (Otter Shell matte preset). Apps read these through `FrameOptions.theme`.
+Import `otter_theme.theme`. `Theme` holds four sections:
 
-## Colors
+| Section   | Purpose                                             |
+| --------- | --------------------------------------------------- |
+| `colors`  | Twelve semantic color roles                         |
+| `layout`  | Window/chrome geometry and style choices            |
+| `spacing` | Shared density and spacing values                   |
+| `globals` | Fonts, icons, layer paths, opacity, shared settings |
 
-| Token | Role |
-|-------|------|
-| `background` | App view background |
-| `background_alt` | Recessed controls |
-| `foreground` | Primary text |
-| `muted` | Secondary text |
-| `accent` | Focus, links, progress |
-| `active` | Selected background |
-| `success` / `warning` / `critical` | Status semantics |
-| `charging` | Positive action accent |
+`Color` is the geometry package's color type. Layout and global text fields use `otter_conf.text.Text`, making the complete theme an owned resource.
 
-## Bar
+## Resolve semantic values
 
-`bar.height`, `bar.padding`, `bar.background`, `bar.item_background`, `bar.item_hover`, `bar.item_active`, `bar.separator`, and related chrome tokens.
+Call methods on a borrowed theme:
 
-## Popup
+- `surface_color`, `panel_color`, `popup_color`, `widget_color`.
+- `overlay_color`, `shadow_color`, `highlight_edge`, `clear_color`.
+- `bar_background`, `bar_group_background`, `bar_group_border`.
+- `dock_background`, `dock_border`.
+- `label_size`, `title_size`, `display_size`, `secondary_text_size`.
+- Decoration button sizing and padding helpers.
 
-Shared menu and tooltip styling: `popup.background`, `popup.border`, `popup.highlight`, `popup.selected`, `popup.padding`, `popup.item_height`.
+Use these values rather than reproducing opacity or geometry rules in each app. Explicit per-app config overrides still take priority where an app supports them.
 
-## Spacing and fonts
+## Profiles and density
 
-`spacing.widget_padding`, `spacing.icon_size`, `spacing.item_spacing`, `fonts.font_family`, `fonts.tooltip_size`.
+`otter_theme.profiles.current()` and `bank()` each return a fresh theme resource. `compact`, `standard`, and `spacious` are plain `Spacing` constants.
 
-## Icons
+## Lua snapshot
 
-`icons.theme` selects an XDG icon theme name or absolute theme directory. Semantic icons check it before bundled SVG fallbacks. The flat config key is `icons_theme`.
+`otter.theme.get()` returns `{ generation, colors, layout, spacing, globals, tokens }`. Colors are `0xRRGGBBAA`, suitable for SD drawing. `color(role)` validates role names; it is not an arbitrary field lookup.
 
-## Surfaces and density
+## Source reference
 
-`surfaces.view`, `surfaces.surface`, `surfaces.surface_alt`, `surfaces.focus_ring`, plus `density.control_height`, `density.control_radius`, `density.panel_radius`.
-
-## Decorations
-
-`decorations.prefered_decoration_type` picks how XDG toplevels ask for decorations: `none`, `server`, `client`, or `client_floating`. Default is `server`.
-
-## CSD
-
-When client-side decorations are active, `csd` styles them. `button_layout` is GTK-style (default `:sbc`). The rest covers titlebar colors and sizes, button colors, and border radius/size.
-
-## Transparency
-
-`transparency.global_alpha` scales surface opacity (percentage 0..100). `transparency.background_blur` (default `true`) asks the compositor to blur behind translucent regions when supported.
-
-## Config keys
-
-`theme.conf` flattens nested structs: `colors_accent`, `bar_height`, `popup_padding`, `spacing_icon_size`, etc. See [Presets and loading](/developers/libraries/otter-theme/presets-and-loading).
+`otr/theme.otr`, `otr/profiles.otr`, `otr/lua/theme.otr` in the component repository.

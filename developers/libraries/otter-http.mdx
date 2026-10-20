@@ -1,0 +1,57 @@
+---
+title: "otter-http"
+sidebarTitle: "otter-http"
+description: "Native otr HTTP/HTTPS transfers with blocking and descriptor-driven clients."
+---
+
+`otter-http` uses otr's `std.http`, `std.tls`, and `std.flate`. It does not use libcurl or OpenSSL. Import `otter_http.client`.
+
+## Requests and responses
+
+`Request` borrows URL, headers, and body for `start`/`fetch`; the transfer copies them. Supported methods are GET, POST, PUT, PATCH, DELETE, and HEAD. Only HTTP and HTTPS URLs are followed.
+
+| Request field        | Default                                                |
+| -------------------- | ------------------------------------------------------ |
+| `timeout_ms`         | 30000 for the whole exchange                           |
+| `connect_timeout_ms` | 10000 for each connection                              |
+| `max_body`           | 4 MiB of decoded data                                  |
+| `max_redirects`      | 5                                                      |
+| `redirect_policy`    | `.any`; `.https_only` and `.same_origin` are available |
+| `use_env_proxy`      | true                                                   |
+
+`Response` owns its body and header lists; call `deinit()`. `outcome == .ok` means a response arrived, including non-2xx statuses. `ok()` additionally requires 2xx. `header(name)` searches final response headers case-insensitively.
+
+## Blocking calls
+
+`fetch(env, request)` suits one-shot tools. It takes `std.Env` for proxy and certificate-root settings. Always check transport outcome and HTTP status before parsing the body.
+
+## Event-loop integration
+
+`Client.init(env)` creates an owned client. Watch `fd()` in your app loop, call `drive()` when readable, then drain `next_done()` and `take(id)`. Each taken response becomes the caller's resource.
+
+`cancel(id)` suppresses a running request's completion. IDs are generational; stale IDs do not name a replacement transfer. `deinit()` cancels requests still held by the client.
+
+Socket transfers use readiness events without worker threads. Request startup is partly blocking: `start` performs blocking DNS resolution before returning.
+
+## TLS and limits
+
+Certificate verification cannot be disabled. Roots come from `SSL_CERT_FILE`, `SSL_CERT_DIR`, or the distribution bundle; native hosts may supply a CA file. gzip/deflate bodies are decoded before applying `max_body`. Redirect restrictions apply at every hop.
+
+## Lua
+
+`otter_http_lua` registers `otter.http` under `net`. Host setup supplies the environment before plugin loading.
+
+```lua
+local http = require("otter.http")
+local id = http.get("https://example.org/", function(status, body, err, content_type)
+  if err == nil and status >= 200 and status < 300 then
+    -- Consume body here.
+  end
+end)
+```
+
+`request(options, callback)` supports method, headers, body, and bounded request options. `cancel(id)` prevents its callback. Lua bodies default to 1 MiB and cap at 2 MiB; plugin unload cancels its requests. Plugins cannot disable TLS verification or choose a CA file.
+
+## Source reference
+
+`otr/client.otr`, `otr/lua/http.otr`, `otr/API.md` in the component repository.

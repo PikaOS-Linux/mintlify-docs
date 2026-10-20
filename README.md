@@ -1,55 +1,40 @@
-# Mintlify Starter Kit
+# Otter Shell documentation
 
-Use the starter kit to get your docs deployed and ready to customize.
+Mintlify documentation for Otter Shell. The site covers end-user setup, packaged applications, configuration, the otr developer libraries, and LuaJIT extensions.
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
+## Source of truth
 
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
+- `docs.json` defines navigation and site settings.
+- MDX pages contain YAML frontmatter and Mintlify components.
+- The shell workspace is `/home/ferreo/otter-shell`; each package has its own repository.
+- `sources/` contains imported reference snapshots, not current API contracts or published guide pages. Preserve their historical provenance; verify current claims against package source and manifests instead.
+- Read `AGENTS.md` for terminology, package boundaries, and writing conventions.
 
-**[Follow the full quickstart guide](https://starter.mintlify.com/quickstart)**
+Otter Shell v0.13.0 uses otr 0.2.0 and LuaJIT extensions. Some native dependencies and separate products use Zig and have their own build instructions.
 
-## AI-assisted writing
+## Local preview
 
-Set up your AI coding tool to work with Mintlify:
+The Mintlify CLI requires Node.js 18 or newer. Install the CLI, then run it from this repository:
 
 ```bash
-npx skills add https://mintlify.com/docs
+bun add --global mint
+mint dev --telemetry=false
 ```
 
-This command installs Mintlify's documentation skill for your configured AI tools like Claude Code, Cursor, Windsurf, and others. The skill includes component reference, writing standards, and workflow guidance.
+The preview normally opens at `http://localhost:3000`.
 
-See the [AI tools guides](/ai-tools) for tool-specific setup.
+## Verification
 
-## Development
-
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
-
-```
-npm i -g mint
+```bash
+mint --telemetry=false validate
+mint --telemetry=false broken-links --check-anchors --check-redirects
+git diff --check
 ```
 
-Run the following command at the root of your documentation, where your `docs.json` is located:
+Check that every published MDX page has a navigation entry, all local links and anchors resolve, and code examples match the current native or Lua API. Link validation does not establish that external sites are reachable or that an example behaves correctly at runtime.
 
-```
-mint dev
-```
+Use `pikman` for end-user package installation examples. Check metapackage membership against `otter-zenith/debian/control`; do not imply that Otter Shell supplies a default compositor or that every advertised portal method is implemented.
 
-View your local preview at `http://localhost:3000`.
+## Publishing
 
-## Publishing changes
-
-Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app) to propagate changes from your repo to your deployment. Changes are deployed to production automatically after pushing to the default branch.
-
-## Need help?
-
-### Troubleshooting
-
-- If your dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
-- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
-
-### Resources
-- [Mintlify documentation](https://mintlify.com/docs)
+Review changes locally before pushing. The connected Mintlify deployment can publish pushes to the default branch, so a push can change the production site. Publishing documentation does not release shell binaries or change Zenith package pins.

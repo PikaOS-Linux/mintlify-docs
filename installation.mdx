@@ -4,20 +4,21 @@ sidebarTitle: "Installation"
 description: "Install Otter Shell with pikman. Add otter-shell-extras for speech and Assistant, or otter-gaming-utils for Otter Bench and HUD."
 ---
 
-Otter Shell ships as native packages on PikaOS. They are built and versioned together in [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith). Gaming tools ship from [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils). Install with **pikman**.
+Install Otter Shell's native PikaOS packages with pikman. They are built and versioned together in [otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith). Gaming tools ship from [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils).
 
-Current packaging train in zenith pins is **0.11.104**. A few apps pin higher. otter-clip is at 0.11.107.
+Otter Shell v0.13.0 uses otr 0.2.0 to build its native applications. You do not need a compiler to install or run the packages.
 
 ## System requirements
 
-- **PikaOS**: Otter Shell packages target PikaOS repositories.
-- **Wayland compositor**: Otter Shell is Wayland-only. Pick a compositor that supports the protocols your apps need. The bar, launcher, and most overlays want `zwlr_layer_shell_v1`.
-- **No Zig runtime needed**: Apps ship as native binaries. You do not need Zig.
+- Otter Shell packages target PikaOS repositories.
+- You need a Wayland compositor that supports the protocols your apps use. The bar, launcher, and most overlays need `zwlr_layer_shell_v1`.
+- Apps ship as native binaries with their Otter libraries statically linked. You do not need otr or Zig on your desktop.
 
 <Note>
   Otter Shell does **not** install a compositor. You pick and configure your own Wayland session. Hyprland, Sway, and Niri are common on PikaOS. The display manager (`otter-greeter`) uses Hyprland only for the login screen. Your user session compositor is separate.
 
-  Screenshot and color-picker tools (`otter-screenshot`, `otter-pick`, `otter-shot`) need the compositor to expose `ext_image_copy_capture_v1`.
+Screenshot and color-picker tools (`otter-screenshot`, `otter-pick`, `otter-shot`) need the compositor to expose `ext_image_copy_capture_v1`.
+
 </Note>
 
 ## Install with pikman
@@ -29,6 +30,7 @@ Current packaging train in zenith pins is **0.11.104**. A few apps pin higher. o
     ```bash
     pikman update
     ```
+
   </Step>
 
   <Step title="Install Otter Shell">
@@ -38,7 +40,7 @@ Current packaging train in zenith pins is **0.11.104**. A few apps pin higher. o
     pikman install otter-shell
     ```
 
-    That pulls every component on the same packaging train. See the package table below.
+    That installs the base desktop and its dependencies. It does not install every package built by zenith. See the exact metapackage dependencies below.
 
     For speech tools and Otter Assistant:
 
@@ -46,7 +48,7 @@ Current packaging train in zenith pins is **0.11.104**. A few apps pin higher. o
     pikman install otter-shell-extras
     ```
 
-    `otter-shell` **recommends** `otter-shell-extras` but does not require it. Transcription, voice synthesis, Assistant, and their model packages stay out of the base metapackage.
+    `otter-shell-extras` is separate from the base metapackage. Transcription, voice synthesis, Assistant, and their model packages are not dependencies of `otter-shell`.
 
     For Otter Bench and the in-game HUD:
 
@@ -54,7 +56,8 @@ Current packaging train in zenith pins is **0.11.104**. A few apps pin higher. o
     pikman install otter-gaming-utils
     ```
 
-    Separate from `otter-shell`. See [otter-bench](/apps/otter-bench).
+    This metapackage is separate from `otter-shell`. See [otter-bench](/apps/otter-bench).
+
   </Step>
 
   <Step title="Install individual packages (optional)">
@@ -63,76 +66,92 @@ Current packaging train in zenith pins is **0.11.104**. A few apps pin higher. o
     ```bash
     pikman install otter-term otter-bar otter-launcher
     ```
+
   </Step>
 </Steps>
 
 ## Metapackages
 
-| Metapackage | Contents |
-|-------------|----------|
-| `otter-shell` | Full desktop shell: bar, launcher, dock, taskbar, file manager, package manager, workspace overview, keybind help, night light, notifications, wallpaper, theme generator, OSD, logout, settings, polkit, lock, idle, greeter, terminal, system monitor, Jade pet, screenshot tools, clipboard, notes, timer, weather, example plugins, plugin factory, and other core helpers. Includes `otter-shell-fonts`. |
+| Metapackage          | Contents                                                                                                                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `otter-shell-core`   | Core shell daemons, launcher, terminal, capture tools, overview, search, clipboard, weather, portal backend, and fonts. Exact direct dependencies are listed below.                                               |
+| `otter-shell`        | `otter-shell-core` plus desktop applications, dock, taskbar, settings, greeter, night light, and plugin tools listed below.                                                                                       |
 | `otter-shell-extras` | Speech tools (`otter-transcribe`, `otter-vox`), Otter Assistant (`otter-assist`, `otter-assistant`, `otter-assist-data`), and model packages (`otter-assist-model`, `otter-transcribe-model`, `otter-vox-model`). |
-| `otter-gaming-utils` | Otter Bench suite: `otter-bench`, `otter-benchd`, `otter-benchctl`, `otter-hud`, `otter-bench-hardwared`. |
+| `otter-gaming-utils` | Otter Bench suite: `otter-bench`, `otter-benchd`, `otter-benchctl`, `otter-hud`, `otter-bench-hardwared`.                                                                                                         |
+
+## Exact metapackage dependencies
+
+Zenith's `debian/control` defines these direct dependencies:
+
+- **`otter-shell-core`**: `xdg-desktop-portal-otter`, `otter-bar`, `otter-launcher`, `otter-term`, `otter-wallpaper`, `otter-osd`, `otter-notifications`, `otter-polkit`, `otter-idle`, `otter-lock`, `otter-logout`, `otter-theme-gen`, `otter-search`, `otter-clip`, `otter-weather`, `otter-screenshot`, `otter-rec`, `otter-overview`, `otter-shell-fonts`.
+- **`otter-shell`**: `otter-shell-core`, `otter-files`, `otter-dock`, `otter-taskbar`, `otter-keybindhelp`, `otter-settings`, `otter-pkg`, `otter-monitor`, `otter-jade`, `otter-clicker`, `otter-shot`, `otter-cal`, `otter-calc`, `otter-emoji`, `otter-note`, `otter-pick`, `otter-timer`, `otter-greeter`, `otter-shell-plugins`, `otter-plugin-factory`, `otter-nightlight`.
+- **`otter-shell-extras`**: `otter-transcribe`, `otter-vox`, `otter-assist`, `otter-assistant`, `otter-assist-data`, `otter-assist-model`, `otter-transcribe-model`, `otter-vox-model`.
+
+Dependencies of those packages can pull in more packages. For example, `otter-shell-plugins` depends on `otter-bluetooth-plugin`, and the portal backend depends on `otter-files` and `otter-pick`. The core metapackage is not a strict exclusion list for desktop apps.
 
 ## Packages in `otter-shell`
 
-Installed by `pikman install otter-shell`:
+Installed directly or transitively by `pikman install otter-shell`:
 
-| Package | Description |
-|---------|-------------|
-| `otter-bar` | Status bar with widgets, system tray, and MPRIS |
-| `otter-launcher` | Application launcher overlay |
-| `otter-files` | File manager (local, SFTP, SMB) |
-| `otter-dock` | Application dock with magnification |
-| `otter-taskbar` | Windows-style taskbar with Start and tray |
-| `otter-overview` | Workspace overview overlay. Also ships `otter-switcher` |
-| `otter-keybindhelp` | Searchable compositor shortcut overlay |
-| `otter-search` | Desktop search daemon (launcher `file` / `grep` modes) |
-| `otter-notifications` | Notification daemon (freedesktop.org spec) |
-| `otter-wallpaper` | Wallpaper daemon |
-| `otter-theme-gen` | Wallpaper-reactive theme generator |
-| `otter-osd` | On-screen display for volume, brightness, and lock keys |
-| `otter-logout` | Power menu overlay |
-| `otter-settings` | Graphical settings editor |
-| `otter-pkg` | Graphical apt package manager |
-| `otter-polkit` | Polkit authentication agent |
-| `otter-lock` | Session lockscreen |
-| `otter-idle` | Idle management daemon |
-| `otter-nightlight` | Color-temperature / night-light daemon |
-| `otter-greeter` | Display manager (login screen) |
-| `otter-term` | Terminal emulator |
-| `otter-monitor` | System monitor with process tables and resource graphs |
-| `otter-jade` | Desktop pet |
-| `otter-screenshot` | Region and fullscreen screenshots with annotation |
-| `otter-shot` | Product-shot composer |
-| `otter-rec` | Screen recorder |
-| `otter-clip` | Clipboard manager (`otter-copy` / `otter-paste`, shadows `wl-copy` / `wl-paste`) |
-| `otter-note` | Sticky notes |
-| `otter-cal` | Calendar helper for the bar |
-| `otter-calc` | Calculator helper |
-| `otter-emoji` | Emoji picker helper |
-| `otter-timer` | Countdown timer |
-| `otter-pick` | Color picker |
-| `otter-clicker` | Auto-clicker with point selection |
-| `otter-weather` | Weather fetcher and bar widget |
-| `otter-shell-fonts` | Bundled fallback fonts |
-| `otter-shell-plugins` | Example bar and launcher `.so` plugins |
-| `otter-bluetooth-plugin` | Bluetooth applet for the bar (pulled by `otter-shell-plugins`) |
-| `otter-plugin-factory` | `opf` CLI to scaffold and pack plugins |
+| Package                                                      | Description                                                                      |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `otter-shell-core`                                           | Core session metapackage                                                         |
+| [`xdg-desktop-portal-otter`](/apps/xdg-desktop-portal-otter) | Native desktop portal backend                                                    |
+| `otter-bar`                                                  | Status bar with widgets, system tray, and MPRIS                                  |
+| `otter-launcher`                                             | Application launcher overlay                                                     |
+| `otter-files`                                                | File manager (local, SFTP, SMB)                                                  |
+| `otter-dock`                                                 | Application dock with magnification                                              |
+| `otter-taskbar`                                              | Windows-style taskbar with Start and tray                                        |
+| `otter-overview`                                             | Workspace overview overlay. Also ships `otter-switcher`                          |
+| `otter-keybindhelp`                                          | Searchable compositor shortcut overlay                                           |
+| `otter-search`                                               | Desktop search daemon (launcher `file` / `grep` modes)                           |
+| `otter-notifications`                                        | Notification daemon (freedesktop.org spec)                                       |
+| `otter-wallpaper`                                            | Wallpaper daemon                                                                 |
+| `otter-theme-gen`                                            | Wallpaper-reactive theme generator                                               |
+| `otter-osd`                                                  | On-screen display for volume, brightness, and lock keys                          |
+| `otter-logout`                                               | Power menu overlay                                                               |
+| `otter-settings`                                             | Graphical settings editor                                                        |
+| `otter-pkg`                                                  | Graphical apt package manager                                                    |
+| `otter-polkit`                                               | Polkit authentication agent                                                      |
+| `otter-lock`                                                 | Session lockscreen                                                               |
+| `otter-idle`                                                 | Idle management daemon                                                           |
+| `otter-nightlight`                                           | Color-temperature / night-light daemon                                           |
+| `otter-greeter`                                              | Display manager (login screen)                                                   |
+| `otter-term`                                                 | Terminal emulator                                                                |
+| `otter-monitor`                                              | System monitor with process tables and resource graphs                           |
+| `otter-jade`                                                 | Desktop pet                                                                      |
+| `otter-screenshot`                                           | Region and fullscreen screenshots with annotation                                |
+| `otter-shot`                                                 | Product-shot composer                                                            |
+| `otter-rec`                                                  | Screen recorder                                                                  |
+| `otter-clip`                                                 | Clipboard manager (`otter-copy` / `otter-paste`, shadows `wl-copy` / `wl-paste`) |
+| `otter-note`                                                 | Sticky notes                                                                     |
+| `otter-cal`                                                  | Calendar helper for the bar                                                      |
+| `otter-calc`                                                 | Calculator helper                                                                |
+| `otter-emoji`                                                | Emoji picker helper                                                              |
+| `otter-timer`                                                | Countdown timer                                                                  |
+| `otter-pick`                                                 | Color picker                                                                     |
+| `otter-clicker`                                              | Auto-clicker with point selection                                                |
+| `otter-weather`                                              | Weather fetcher and bar widget                                                   |
+| `otter-shell-fonts`                                          | Bundled fallback fonts                                                           |
+| `otter-shell-plugins`                                        | Example Lua bar widgets and launcher providers                                   |
+| `otter-bluetooth-plugin`                                     | Bluetooth applet for the bar (pulled by `otter-shell-plugins`)                   |
+| `otter-plugin-factory`                                       | `opf` CLI to scaffold and pack plugins                                           |
 
 **Not in the base metapackage** (install via `otter-shell-extras`): `otter-transcribe`, `otter-vox`, `otter-assist`, `otter-assistant`, `otter-assist-data`, `otter-assist-model`, `otter-transcribe-model`, and `otter-vox-model`.
+
+`otter-browser`, its engine packages, `otter-installer`, `otter-first-setup`, and `otter-welcome` exist in zenith but are not dependencies of these shell metapackages. `otter-cue` and `otter-hypr` are not standalone end-user packages in `debian/control`.
 
 ## Packages in `otter-gaming-utils`
 
 Installed by `pikman install otter-gaming-utils`. Built from [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils), not otter-zenith.
 
-| Package | Description |
-|---------|-------------|
-| `otter-bench` | Desktop app for HUD layouts, sessions, and benchmarks |
-| `otter-benchd` | Metrics and session daemon |
-| `otter-benchctl` | CLI |
-| `otter-hud` | Vulkan / OpenGL overlay and launcher |
-| `otter-bench-hardwared` | Privileged hardware helper (polkit) |
+| Package                 | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
+| `otter-bench`           | Desktop app for HUD layouts, sessions, and benchmarks |
+| `otter-benchd`          | Metrics and session daemon                            |
+| `otter-benchctl`        | CLI                                                   |
+| `otter-hud`             | Vulkan / OpenGL overlay and launcher                  |
+| `otter-bench-hardwared` | Privileged hardware helper (polkit)                   |
 
 See [otter-bench](/apps/otter-bench) and [otter-hud](/apps/otter-hud).
 

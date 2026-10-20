@@ -4,7 +4,9 @@ sidebarTitle: "Introduction"
 description: "Native Wayland apps for a lightweight PikaOS desktop: shell daemons, utilities, and shared libraries."
 ---
 
-Otter Shell is a lightweight Wayland desktop for PikaOS. Apps are small native binaries. Each one does one job. They share Zig libraries so they look and behave the same.
+Otter Shell is a lightweight Wayland desktop for PikaOS. Version v0.13.0 uses native otr applications and statically linked shared libraries, with Lua plugins and selected Lua surface UIs. Each app does one job and shares rendering, styling, and desktop services.
+
+Otter Shell does not ship a user-session compositor. Use your own Wayland compositor; protocol support determines which overlays and capture features are available.
 
 ## Desktop shell
 
@@ -30,7 +32,7 @@ Background daemons and overlays on your compositor:
     Windows-style taskbar with Start, tray, and calendar.
   </Card>
   <Card title="Plugins" icon="puzzle-piece" href="/desktop/plugins">
-    Extra bar widgets and launcher providers as `.so` plugins.
+    Extra bar widgets and launcher providers as hosted Lua plugins.
   </Card>
   <Card title="Night light" icon="moon" href="/desktop/otter-nightlight">
     Color-temperature daemon with schedule and bar widget.
@@ -48,7 +50,7 @@ Background daemons and overlays on your compositor:
     Volume, brightness, and lock-key overlays.
   </Card>
   <Card title="Settings" icon="sliders" href="/desktop/otter-settings">
-    **Start here.** Apps, themes, and bar layout in the GUI.
+    Configure apps, themes, and bar layout in the GUI.
   </Card>
   <Card title="Display manager" icon="door-open" href="/desktop/otter-greeter">
     Wayland login greeter with PAM and fingerprint support.

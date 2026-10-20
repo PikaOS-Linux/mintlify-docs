@@ -4,7 +4,7 @@ sidebarTitle: "Terminal"
 description: "Native Wayland terminal for Otter Shell. Tabs, split panes, shell integration, URL handling, and IME support."
 ---
 
-`otter-term` is Otter Shell's built-in terminal emulator. Terminal emulation comes from the vendored `ghostty-vt` Zig module. Wayland windowing, PTY handling, input, rendering, configuration, and clipboard come from Otter libraries. Tabs, horizontal and vertical splits, OSC shell integration, and IME input are all there. You do not need X11, and you do not need an installed `libghostty-vt` library.
+`otter-term` is Otter Shell's built-in terminal emulator. It embeds Ghostty's `ghostty-vt` core in a static `libotter_vt` library. Otter libraries handle Wayland windows, PTYs, input, rendering, configuration, and the clipboard. The terminal supports tabs, horizontal and vertical splits, OSC shell integration, and IME input. It requires neither X11 nor an installed `libghostty-vt` library.
 
 ## Launching
 
@@ -16,8 +16,12 @@ otter-term /path/to/project                     # open in directory
 otter-term --cwd /path/to/project               # same, with explicit flag
 otter-term --working-directory /path/to/project # long form of --cwd
 otter-term -e htop                              # run a command
+otter-term --execute sh -lc "htop"              # long form of -e
 otter-term -- nano file.txt                     # pass arguments to command
+otter-term --self-test                          # run the built-in PTY self-test and exit
 ```
+
+`--cwd` and `--working-directory` also accept the `--cwd=PATH` form.
 
 ## Features
 
@@ -29,27 +33,33 @@ otter-term -- nano file.txt                     # pass arguments to command
     Split any tab horizontally or vertically. Each pane has its own focus, resizes independently, and closes without affecting the others.
   </Card>
   <Card title="Shell Integration" icon="terminal">
-    OSC 7 tracks the current working directory so new tabs and splits open in the right place. OSC 133 captures command output for the context menu.
+    OSC 7 tracks the current working directory so new tabs and splits open in the right place. OSC 133 reports command status, shown with the directory at the right of the tab strip, and can capture command output for the context menu.
   </Card>
   <Card title="URL Handling" icon="link">
-    `http://`, `https://`, and `www.` URLs are detected, underlined on hover, and opened with a configurable command (default: `xdg-open`).
+    OSC 8 hyperlinks and detected `http://`, `https://`, and `www.` URLs are underlined on hover and opened with a configurable command (default: `xdg-open`).
   </Card>
   <Card title="IME Support" icon="language">
     Full `zwp_text_input_v3` support with preedit text display and candidate-window positioning at the terminal cursor.
   </Card>
   <Card title="Clipboard" icon="clipboard">
-    Copy with <kbd>Ctrl+Shift+C</kbd> and paste with <kbd>Ctrl+Shift+V</kbd>. Primary selection and a right-click context menu are also supported.
+    Copy with <kbd>Ctrl+Shift+C</kbd> and paste with <kbd>Ctrl+Shift+V</kbd>. Primary selection and a right-click context menu are also supported. Programs can write to the clipboard with OSC 52 when `general_allow_clipboard_write` is on.
   </Card>
   <Card title="Scrollback" icon="scroll">
     Configurable scrollback. Idle panes compress history so big buffers cost less memory.
+  </Card>
+  <Card title="Program status" icon="signal">
+    Programs report working, blocked, done, or error state with OSC 7501. Tab labels and the window title show the state and progress. OSC 9;4 progress works as a fallback.
+  </Card>
+  <Card title="Kitty images" icon="image">
+    Kitty graphics protocol images, including parent-linked placements and Unicode placeholders. Overlapping transparent images composite in placement order.
   </Card>
 </CardGroup>
 
 ## Configuration
 
-`otter-term` reads `~/.config/otter-shell/otter-term.conf`. The file loads on startup and **hot-reloads whenever you save it**. Font, padding, and grid size update without restarting the terminal.
+`otter-term` reads `~/.config/otter-shell/otter-term.conf`, then `/etc/otter-shell/otter-term.conf`, then compiled defaults. On startup it normalizes your file, adding missing defaults and removing unknown keys. The file **hot-reloads whenever you save it**. Font, colors, padding, and grid size update without restarting the terminal. The **Terminal** tab in otter-settings edits the same keys.
 
-Shared colors in `theme.conf` hot-reload too. [otter-theme-gen](/desktop/otter-theme-gen) and otter-settings write that file; saving it updates open terminal panes.
+Terminal chrome (tab strip, split rules, status pills, visual bell) follows `theme.conf` and its profile, and hot-reloads when you save it.
 
 ```conf
 general_shell = ""
@@ -57,11 +67,17 @@ general_term = "xterm-256color"
 general_width = 900
 general_height = 560
 general_scrollback_rows = 10000
+general_allow_clipboard_write = true
+general_clipboard_write_max_bytes = 1048576
 
 font_family = "IoskeleyMono Nerd Font"
+font_path = ""
+font_fallback_path = "/usr/share/fonts/otter-shell/IoskeleyMonoNerdFont-Regular.ttf"
 font_size = 14
 font_dpi_aware = true
 font_scale_percent = 100
+font_cell_height = 0
+font_baseline_offset = 0
 
 padding_x = 4
 padding_y = 4
@@ -84,27 +100,26 @@ bell_command = "paplay /usr/share/sounds/freedesktop/stereo/bell.oga"
 bell_visual = false
 ```
 
-<Note>
-  `general_shell = ""` uses `$SHELL`, falling back to `/bin/sh` if unset. The default `general_term` value `xterm-256color` works best for remote hosts over SSH. Only set it to `xterm-ghostty` when the target host has that terminfo entry installed.
-</Note>
+<Note>`general_shell = ""` uses `$SHELL`, falling back to `/bin/sh` if unset. The default `general_term` value `xterm-256color` works best for remote hosts over SSH. Only set it to `xterm-ghostty` when the target host has that terminfo entry installed.</Note>
 
-<Tip>
-  Set `shell_capture_output = true` to enable OSC 133 command-output capture. The right-click context menu then gets a **Copy Last Output** action that copies the full output of the most recent command. Off by default to keep large command output off the hot PTY path.
-</Tip>
+<Tip>Set `shell_capture_output = true` to enable OSC 133 command-output capture. The right-click context menu then gets a **Copy Last Output** action that copies the full output of the most recent command. Off by default to keep large command output off the hot PTY path.</Tip>
+
+<Note>`general_allow_clipboard_write` controls OSC 52 and iTerm2 clipboard writes from programs. Writes larger than `general_clipboard_write_max_bytes` are rejected.</Note>
 
 ## Color palette
 
-The color palette uses `colors_*` keys in `otter-term.conf`, or inherits from `theme.conf` when those keys are unset. Palette changes hot-reload on save. Per-app keys in `otter-term.conf` override the shared theme.
+Cell colors come from `colors_*` keys in `otter-term.conf`: `foreground`, `background`, `cursor`, `selection_background`, `url_foreground`, and the 16 ANSI colors (`black` through `bright_white`). Defaults give a complete palette. Palette changes hot-reload on save.
 
-## Compositor compatibility
-
-Works on Hyprland, Sway, Niri, and other wlroots compositors. On Niri, scroll damage is tracked so scrollback redraws match the viewport.
+Theme profiles do not change the terminal palette. When generated colors are enabled, [otter-theme-gen](/desktop/otter-theme-gen) supplies the terminal colors through its `otter_term` template.
 
 ## Keyboard shortcuts
 
-| Action | Shortcut |
-|---|---|
-| Copy selection | <kbd>Ctrl+Shift+C</kbd> |
-| Paste | <kbd>Ctrl+Shift+V</kbd> |
-| New tab | Right-click → **New Tab** |
-| Split pane | Right-click → **Split Pane** |
+| Action                                     | Shortcut                                                 |
+| ------------------------------------------ | -------------------------------------------------------- |
+| Copy selection                             | <kbd>Ctrl+Shift+C</kbd>                                  |
+| Paste                                      | <kbd>Ctrl+Shift+V</kbd>                                  |
+| New tab                                    | <kbd>Ctrl+Shift+T</kbd>                                  |
+| Close tab or split (quits on the last one) | <kbd>Ctrl+Shift+W</kbd>                                  |
+| Split pane                                 | Right-click → **Split Horizontal** or **Split Vertical** |
+
+Change the copy and paste shortcuts with `keybinds_copy` and `keybinds_paste`. The right-click menu also has **Copy URL**, **Copy Path**, **Copy Last Output**, **Close Tab/Split**, **Clear**, **Clear Scrollback**, and **Reset**.

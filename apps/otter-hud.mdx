@@ -4,7 +4,7 @@ sidebarTitle: "Otter HUD"
 description: "In-game Vulkan and OpenGL overlay. Prefix any command with otter-hud. Part of otter-gaming-utils."
 ---
 
-Otter HUD draws inside the game. No separate desktop HUD process. A Vulkan implicit layer (`VK_LAYER_OTTER_HUD`) and an OpenGL preload hook capture frame timings and paint the overlay on present.
+Otter HUD draws inside the game without a separate desktop HUD process. A Vulkan implicit layer (`VK_LAYER_OTTER_HUD`) and an OpenGL preload hook capture frame timings and draw the overlay when the game presents a frame.
 
 Install with:
 
@@ -14,9 +14,7 @@ pikman install otter-gaming-utils
 
 Or install `otter-hud` alone.
 
-<Note>
-  For a full HUD with live metrics, your layout, and Bench telemetry, **`otter-benchd` must be running**. Without it, the game still launches and the layer fails open, but you only get a diagnostic banner instead of a usable overlay. Start Bench once, run `otter-benchctl status`, or enable the user unit before you play.
-</Note>
+<Note>For a full HUD with live metrics, your layout, and Bench telemetry, **`otter-benchd` must be running**. Without it, the game still launches and the layer fails open, but you only get a diagnostic banner instead of a usable overlay. Start Bench once, run `otter-benchctl status`, or enable the user unit before you play.</Note>
 
 ## Launch a game with the HUD
 
@@ -32,13 +30,13 @@ The layer is implicit and **off by default**. It activates when `OTTER_HUD_ENABL
 
 ## How it behaves
 
-- **Fails open.** Missing daemon, bad layout, or a full ring never take the game down. Instrumentation goes quiet (or shows the diagnostic banner) instead.
-- **No allocations on the present path.** Frame events go into a lock-free shared-memory ring. A full ring bumps a counter; it never blocks the producer.
-- **Missing data is never zero.** Sensors report unavailable with a reason. Graphs show gaps rather than inventing values.
+- A missing daemon, bad layout, or full ring does not stop the game. Instrumentation stays inactive or the HUD shows a diagnostic banner.
+- The present path allocates no memory. Frame events go into a lock-free shared-memory ring. A full ring increments a counter without blocking the producer.
+- Unavailable sensors report a reason. Graphs leave gaps for missing data instead of showing zero.
 
 Edit layouts and collection in [otter-bench](/apps/otter-bench), or with [otter-benchctl](/apps/otter-benchctl).
 
-## 64-bit only (for now)
+## 64-bit only
 
 Packaged builds ship the **x86_64** Vulkan layer only. A 32-bit process (common under Steam/Proton for older titles) cannot load that layer, so those games get no HUD until a 32-bit package exists.
 
