@@ -6,6 +6,8 @@ description: "What to autostart at login, how to bind hotkeys, and where otter-g
 
 Otter Shell runs on your Wayland compositor. The metapackage installs the apps but leaves compositor configuration to you. Add session daemons to autostart and bind hotkeys for apps you open on demand.
 
+Zoolander is one of the compositors Otter Shell supports, next to the Hyprland, Sway, and Niri examples below. It is a separate, optional compositor package, not part of Otter Shell. See the [Zoolander overview](/zoolander/overview).
+
 ## What runs at login
 
 Autostart these for a working desktop:
@@ -34,6 +36,38 @@ Do not autostart one-shot apps: `otter-launcher`, `otter-overview`, `otter-switc
 If you want one bottom launcher, run **either** `otter-dock` **or** `otter-taskbar`. Both packages install. You choose which to start.
 
 ## Compositor autostart examples
+
+### Zoolander
+
+Zoolander reads Lua from `~/.config/zoolander/init.lua`. Start the daemons from a `startup` handler. They then run once the compositor is live and get its socket environment:
+
+```lua
+zl.on("startup", function()
+    zl.exec_command("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP")
+    zl.exec_command("otter-bar &")
+    zl.exec_command("otter-wallpaper &")
+    zl.exec_command("otter-theme-gen &")
+    zl.exec_command("otter-notifications &")
+    zl.exec_command("otter-osd &")
+    zl.exec_command("otter-idle &")
+    zl.exec_command("otter-polkit &")
+    zl.exec_command("otter-nightlight &")
+    zl.exec_command("otter-clip daemon &")
+    zl.exec_command("otter-search &")
+    zl.exec_command("otter-weather --watch 900 --write-cache &")
+    -- Pick one bottom launcher if you want it:
+    -- zl.exec_command("otter-dock &")
+    -- zl.exec_command("otter-taskbar &")
+end)
+```
+
+Otter Shell apps detect a Zoolander session from `XDG_CURRENT_DESKTOP`. The Zoolander session file names the desktop `Zoolander`. If your session launcher does not export that value, set it in `init.lua` before the `startup` handler:
+
+```lua
+zl.set_env("XDG_CURRENT_DESKTOP", "Zoolander")
+```
+
+See [Configuring Zoolander](/zoolander/configuring/overview) for the rest of the config.
 
 ### Hyprland
 
@@ -100,7 +134,7 @@ spawn-at-startup "otter-weather" "--watch" "900" "--write-cache"
 `otter-greeter` is Otter Shell's Wayland display manager:
 
 - `otter-greeterd`: root daemon for PAM, logind, and session launch
-- `otter-greeter-ui`: login UI on Hyprland (greeter only, not your user session)
+- `otter-greeter-ui`: login UI on Zoolander by default, or on Hyprland if you switch the greeter compositor (greeter only, not your user session)
 
 Enable after install:
 
@@ -108,7 +142,7 @@ Enable after install:
 sudo systemctl enable otter-greeter.service
 ```
 
-Config: `/etc/otter-shell/otter-greeter.conf`. See [otter-greeter](/desktop/otter-greeter).
+Config: `/etc/otter-shell/otter-greeter.conf`. The shipped config selects `zoolander` as the default session. See [otter-greeter](/desktop/otter-greeter).
 
 ## Session security flow
 

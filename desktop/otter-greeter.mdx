@@ -13,7 +13,7 @@ description: "Wayland display manager with PAM login, fingerprint auth, and Acco
 | `otter-greeterd`   | Root daemon: PAM, logind seats, AccountsService, IPC, session launch |
 | `otter-greeter-ui` | Unprivileged Wayland login UI                                        |
 
-The greeter UI runs on **Hyprland** for the login screen only. Your session compositor is separate.
+The greeter UI runs on [Zoolander](/zoolander/overview) by default, for the login screen only. Hyprland is the alternative greeter compositor. Your session compositor is separate.
 
 ## Installation
 
@@ -26,7 +26,8 @@ sudo systemctl enable otter-greeter.service
 The package installs:
 
 - `/etc/otter-shell/otter-greeter.conf`
-- `/etc/otter-shell/otter-greeter-hyprland.conf`
+- `/etc/otter-shell/otter-greeter-zoolander.lua`
+- `/etc/otter-shell/otter-greeter-hyprland.lua`
 - `/etc/pam.d/otter-greeter`
 - `/etc/pam.d/otter-greeter-autologin`
 - `/usr/lib/systemd/system/otter-greeter.service`
@@ -39,12 +40,28 @@ Main config: `/etc/otter-shell/otter-greeter.conf`
 
 | Setting            | Default                                                                            |
 | ------------------ | ---------------------------------------------------------------------------------- |
-| Greeter compositor | `/usr/bin/start-hyprland -- --config /etc/otter-shell/otter-greeter-hyprland.conf` |
+| Greeter compositor | `/usr/bin/zoolander --config=/etc/otter-shell/otter-greeter-zoolander.lua`         |
+| Default session    | `zoolander`                                                                        |
 | Display VT         | `7`                                                                                |
 | State path         | `/var/lib/otter-greeter/state.conf`                                                |
 | Runtime sockets    | `/run/otter-greeter/<seat>.sock`                                                   |
 
 The greeter discovers Wayland sessions from configured `.desktop` directories. X11 sessions are ignored.
+
+### Greeter compositor
+
+`greeter_command` picks the compositor that hosts the login UI. `default_session` picks the session preselected at login:
+
+```conf
+# Hyprland alternative:
+# greeter_command = "/usr/bin/start-hyprland -- --config /etc/otter-shell/otter-greeter-hyprland.lua"
+greeter_command = "/usr/bin/zoolander --config=/etc/otter-shell/otter-greeter-zoolander.lua"
+default_session = "zoolander"
+```
+
+To host the greeter on Hyprland, comment out the Zoolander line and uncomment the Hyprland one. Install `hyprland` first; the package only suggests it.
+
+`otter-greeter-zoolander.lua` is a greeter-only Zoolander config. It turns off XWayland, server-side decorations, borders, gaps, blur, and animations. Its `startup` handler launches `otter-wallpaper`, `otter-theme-gen`, and `otter-greeter-ui`. `otter-greeterd` sets `XDG_CURRENT_DESKTOP=Zoolander` in the greeter environment.
 
 ## Authentication
 
@@ -56,4 +73,4 @@ The greeter discovers Wayland sessions from configured `.desktop` directories. X
 
 ## Dependencies
 
-`otter-greeter` depends on `otter-wallpaper` (same version), Hyprland (greeter compositor only), `accountsservice`, and `adduser`.
+`otter-greeter` depends on `otter-wallpaper`, `otter-theme-gen`, `zoolander` (greeter compositor), `accountsservice`, and `adduser`. It suggests `hyprland` for the alternative greeter compositor. Because `otter-shell` depends on `otter-greeter`, installing the metapackage pulls in `zoolander` through this dependency.

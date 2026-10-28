@@ -1,0 +1,247 @@
+---
+title: "Window rules"
+sidebarTitle: "Window rules"
+description: "Match windows by app ID, title or tag and set floating, fullscreen, workspace, borders and more. Add blur and animation rules for layer surfaces."
+---
+
+A window rule matches windows by one property and applies a set of actions to every window that matches. Layer rules do the same for layer-shell surfaces such as bars, launchers and notifications.
+
+## Add a window rule
+
+```lua
+zl.add_window_rule(match, pattern, actions) -> true
+```
+
+| Name | Description | Type |
+| --- | --- | --- |
+| `match` | Which window property the pattern tests: `app_id`, `title` or `tag`. | string |
+| `pattern` | The pattern. See [Pattern syntax](#pattern-syntax). | string |
+| `actions` | What the rule sets. See [Actions](#actions). | table |
+
+The call returns `true`. An invalid argument raises a Lua error, so a bad rule stops the config from loading and the previous config stays active.
+
+```lua
+zl.add_window_rule("app_id", "pavucontrol", { float = true })
+zl.add_window_rule("title", "^(Picture-in-Picture)$", { float = true, border_size = 0 })
+```
+
+### Positional form
+
+`zl.add_window_rule` also takes the actions as positional arguments, in this order:
+
+```lua
+zl.add_window_rule(match, pattern,
+    float, dim_around, no_animation, idle_inhibit, fullscreen,
+    content, border_size, rounding, shadow, decorate, workspace, follow)
+```
+
+Pass `nil` to skip an argument. Both forms check values the same way. The table form is easier to read, so the examples on this page use it.
+
+```lua
+-- These two calls are the same rule
+zl.add_window_rule("app_id", "^(gamescope)$", { idle_inhibit = true })
+zl.add_window_rule("app_id", "^(gamescope)$", false, false, false, true)
+```
+
+## Match keys
+
+| Key | What it tests |
+| --- | --- |
+| `app_id` | The Wayland app ID set by the client. For X11 windows, the class part of `WM_CLASS`, or the instance part when the class is empty. |
+| `title` | The window title. |
+| `tag` | The untranslated tag a client gives a window through the xdg-toplevel-tag protocol, such as `main window` or `settings`. Empty when the client sets none. |
+
+To see the values for open windows, list them with `zl.get_windows()`:
+
+```sh
+zoolanderctl eval "local o={} for _,w in ipairs(zl.get_windows()) do o[#o+1]=w.app_id..' | '..w.title..' | '..w.tag end return table.concat(o,'; ')"
+```
+
+See [Hooks and events](/zoolander/configuring/hooks-and-events#query-windows) for every field `zl.get_windows` returns.
+
+## Pattern syntax
+
+A pattern is 1 to 127 bytes. It matches the whole value, and matching is case-sensitive. There are two forms:
+
+| Form | Example | Matches |
+| --- | --- | --- |
+| Exact string | `firefox` | Only the value `firefox`. |
+| Anchored form `^(...)$` | `^(steam_app_.*)$` | The text inside the parentheses, where `.*` matches any run of characters (including none). |
+
+Inside the anchored form:
+
+- `.*` is the only wildcard.
+- A `.` that is not followed by `*` matches a literal dot. `^(org.gnome.Nautilus)$` matches only that ID.
+- `\` makes the next character literal. In a Lua string you write it as `\\`, for example `"^(.*\\.exe)$"`.
+- Any other regular expression syntax (`*` on its own, `+`, `?`, `[ ]`, `{ }`, `|`, `( )`, `^`, `$`) is rejected with `zl.add_window_rule: pattern must be 1..127 bytes, an exact name or ^(...)$ with .* as its only wildcard`.
+
+<Warning>A pattern that is not wrapped in `^(...)$` is always an exact match, even if it contains `*`, `^` or other symbols. Zoolander logs a warning when such a pattern looks like a regular expression. Parentheses alone do not trigger the warning, so a title such as `Steam (beta)` works as an exact pattern.</Warning>
+
+| Pattern | Value | Match? |
+| --- | --- | --- |
+| `firefox` | `firefox` | Yes |
+| `firefox` | `Firefox` | No (case-sensitive) |
+| `^(firefox)$` | `firefox` | Yes |
+| `^(org.gnome..*)$` | `org.gnome.Nautilus` | Yes |
+| `^(.*Discord.*)$` | `#general - Discord` | Yes |
+| `^(steam_app_.*)$` | `steam_app_570` | Yes |
+| `^(.*\\.exe)$` (Lua string) | `game.exe` | Yes |
+| `^(a\|b)$` | | Rejected |
+
+## Actions
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `float` | Open the window floating. It opens at the size its client chose, kept inside the work area and within the window's own minimum and maximum size. | bool | `false` |
+| `fullscreen` | Make the window fullscreen. | bool | `false` |
+| `workspace` | Open the window on this workspace. The name is 1 to 127 bytes and cannot be a special workspace (`special` or `special:name`). | string | none |
+| `follow` | With `workspace`, also switch to that workspace when the window moves there. Needs `workspace`. | bool | `false` |
+| `dim_around` | Dim everything behind the window. The strength is the `around` value of `zl.set_dim`. | bool | `false` |
+| `no_animation` | Turn off open, close and move animations for the window. | bool | `false` |
+| `idle_inhibit` | Keep the session from going idle while the window exists. | bool | `false` |
+| `content` | Content type hint: `none`, `photo`, `video` or `game`. Zoolander passes it to a display that supports content types when the window is shown fullscreen on its own. With `vrr = "fullscreen_content"`, VRR turns on for `video` and `game`. | string | `none` |
+| `border_size` | Border width in pixels for this window, `0..64`. | int | the global `border_size` |
+| `rounding` | Corner radius in pixels for this window, `0..128`. | int | the global `rounding` |
+| `shadow` | Turn the window's shadow on or off, overriding `shadow.enabled`. | bool | the global setting |
+| `decorate` | Allow (`true`) or refuse (`false`) server-side decorations for this window. Decorations still need `zl.set_ssd` to be on. | bool | the window's own choice |
+
+A rule must set at least one action. A rule with none raises `zl.add_window_rule: the rule sets nothing`. Unknown keys in the actions table log a warning (`zl.add_window_rule: unknown field ...`) and the rest of the rule still applies.
+
+For the global values these actions override, see [Variables](/zoolander/configuring/variables). For `vrr`, see `zl.set_presentation` on the same page.
+
+## How rules combine
+
+Zoolander tests every rule, in the order you added them, against the window's current app ID, title and tag. Every matching rule contributes:
+
+- Boolean actions (`float`, `fullscreen`, `dim_around`, `no_animation`, `idle_inhibit`) add up. If any matching rule sets one, it is on.
+- Value actions (`content`, `border_size`, `rounding`, `shadow`, `decorate`) take the value from the last matching rule that sets them.
+- `workspace` and `follow` come together from the last matching rule that sets `workspace`.
+
+```lua
+zl.add_window_rule("app_id", "^(org.gnome..*)$", { rounding = 8 })
+zl.add_window_rule("app_id", "org.gnome.Calculator", { float = true, rounding = 16 })
+-- Calculator floats with rounding 16. Other GNOME apps tile with rounding 8.
+```
+
+A config holds up to 32 window rules. Past that, the call raises `zl.add_window_rule: the rule table is full`.
+
+## When rules run
+
+| Moment | What is applied |
+| --- | --- |
+| The window maps | All actions, including `workspace`. |
+| The app ID, title or tag changes | All actions. `workspace` is tried again only if no rule has moved the window yet. |
+| An X11 window's properties change | All actions. `workspace` is tried again only if no rule has moved the window yet. |
+| The config loads or reloads | All actions except `workspace`, for every open window. |
+
+Rules follow the window's current state. If a title change means a `float` rule no longer matches, a window that the rule floated goes back to tiling. In the same way, a window leaves fullscreen when its `fullscreen` rule stops matching.
+
+`workspace` is an opening placement, not a constraint. Once a rule has moved the window, it never moves it again, so you can move the window elsewhere by hand. Until then, Zoolander retries on each metadata change. This helps with apps that set their app ID or title after they map.
+
+## Errors
+
+| Message | Cause |
+| --- | --- |
+| `expected match kind and pattern strings` | `match` or `pattern` is not a string. |
+| `match kind must be app_id, title or tag` | Unknown match key. |
+| `pattern must be 1..127 bytes, an exact name or ^(...)$ with .* as its only wildcard` | Empty, too long, or unsupported regex syntax. |
+| `boolean actions must be boolean` | `float`, `dim_around`, `no_animation`, `idle_inhibit` or `fullscreen` is not a boolean. |
+| `content must be none, photo, video, or game` | Unknown content type. |
+| `border size must be 0..64` | `border_size` out of range or not a number. |
+| `rounding must be 0..128` | `rounding` out of range or not a number. |
+| `shadow/decorate/follow overrides must be boolean` | One of those is not a boolean. |
+| `workspace must be a string` / `workspace must be 1..127 bytes` | Bad `workspace` value. |
+| `workspace cannot be a scratchpad` | `workspace` names a special workspace. |
+| `follow needs a workspace` | `follow = true` without `workspace`. |
+| `the rule sets nothing` | No action set. |
+| `the rule table is full` | More than 32 rules. |
+
+Each message starts with `zl.add_window_rule: `.
+
+## Window rule examples
+
+```lua
+-- Float dialogs and small tools
+zl.add_window_rule("app_id", "^(com.saivert.pwvucontrol)$", { float = true })
+zl.add_window_rule("app_id", "^(io.github.lact-linux)$", { float = true })
+zl.add_window_rule("title", "^(Sharing)$", { float = true })
+
+-- Settings windows, matched by xdg-toplevel-tag
+zl.add_window_rule("tag", "settings", { float = true, dim_around = true })
+
+-- Games: fullscreen, game content type, no idle
+zl.add_window_rule("app_id", "^(steam_app_.*)$", { fullscreen = true, content = "game" })
+zl.add_window_rule("app_id", "^(.*\\.exe)$", { content = "game" })
+zl.add_window_rule("app_id", "^(gamescope)$", { idle_inhibit = true })
+
+-- Video players
+zl.add_window_rule("app_id", "mpv", { content = "video", idle_inhibit = true })
+
+-- Send apps to workspaces
+zl.add_window_rule("app_id", "^(.*iscord.*)$", { workspace = "5" })   -- Discord and discord
+zl.add_window_rule("app_id", "thunderbird", { workspace = "4", follow = true })
+
+-- Overlays without animation, borders or shadow
+zl.add_window_rule("title", "^(gsr ui)$", { no_animation = true })
+zl.add_window_rule("app_id", "^(launcher)$", { float = true, border_size = 0, shadow = false, rounding = 0 })
+
+-- Keep server-side decorations off for one app
+zl.add_window_rule("app_id", "org.wezfurlong.wezterm", { decorate = false })
+```
+
+A small helper keeps long rule lists short:
+
+```lua
+local function float(match, pattern)
+    zl.add_window_rule(match, pattern, { float = true })
+end
+
+float("app_id", "^(com.github.pikaos-linux.pikmanupdatemanager)$")
+float("app_id", "^(launcher)$")
+float("title", "^(Open File)$")
+```
+
+## Layer rules
+
+Layer rules match layer-shell surfaces by their namespace. The namespace is the name a client gives its layer surface, for example `otter-launcher` or `otter-notifications`. Namespaces use the same [pattern syntax](#pattern-syntax) as window rules, from 1 to 127 bytes.
+
+| Function | Arguments | Effect |
+| --- | --- | --- |
+| `zl.add_layer_blur_rule(namespace, ignore_alpha)` | `namespace`: pattern, `ignore_alpha`: number `0..1` | Blur behind matching layers. Pixels with alpha below the `ignore_alpha` threshold are not blurred, so transparent margins stay clear. |
+| `zl.add_layer_no_animation_rule(namespace)` | `namespace`: pattern | Turn off open and close animations for matching layers. |
+| `zl.add_layer_animation_rule(namespace, style)` | `namespace`: pattern, `style`: string | Use this animation style for matching layers. |
+
+`style` is one of `slide`, `popin`, `fade`, `slide left`, `slide right`, `slide top` or `slide bottom`. The underscore forms (`slide_left` and so on) also work. The `layers` animation leaf sets the duration and curve. See [Animations](/zoolander/configuring/animations).
+
+A layer gets blur from `zl.set_blur({ enabled = true })` only through a blur rule. Without one, only the region the client asks to blur (through `ext-background-effect-v1`) is blurred.
+
+How layer rules combine:
+
+- Calls with the same namespace pattern update one record, so you can give a namespace blur and an animation style with two calls.
+- When several patterns match, the last matching record that sets blur decides the threshold, and the last matching record that sets a style decides the style.
+- `no_animation` applies when any matching record sets it.
+- A config holds up to 32 layer rule records. Past that, the call raises `the rule table is full`.
+
+The layer functions return nothing. They raise errors such as `zl.add_layer_blur_rule: ignore alpha must be 0..1` or `zl.add_layer_animation_rule: style must be ...`.
+
+### Layer rule examples
+
+```lua
+-- Blur the polkit prompt and the bar
+zl.add_layer_blur_rule("^(otter-polkit)$", 0.5)
+zl.add_layer_blur_rule("otter-bar", 0.1)
+
+-- Slide notifications in from the right and the OSD from the bottom
+zl.add_layer_animation_rule("^(otter-notifications)$", "slide right")
+zl.add_layer_animation_rule("^(otter-osd)$", "slide bottom")
+
+-- No animation for screenshot and picker overlays
+for _, namespace in ipairs({
+    "^(otter-screenshot)$",
+    "^(otter-pick)$",
+    "^(selection)$",
+    "^(wayfreeze)$",
+}) do
+    zl.add_layer_no_animation_rule(namespace)
+end
+```

@@ -1,0 +1,168 @@
+---
+title: "Lua API reference"
+sidebarTitle: "Lua API"
+description: "Index of every zl function and constant the Zoolander Lua runtime registers, grouped by topic, with links to the pages that document them."
+---
+
+Zoolander exposes its Lua API through one global table, `zl`. This page lists every function and constant in it, grouped by topic. Each entry links to the page that documents it in full.
+
+Setters (`zl.set_*`, rules) can run at the top level of the config. Actions that need a running compositor, such as `zl.workspace` or `zl.exec_command`, belong in a binding or an event handler. See [Hooks and events](/zoolander/configuring/hooks-and-events#actions-during-a-load).
+
+These rules apply to option tables. A field you leave out keeps its current value unless the function's page says otherwise. An unknown field logs a warning and does not stop the config from loading. An invalid value raises a Lua error.
+
+## Variables
+
+Global settings. See [Variables](/zoolander/configuring/variables).
+
+| Function | Description |
+| --- | --- |
+| `zl.set_keyboard(options)` | Key repeat rate and delay, Num Lock, and the XKB rules, model, layout, variant and options. |
+| `zl.set_pointer(options)` | Left-handed mode, acceleration profile, sensitivity and focus-follows-mouse mode. |
+| `zl.set_presentation(options)` | Tearing, immediate fullscreen, direct scanout, partial damage, VRR, HDR and SDR brightness and saturation. |
+| `zl.set_xwayland(options)` | Turn Xwayland on or off and set `force_zero_scaling`. |
+| `zl.set_window_style(options)` | Gaps, borders and border gradients, rounding, opacity and shadows. |
+| `zl.set_ssd(enabled_or_options)` | Server-side decorations: title bars, borders, title font and buttons. |
+| `zl.set_blur(options)` | Blur behind translucent windows, popups and input method surfaces. |
+| `zl.set_dim(options)` | Dimming: `inactive` and `strength` for unfocused windows, plus the `special` and `around` strengths. |
+| `zl.set_overview(options)` | Overview axis (`vertical` or `horizontal`) and rail position (`bottom` or `top`). |
+| `zl.set_bell_sound(name) -> boolean` | Pick the sound the system bell plays, or silence it. |
+
+## Animations
+
+See [Animations](/zoolander/configuring/animations).
+
+| Function | Description |
+| --- | --- |
+| `zl.set_animations(options)` | Common animation baseline: enabled, duration and easing for the classic leaves. |
+| `zl.set_animations_enabled(enabled)` | Turn all animations on or off. |
+| `zl.set_animation_leaf(leaf, options)` | Configure one animation leaf, such as `windows_in`, `workspaces`, `layers`, `camera` or `layout`. |
+| `zl.set_reduced_motion(enabled)` | Make spatial camera and layout motion instant. Also covered in [Layouts](/zoolander/configuring/layouts#reduced-motion). |
+
+## Binds
+
+See [Binds](/zoolander/configuring/binds).
+
+| Function | Description |
+| --- | --- |
+| `zl.bind(modifiers, key, callback [, options]) -> id` | Bind a key. Options: `locked`, `repeating`, `description`. |
+| `zl.bind_mouse(modifiers, button, callback [, options]) -> id` | Bind a pointer button. |
+| `zl.bind_axis(modifiers, axis, callback [, options]) -> id` | Bind a scroll direction (`zl.AXIS_*`). |
+| `zl.bind_global_shortcut(modifiers, key, app_id, id [, options]) -> id` | Bind a key to a global shortcut that an application registered. |
+| `zl.global_shortcuts() -> list` | List the global shortcuts applications have registered. |
+| `zl.bindings() -> list` | List the binds of the running config, with kind, modifiers, key name and description. |
+
+## Dispatchers
+
+Actions you call from binds and handlers. Most return `true` when the action ran. See [Dispatchers](/zoolander/configuring/dispatchers).
+
+| Function | Description |
+| --- | --- |
+| `zl.exec_command(command) -> boolean` | Run a command with `/bin/sh -c`. |
+| `zl.quit()` | Shut down the compositor. |
+| `zl.close_window() -> boolean` | Ask the focused window to close. |
+| `zl.toggle_floating() -> boolean` | Toggle floating for the focused window. |
+| `zl.toggle_fullscreen() -> boolean` | Toggle fullscreen for the focused window. |
+| `zl.toggle_pin() -> boolean` | Pin the focused window to all workspaces, or unpin it. |
+| `zl.toggle_overview() -> boolean` | Open or close the overview. |
+| `zl.focus_direction(direction) -> boolean` | Move focus `left`, `right`, `up` or `down`. |
+| `zl.move_window_direction(direction) -> boolean` | Move the focused window in a direction, or to the monitor that way. |
+| `zl.focus_monitor(direction) -> boolean` | Focus the monitor in a direction. |
+| `zl.move_floating(dx, dy) -> boolean` | Move the focused floating window by a pixel offset. |
+| `zl.resize_floating(dw, dh) -> boolean` | Resize the focused floating window by a pixel offset. |
+| `zl.resize_window(dw, dh) -> boolean` | Resize the focused window, floating or tiled. |
+| `zl.begin_move() -> boolean` | Start an interactive pointer move of the focused window. |
+| `zl.begin_resize() -> boolean` | Start an interactive pointer resize of the focused window. |
+| `zl.workspace(name) -> boolean` | Switch to a workspace. |
+| `zl.toggle_special_workspace(name) -> boolean` | Show or hide a special workspace. |
+| `zl.move_window_workspace(name [, follow [, address]]) -> boolean` | Move the focused window, or the window at `address`, to a workspace. |
+| `zl.workspace_on_monitor(monitor, workspace) -> boolean` | Show a workspace on a named monitor. Also covered in [Workspaces](/zoolander/configuring/workspaces). |
+
+## Layouts
+
+See [Layouts](/zoolander/configuring/layouts).
+
+| Function | Description |
+| --- | --- |
+| `zl.set_layout(name [, ratio [, master_count [, axis]]])` | Set the global layout. Pass a function instead of a name for a custom Lua layout. |
+| `zl.set_workspace_layout(workspace, name [, ratio [, master_count [, axis]]])` | Set the layout for one workspace. |
+| `zl.set_dwindle(options)` | Dwindle options: `preserve_split`, `smart_split`, `smart_resizing`, `force_split`, `split_width_multiplier`. |
+| `zl.set_spatial(options)` | Spatial layout options: fallback sizes, width cap, shelves, snapping, reveal margin, pan fingers. |
+| `zl.layout(action [, a [, b]]) -> result` | Run a layout action on the focused workspace. Returns `done`, `no_target` or `unavailable`. |
+| `zl.layout_context() -> table or nil` | The focused workspace's layout, switcher entry, placement and flags. |
+| `zl.layout_info() -> string` | JSON snapshot of the focused workspace's layout state. |
+
+## Window rules
+
+See [Window rules](/zoolander/configuring/window-rules).
+
+| Function | Description |
+| --- | --- |
+| `zl.add_window_rule(match, pattern, actions) -> true` | Match windows by `app_id`, `title` or `tag` and apply actions. |
+| `zl.add_layer_blur_rule(namespace, ignore_alpha)` | Blur behind matching layer surfaces. |
+| `zl.add_layer_no_animation_rule(namespace)` | Turn off animations for matching layer surfaces. |
+| `zl.add_layer_animation_rule(namespace, style)` | Set the animation style for matching layer surfaces. |
+
+## Workspace rules
+
+See [Workspaces](/zoolander/configuring/workspaces).
+
+| Function | Description |
+| --- | --- |
+| `zl.workspace_info(name) -> table or nil` | `{ name, special, empty }` for a workspace. |
+| `zl.set_workspace_persistent(name, persistent [, monitor]) -> boolean` | Keep a workspace when it is empty, optionally on a named monitor. |
+| `zl.set_workspace_gesture(enabled [, fingers])` | Turn workspace swipe gestures on or off and set the finger count (`2..10`). |
+
+## Monitors
+
+See [Monitors](/zoolander/configuring/monitors).
+
+| Function | Description |
+| --- | --- |
+| `zl.output_rule(options)` | Mode, position, scale and transform for a named output. |
+| `zl.set_output_size(width, height) -> boolean` | Change the size of the primary output when the backend allows it. |
+| `zl.monitor_count() -> integer` | Number of monitors. |
+| `zl.monitor_info(index) -> table or nil` | `{ id, name, mirror, active_workspace = { name } }` for a zero-based monitor index. |
+| `zl.active_monitor_index() -> integer` | Zero-based index of the focused monitor, or a negative number when there is none. |
+| `zl.monitor_at_cursor_index() -> integer` | Zero-based index of the monitor under the pointer, or a negative number when there is none. |
+
+## Environment variables
+
+See [Environment variables](/zoolander/configuring/environment-variables).
+
+| Function | Description |
+| --- | --- |
+| `zl.set_env(name, value) -> boolean` | Set an environment variable for programs Zoolander starts after the call. |
+
+## Hooks, events and queries
+
+See [Hooks and events](/zoolander/configuring/hooks-and-events).
+
+| Function | Description |
+| --- | --- |
+| `zl.on(event, callback)` | Run a function on `startup`, `config_reloaded`, `output_added` or `output_removed`. |
+| `zl.get_windows() -> list` | Every managed window with its address, app ID, title, tag, workspace and state. |
+| `zl.window_count() -> integer` | Number of managed windows. |
+| `require(name)` | Load a Lua module from the config directory. This is a global, not part of `zl`. |
+
+## Constants
+
+The `zl` table also holds integer constants. Use them with the bind functions. See [Binds](/zoolander/configuring/binds).
+
+| Constant | Meaning |
+| --- | --- |
+| `zl.MOD_SHIFT`, `zl.MOD_CTRL`, `zl.MOD_ALT`, `zl.MOD_LOGO` | Modifier flags. Combine them with `+` or `bit.bor`. `MOD_LOGO` is the Super key. |
+| `zl.AXIS_LEFT`, `zl.AXIS_RIGHT`, `zl.AXIS_UP`, `zl.AXIS_DOWN` | Scroll directions for `zl.bind_axis`. |
+| `zl.KEY_BACKSPACE`, `zl.KEY_TAB`, `zl.KEY_RETURN`, `zl.KEY_ESCAPE`, `zl.KEY_SPACE` | XKB keysyms for common keys. |
+| `zl.KEY_LEFT`, `zl.KEY_UP`, `zl.KEY_RIGHT`, `zl.KEY_DOWN` | XKB keysyms for the arrow keys. |
+| `zl.KEY_F1` | XKB keysym for F1. |
+
+For other keys, pass a numeric XKB keysym, or a one-character printable string to `zl.bind`.
+
+## Outside the config
+
+[`zoolanderctl eval`](/zoolander/ipc/zoolanderctl) runs a Lua chunk in the live config, with the same `zl` table. Its reply is the chunk's return value as text:
+
+```sh
+zoolanderctl eval 'return zl.window_count()'
+zoolanderctl eval 'return zl.layout("preset", 1)'
+```

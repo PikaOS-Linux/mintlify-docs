@@ -1,0 +1,200 @@
+---
+title: "Configuring Zoolander"
+sidebarTitle: "Overview"
+description: "Where the Zoolander config lives, how Lua modules and hot reload work, what happens when the config has an error, and how to change a setting."
+---
+
+Zoolander reads one Lua file, `init.lua`. Everything you configure goes through the global `zl` table: settings, key bindings, rules and event handlers. You can split the config into modules and load them with `require`.
+
+## Config location
+
+Zoolander uses the first of these that applies:
+
+| Order | Path | When |
+| --- | --- | --- |
+| 1 | The path you pass with `--config=PATH` | Always, when given |
+| 2 | `$XDG_CONFIG_HOME/zoolander/init.lua` | `XDG_CONFIG_HOME` is an absolute path |
+| 3 | `$HOME/.config/zoolander/init.lua` | Otherwise |
+
+For the default locations, Zoolander creates the `zoolander` directory with mode `0700` if it is missing. The config file can be at most 1 MiB.
+
+See [Command-line flags](/zoolander/installation#command-line-flags) for the other startup options.
+
+## Lua basics
+
+Zoolander embeds LuaJIT, so the config uses Lua 5.1 syntax. The runtime opens these standard libraries:
+
+- base functions (`print`, `pairs`, `ipairs`, `tostring`, `assert`, `pcall` and so on)
+- `table`, `string`, `math` and `bit`
+
+It removes `dofile`, `loadfile`, `load` and `loadstring`, and does not open `io`, `os`, `package`, `debug`, `jit` or `ffi`. This keeps config code away from files and native code by accident. It is not a sandbox: `zl.exec_command` runs `/bin/sh -c` on purpose.
+
+Settings are functions that take a table:
+
+```lua
+zl.set_keyboard({ layout = "gb", repeat_rate = 30, repeat_delay = 400 })
+```
+
+Bindings take a modifier mask, a key and a function:
+
+```lua
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "q", function()
+    return zl.close_window()
+end)
+```
+
+Combine modifiers with `+` or `bit.bor`. A key can be one of the `zl.KEY_*` constants, a numeric XKB keysym, or a one-character printable string. See [Binds](/zoolander/configuring/binds).
+
+### Top level versus startup
+
+The first config pass runs before the compositor is attached. During that pass, actions such as `zl.workspace`, `zl.close_window` and `zl.exec_command` do nothing, return `false`, and log one warning:
+
+```text
+zoolander: zl.exec_command does nothing before compositor startup; use a startup handler or binding
+```
+
+Put setters at the top level. Put actions with side effects in a binding or a `startup` handler:
+
+```lua
+zl.set_layout("dwindle", 0.6, 1)
+
+zl.on("startup", function()
+    zl.exec_command("otter-bar")
+end)
+```
+
+Reloads behave differently. A reload runs with the compositor attached, so a top-level action runs every time a reload reaches it, even if a later line makes that reload fail. This is another reason to keep actions out of the top level. See [Hooks and events](/zoolander/configuring/hooks-and-events).
+
+## Splitting the config into modules
+
+`require("name")` loads a module from the config directory. Zoolander uses its own loader, not Lua's `package` library:
+
+- A name may contain letters, digits, `_`, `-` and dots.
+- Dots map to subdirectories. `require("theme.colors")` loads `theme/colors.lua` or `theme/colors/init.lua`.
+- Zoolander tries `name.lua` first, then `name/init.lua`.
+- The resolved path must stay inside the config directory. Paths that escape it are rejected.
+- Modules are text only, limited to 1 MiB, and cached for the life of the current config runtime.
+
+A module can return a value:
+
+```lua
+-- ~/.config/zoolander/colors.lua
+return {
+    active = "#7aa2f7",
+    inactive = "#414868",
+}
+```
+
+```lua
+-- ~/.config/zoolander/init.lua
+local colors = require("colors")
+
+zl.set_window_style({
+    active_border = colors.active,
+    inactive_border = colors.inactive,
+})
+```
+
+Errors inside a module name the file, for example `colors.lua:3: ...`.
+
+## Hot reload
+
+Zoolander watches the directory that holds `init.lua`. It reloads when you save:
+
+- `init.lua` itself, or
+- any other `.lua` file in the same directory whose name does not start with a dot.
+
+Files that start with a dot, such as an editor's `.#init.lua` lock file, are ignored. The watch is not recursive. If you edit a module in a subdirectory, reload by hand:
+
+```bash
+zoolanderctl reload
+```
+
+Each reload builds a new Lua runtime and runs the whole config in it. Zoolander swaps it in only if the whole config succeeds. Bindings, event handlers and rules from the old runtime are removed after the new one is ready. Setters are applied together, so a failed reload leaves every setting as it was.
+
+When a reload succeeds, the log says:
+
+```text
+info(zoolander_hotreload): config reloaded: /home/you/.config/zoolander/init.lua
+```
+
+When it fails:
+
+```text
+warning(zoolander_hotreload): config reload failed, keeping previous state: init.lua:12: ...
+```
+
+If you delete the config directory, the kernel drops the watch. Zoolander logs `config directory watch removed; hot reload stopped, use zoolanderctl reload`.
+
+## Errors and the emergency config
+
+What happens on an error depends on when it happens:
+
+| Situation | Result |
+| --- | --- |
+| Lua syntax or runtime error at startup | Zoolander logs `initial config load failed: ...; loading emergency config` and runs the built-in emergency config. |
+| `init.lua` missing at startup | Same as above. |
+| Error during a reload | The previous config stays active. The error is logged and returned by `zoolanderctl reload`. |
+| Unknown field in an option table | Zoolander logs `zoolander: zl.set_blur: unknown field <name>` and keeps loading. |
+| Invalid argument value | The call raises a Lua error, which fails the load. |
+| Error inside a binding, event handler or layout callback | Zoolander logs it and keeps running. |
+
+The emergency config gives you a terminal, a launcher, close, fullscreen, workspaces 1 to 5 and a logout key. See [First launch](/zoolander/installation#first-launch) for its bindings and [Example config](/zoolander/configuring/example-config#the-emergency-config) for its source.
+
+While the emergency config runs, Zoolander still watches the config directory. Fix `init.lua`, save it, and Zoolander loads it. `zoolanderctl status` shows `config_ok=false` until a load succeeds.
+
+## How to change a setting
+
+This example turns on blur.
+
+<Steps>
+  <Step title="Find the setting">
+    Look it up in [Variables](/zoolander/configuring/variables). Blur lives in `zl.set_blur`, with fields such as `enabled`, `size` and `passes`.
+  </Step>
+  <Step title="Add it to your config">
+    Add the call at the top level of `init.lua`, or in a module that `init.lua` requires:
+
+    ```lua
+    zl.set_blur({
+        enabled = true,
+        size = 4,
+        passes = 2,
+    })
+    ```
+  </Step>
+  <Step title="Save the file">
+    Zoolander reloads as soon as the file is written. You do not need to restart.
+  </Step>
+  <Step title="Check the result">
+    Ask the control socket whether the config loaded:
+
+    ```bash
+    zoolanderctl status
+    ```
+
+    `config_ok=true` means the reload succeeded. If it says `false`, run `zoolanderctl reload` to see the error.
+  </Step>
+</Steps>
+
+You can also try a value without saving it, using `eval`. The change lasts until the next reload:
+
+```bash
+zoolanderctl eval 'zl.set_blur({ enabled = false })'
+```
+
+## Config pages
+
+| Page | What it covers |
+| --- | --- |
+| [Variables](/zoolander/configuring/variables) | Every setter and its fields: keyboard, pointer, presentation, window style, decorations, blur, dimming, Xwayland. |
+| [Animations](/zoolander/configuring/animations) | Animation leaves, durations, curves and styles. |
+| [Binds](/zoolander/configuring/binds) | Key, mouse, scroll and global-shortcut bindings. |
+| [Dispatchers](/zoolander/configuring/dispatchers) | Actions you call from binds, such as `zl.workspace` and `zl.close_window`. |
+| [Monitors](/zoolander/configuring/monitors) | Output rules for mode, position, scale and transform. |
+| [Workspaces](/zoolander/configuring/workspaces) | Workspace layouts, persistence, special workspaces and gestures. |
+| [Layouts](/zoolander/configuring/layouts) | Built-in tiling layouts, spatial layouts and custom Lua layouts. |
+| [Window rules](/zoolander/configuring/window-rules) | Window and layer rules. |
+| [Hooks and events](/zoolander/configuring/hooks-and-events) | `zl.on` events and when they run. |
+| [Lua API](/zoolander/configuring/lua-api) | The full `zl` reference. |
+| [Environment variables](/zoolander/configuring/environment-variables) | Variables Zoolander reads and the ones it sets for clients. |
+| [Example config](/zoolander/configuring/example-config) | A complete annotated config and the emergency config. |

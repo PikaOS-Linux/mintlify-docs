@@ -1,14 +1,14 @@
 ---
 title: "otter-keybindhelp"
 sidebarTitle: "Shortcut overlay"
-description: "One-shot searchable shortcut overlay for Niri, Hyprland, and Mango."
+description: "One-shot searchable shortcut overlay for Niri, Hyprland, Mango, and Zoolander."
 ---
 
 `otter-keybindhelp` reads your compositor config and shows shortcuts in a centered overlay. It displays readable action names for commands and groups shortcuts by key mode or submap. The app is part of the `otter-shell` metapackage.
 
 Do not autostart it. Bind a hotkey, or launch **Otter Keyboard Shortcuts** from [otter-launcher](/desktop/otter-launcher). It exits when you dismiss it.
 
-Niri, Hyprland, and Mango are detected automatically. Override with flags if detection is wrong, or if the config is not in the default path.
+Niri, Hyprland, Mango, and Zoolander are detected automatically. Zoolander is detected from `XDG_CURRENT_DESKTOP`. Override with flags if detection is wrong, or if the config is not in the default path.
 
 ## Usage
 
@@ -20,15 +20,16 @@ otter-keybindhelp
 otter-keybindhelp --compositor niri --config ~/.config/niri/config.kdl
 otter-keybindhelp --compositor hyprland --config ~/.config/hypr/hyprland.lua
 otter-keybindhelp --compositor mango --config ~/.config/mango/config.conf
+otter-keybindhelp --compositor zoolander --config saved-bindings.payload
 otter-keybindhelp --dump
 ```
 
-| Flag                                 | Meaning                                                                   |
-| ------------------------------------ | ------------------------------------------------------------------------- |
-| `--compositor niri\|hyprland\|mango` | Skip automatic detection                                                  |
-| `--config PATH`                      | Read a non-default root config                                            |
-| `--dump`                             | Print normalized shortcuts to the terminal instead of opening the overlay |
-| `-h`, `--help`                       | Usage                                                                     |
+| Flag                                            | Meaning                                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `--compositor niri\|hyprland\|mango\|zoolander` | Skip automatic detection                                                                         |
+| `--config PATH`                                 | Read a non-default root config. For Zoolander, read a saved bindings payload from a file instead |
+| `--dump`                                        | Print normalized shortcuts to the terminal instead of opening the overlay                        |
+| `-h`, `--help`                                  | Usage                                                                                            |
 
 `--dump` is useful when you want to check what it parsed without a GUI.
 
@@ -53,6 +54,13 @@ hl.bind("SUPER + SHIFT + Slash", hl.dsp.exec_cmd("otter-keybindhelp"), {
 bind=SUPER+SHIFT,slash,spawn,otter-keybindhelp
 ```
 
+```lua
+-- Zoolander
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "/", function()
+    return zl.exec_command("otter-keybindhelp")
+end, { description = "Show keyboard shortcuts" })
+```
+
 ## Keyboard
 
 Type to search. Press **Backspace** or **Ctrl+Backspace** to edit the query, or **Ctrl+U** to clear it. Use **Tab** / **Shift+Tab** to change context and **Page Up** / **Page Down** or the mouse wheel to change pages.
@@ -64,10 +72,12 @@ Press **Escape**, click outside, or right-click to close.
 - **Niri:** `binds {}` blocks, `hotkey-overlay-title`, and recursive `include` files
 - **Hyprland:** current Lua `hl.bind()` / `require()`, plus legacy `bind...=` / `source=` configs
 - **Mango:** keyboard, mouse, axis, gesture, and switch binds, with `keymode` contexts and recursive `source` files
+- **Zoolander:** the running compositor's `zl.bindings()`, read through `zoolanderctl eval`. Zoolander binds are Lua callbacks, so there is no config file to parse. Each bind's `description` becomes its label, and binds without one stay in the list. With `--config PATH`, the same payload comes from a file: records split by `0x1E`, with kind, mods, key, and description fields split by `0x1F`
 
 Each file is capped at 1 MiB, include depth at 32, and total bindings at 2048.
 
 ## Dependencies
 
 - Wayland compositor with `zwlr_layer_shell_v1`
-- Niri, Hyprland, or Mango (other compositors are not parsed)
+- Niri, Hyprland, Mango, or Zoolander (other compositors are not parsed)
+- For Zoolander, `zoolanderctl`, which the `zoolander` package installs

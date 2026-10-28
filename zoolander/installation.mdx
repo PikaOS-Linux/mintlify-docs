@@ -1,0 +1,181 @@
+---
+title: "Installing and starting Zoolander"
+sidebarTitle: "Installation"
+description: "Install the zoolander package, start a session from a display manager, a TTY or inside another compositor, and check what loads on first launch."
+---
+
+Zoolander ships as the `zoolander` package for PikaOS. It is separate from the `otter-shell` metapackage, so install it on its own.
+
+## Install with pikman
+
+```bash
+pikman install zoolander
+```
+
+The package pulls in `xwayland`, `libvulkan1`, `netcat-openbsd` (for `zoolanderctl`) and `seatd`. It recommends `mesa-vulkan-drivers` or another Vulkan driver.
+
+For the portal backend that the installed portal config prefers, also install `xdg-desktop-portal-otter`. See [xdg-desktop-portal-otter](/apps/xdg-desktop-portal-otter).
+
+### Installed files
+
+| Path | Purpose |
+| --- | --- |
+| `/usr/bin/zoolander` | The compositor. |
+| `/usr/bin/zoolander-session` | Session wrapper that the display manager runs. |
+| `/usr/bin/zoolanderctl` | Control socket client. See [zoolanderctl](/zoolander/ipc/zoolanderctl). |
+| `/usr/lib/zoolander/libzoolander_bell.so` | Plays the system bell through PipeWire. Loaded on the first ring. |
+| `/usr/share/wayland-sessions/zoolander.desktop` | Session entry named **Zoolander**. Runs `/usr/bin/zoolander-session`. |
+| `/usr/share/xdg-desktop-portal/zoolander-portals.conf` | Portal backend order: `otter`, then `wlr`, then `gtk`. |
+
+The package does not install a default `init.lua`. On first launch, Zoolander uses its built-in emergency config until you write one. See [First launch](#first-launch).
+
+### Build from source
+
+`install-system.sh` needs otr 0.2.2 or newer. The Debian package build asks for otr 0.2.5 or newer. You also need the other build dependencies listed in `debian/control`, and a `zooland` checkout next to the `zoolander` checkout.
+
+```bash
+./install-system.sh
+```
+
+The script fetches the pinned LuaJIT if it is missing, builds the compositor and the bell library as your user, and then uses `sudo` to install under `/usr/local`. A source install puts `zoolander` and `zoolanderctl` in `/usr/local/bin`, the bell library in `/usr/local/lib/zoolander`, and the session and portal files under `/usr/local/share`. The source session file runs `/usr/local/bin/zoolander` directly, without the `zoolander-session` wrapper.
+
+Set `DESTDIR` to stage the install without `sudo`:
+
+```bash
+DESTDIR="$PWD/stage" ./install-system.sh
+```
+
+Set `OTR` to use a compiler other than the `otr` on your `PATH`.
+
+## Start a session
+
+### From a display manager
+
+Log out, pick **Zoolander** from the session list, and log in. The session file sets `DesktopNames=Zoolander`.
+
+The packaged session runs `zoolander-session`. That wrapper starts `/usr/bin/zoolander` with any arguments you pass. When Zoolander exits, it stops the `pika-zoolander-session.target` systemd user unit if that unit is active.
+
+### From a TTY
+
+Log in on a virtual terminal and run:
+
+```bash
+zoolander-session
+```
+
+Use `zoolander` instead if you built from source. With no backend flag and no `WAYLAND_DISPLAY`, Zoolander tries DRM first and falls back to headless if DRM fails.
+
+Zoolander needs `XDG_RUNTIME_DIR` to create its Wayland socket. A normal login through `pam_systemd` sets it. Zoolander does not set `XDG_CURRENT_DESKTOP` itself. Export it before starting, or set it for clients from your config with `zl.set_env`:
+
+```bash
+XDG_CURRENT_DESKTOP=Zoolander zoolander-session
+```
+
+### Nested inside another compositor
+
+Run `zoolander` from a terminal inside a Wayland session. When `WAYLAND_DISPLAY` is set and you pass no backend flag, Zoolander opens a window titled `zoolander` on the host compositor:
+
+```bash
+zoolander --spawn foot
+```
+
+Clients you start from inside it receive Zoolander's own `WAYLAND_DISPLAY`. A nested session renders in software, so `zoolanderctl status` reports `renderer="software"`.
+
+<Warning>
+  Do not run the DRM backend against a device that a live desktop session is using. Inside a desktop, use the nested or headless backend.
+</Warning>
+
+### Headless
+
+The headless backend has no display and needs no GPU or seat. Use it for tests and scripted runs:
+
+```bash
+zoolander --headless --headless-size=1280x720 --spawn foot
+```
+
+## Command-line flags
+
+```text
+zoolander [OPTIONS] [--spawn CMD [ARGS...]]
+```
+
+| Flag | Description | Type | Default |
+| --- | --- | --- | --- |
+| `-h`, `--help` | Print usage and exit. | flag | |
+| `--headless` | Use the headless backend. Takes precedence over every DRM option. | flag | off |
+| `--headless-size=WxH` | Size of the first headless output. Each side is 1 to 2147483647. | `WxH` | `64x48` |
+| `--headless-size2=WxH` | Add a second headless output of this size. | `WxH` | none |
+| `--drm` | Use the DRM backend on an auto-picked device. Fails instead of falling back if DRM cannot start. | flag | off |
+| `--drm=DEVICE` | Use the DRM backend on this device, for example `/dev/dri/card1`. | path | |
+| `--drm-list` | List DRM candidates in ranked order, plus rejected cards and the reason, then exit. | flag | |
+| `--config=PATH` | Load this Lua file instead of the default config. | path | see [Config location](/zoolander/configuring/overview#config-location) |
+| `--spawn CMD [ARGS...]` | Start a client after startup. Takes the rest of the command line, so put it last. Accepts at most 16 words in total. | command | none |
+
+Without a backend flag, Zoolander picks a backend in this order:
+
+1. Nested, when `WAYLAND_DISPLAY` is set.
+2. DRM, on the best device it finds.
+3. Headless, if DRM fails.
+
+An unknown flag or a malformed size prints the error and the usage text, and exits with status 2.
+
+`--drm-list` prints one line per card:
+
+```text
+drm: #1 /dev/dri/card1 driver=<driver> connected=2 internal_panel=false boot_vga=true virtual=false
+drm: -- /dev/dri/card0 driver=<driver> REJECTED: <reason>
+```
+
+## Portals
+
+`zoolander-portals.conf` tells `xdg-desktop-portal` to use the `otter` backend first, then `wlr`, then `gtk`. `xdg-desktop-portal` picks this file when `XDG_CURRENT_DESKTOP` is `Zoolander` in its own environment.
+
+The portal service is started by D-Bus, so it reads the D-Bus and systemd user environment, not your shell. Export the session variables there from your `startup` handler:
+
+```lua
+zl.set_env("XDG_CURRENT_DESKTOP", "Zoolander")
+
+zl.on("startup", function()
+    zl.exec_command("dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP")
+end)
+```
+
+`zl.set_env` only affects clients Zoolander starts, so the command above sees `XDG_CURRENT_DESKTOP=Zoolander` and passes it on.
+
+## First launch
+
+Zoolander looks for its config in this order:
+
+1. The path given with `--config=PATH`.
+2. `$XDG_CONFIG_HOME/zoolander/init.lua`, when `XDG_CONFIG_HOME` is an absolute path.
+3. `$HOME/.config/zoolander/init.lua`.
+
+When it uses the default location, Zoolander creates the `zoolander` directory (mode `0700`) if it does not exist. It does not create `init.lua`.
+
+If the file is missing or fails to load, Zoolander logs the error and loads the emergency config:
+
+```text
+reading "/home/you/.config/zoolander/init.lua" failed: <error>
+initial config load failed: <message>; loading emergency config
+```
+
+The emergency config gives you these bindings:
+
+| Keys | Action |
+| --- | --- |
+| <kbd>Super</kbd> + <kbd>Return</kbd> | Run `otter-term` |
+| <kbd>Super</kbd> + <kbd>D</kbd> | Run `otter-launcher` |
+| <kbd>Super</kbd> + <kbd>Q</kbd> | Close the focused window |
+| <kbd>Super</kbd> + <kbd>F</kbd> | Toggle fullscreen |
+| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> | Run `otter-logout` |
+| <kbd>Super</kbd> + <kbd>1</kbd> to <kbd>5</kbd> | Switch to workspace 1 to 5 |
+
+It also starts `otter-wallpaper` and `otter-bar`, uses the Dwindle layout, and turns off decorations, blur and animations. See [Example config](/zoolander/configuring/example-config#the-emergency-config) for the full source.
+
+The emergency config has no quit binding of its own. If the Otter apps are not installed, quit over the control socket. From another TTY, name the Wayland socket that Zoolander created. Zoolander takes the first free name in `$XDG_RUNTIME_DIR`, starting at `wayland-0`:
+
+```bash
+WAYLAND_DISPLAY=wayland-1 zoolanderctl quit
+```
+
+Zoolander keeps watching the config directory while the emergency config runs. Save a working `init.lua` there and it loads at once. Start from the [example config](/zoolander/configuring/example-config).

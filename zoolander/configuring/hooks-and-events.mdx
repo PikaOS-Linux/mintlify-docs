@@ -1,0 +1,250 @@
+---
+title: "Hooks and events"
+sidebarTitle: "Hooks and events"
+description: "Run Lua when Zoolander starts, reloads its config, or gains and loses an output. Query open windows, and learn how config loads and hot reloads work."
+---
+
+Your config runs once when it loads. To run code later, you register a callback: a binding (see [Binds](/zoolander/configuring/binds)), a [custom layout function](/zoolander/configuring/layouts#custom-lua-layouts), or an event handler with `zl.on`.
+
+## Register an event handler
+
+```lua
+zl.on(event, callback)
+```
+
+| Name | Description | Type |
+| --- | --- | --- |
+| `event` | One of the event names below. | string |
+| `callback` | The function to call. | function |
+
+`zl.on` returns nothing. An unknown event name raises `zl.on: event must be startup, config_reloaded, output_added or output_removed`.
+
+## Events
+
+| Event | Fires when | Callback arguments |
+| --- | --- | --- |
+| `startup` | Once per compositor run, after the first config load, after the backend and Xwayland have started, and before any `--spawn` command runs. | none |
+| `config_reloaded` | After every successful config load, including the first one. It does not fire when a reload fails. | none |
+| `output_added` | When an output is connected, and when an output that was turned off through output management is turned on again. | monitor table |
+| `output_removed` | When an output is disconnected or turned off through output management, after its windows have moved to another output. | monitor table |
+
+<Warning>`startup` fires only once, for the config that is loaded at launch. A reloaded config never sees `startup`, even if it registers a new `startup` handler. Put code that must run after every load in a `config_reloaded` handler.</Warning>
+
+<Note>The first config load happens before the compositor is running. A `config_reloaded` handler that runs then sees no outputs or windows, and actions such as `zl.workspace` do nothing and log a warning. On later reloads the compositor is running and the same handler works normally.</Note>
+
+### Monitor table
+
+`output_added` and `output_removed` handlers receive one table, in the same shape `zl.monitor_info` returns:
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `id` | Output ID. | integer |
+| `name` | Connector name, for example `DP-1` or `HDMI-A-1`. | string |
+| `mirror` | `true` when the output mirrors another one. | bool |
+| `active_workspace` | Table with `name`, the output's active workspace. | table |
+
+For `output_removed`, the table describes the output as it was just before it went away.
+
+```lua
+zl.on("output_added", function(monitor)
+    if monitor.name == "HDMI-A-1" then
+        zl.workspace_on_monitor(monitor.name, "9")
+    end
+end)
+
+zl.on("output_removed", function(monitor)
+    zl.exec_command("notify-send 'Output removed' '" .. monitor.name .. "'")
+end)
+```
+
+See [Monitors](/zoolander/configuring/monitors) for `zl.monitor_info` and output rules.
+
+### How handlers run
+
+- Handlers for one event run in the order you registered them.
+- Zoolander logs an error in a handler as `config event handler: <message>`. The other handlers still run, and the compositor keeps going.
+- A handler registered while an event is being delivered does not run for that delivery. It runs from the next one.
+- Handlers belong to the config that registered them. When a reload succeeds, Zoolander drops the old config's handlers with it.
+
+## Startup commands
+
+Put commands that start programs in a `startup` handler, so they run once and not on every reload:
+
+```lua
+zl.on("startup", function()
+    zl.exec_command("otter-wallpaper")
+    zl.exec_command("otter-bar")
+    zl.exec_command("otter-notifications")
+end)
+```
+
+Code at the top level of the config runs on every reload attempt that reaches it, so a top-level `zl.exec_command` would start the program again each time you save.
+
+To run something after each reload, use `config_reloaded`:
+
+```lua
+zl.on("config_reloaded", function()
+    zl.exec_command("notify-send 'Zoolander' 'Config reloaded'")
+end)
+```
+
+## Config lifecycle
+
+### Load order
+
+1. Zoolander creates a fresh Lua state and resets every setting to its default.
+2. It runs `init.lua`. Setters such as `zl.set_layout` or `zl.add_window_rule` record settings. Binds, event handlers and a custom layout function are registered with the new Lua state.
+3. If the file fails to compile or raises an error, Zoolander throws the new state away and restores the settings it had before. The previous config stays fully active.
+4. If it succeeds, the new state becomes the live one. Zoolander applies the new settings, removes the binds and layout function of the old state, then closes it.
+5. `config_reloaded` fires on the new state.
+
+At launch, if the first load fails, Zoolander loads a built-in emergency config instead. It uses Dwindle, binds `Super+Return` to `otter-term`, `Super+D` to `otter-launcher`, `Super+Q` to close the window, `Super+F` to fullscreen, `Super+Shift+Q` to `otter-logout` and `Super+1` to `Super+5` to workspaces, and starts `otter-wallpaper` and `otter-bar` on `startup`.
+
+### Hot reload
+
+Zoolander watches the directory that holds `init.lua`. It reloads the whole config when:
+
+- `init.lua` is written, or a file is moved over it.
+- Any other `.lua` file in the same directory is written or moved in. Names that start with `.` (editor lock and swap files) are ignored.
+- A symbolic link named like one of those files is created.
+
+The watch is not recursive. A change to a module in a subdirectory, such as `lib/util.lua`, does not trigger a reload. Run `zoolanderctl reload` for those. If the config directory itself is deleted, the watch stops and Zoolander logs a warning. See [zoolanderctl](/zoolander/ipc/zoolanderctl).
+
+The config file and each module can be up to 1 MiB.
+
+### What survives a reload
+
+| Kept | Replaced |
+| --- | --- |
+| Open windows, their workspaces and positions | All settings: they reset to defaults and the new config sets them again |
+| Each workspace's current layout, unless the reload changes the global layout for the focused workspace | Binds, event handlers and the custom layout function |
+| Spatial layout state: camera, groups, shelves | Lua globals and module values (`require` cache) |
+| Processes started by `zl.exec_command` | Window addresses from `zl.get_windows` |
+
+After a reload, window rules run again for every open window. The `workspace` action does not run again. See [Window rules](/zoolander/configuring/window-rules#when-rules-run).
+
+### Actions during a load
+
+Actions that need a running compositor, such as `zl.workspace`, `zl.exec_command`, `zl.toggle_floating` or `zl.layout`, return `false` (or `unavailable`) during the first load and log one warning:
+
+```text
+zoolander: zl.workspace does nothing before compositor startup; use a startup handler or binding
+```
+
+During a reload the compositor is running, so a top-level action does run, even when a later line makes the reload fail. Keep side effects in bindings and handlers.
+
+## Modules
+
+`require("name")` loads `name.lua` or `name/init.lua` from the directory that holds `init.lua`. Dots in the name are subdirectories, so `require("lib.util")` loads `lib/util.lua`.
+
+- Module names may contain letters, digits, `_`, `-` and single dots between parts.
+- The resolved file must stay inside the config directory. Symbolic links that point outside it are refused.
+- A module runs once per config load and its return value is cached. A reload starts with an empty cache, so every module runs again.
+- The module receives its name as its first argument, as in standard Lua.
+- An error inside a module reports the path below the config directory, for example `keybinds.lua:12: ...`.
+
+```lua
+-- init.lua
+local layouts = require("layouts")
+layouts.setup({ announce = function(name) zl.exec_command("notify-send " .. name) end })
+require("keybinds")
+require("windows")
+```
+
+### Lua environment
+
+The config runs on LuaJIT with the `base`, `table`, `string`, `math` and `bit` libraries. `dofile`, `loadfile`, `load` and `loadstring` are removed. `io`, `os`, `package`, `debug`, `jit` and `ffi` are not available.
+
+<Warning>This limits what Lua code can do directly. It is not a process sandbox: `zl.exec_command` runs any shell command with your user's permissions.</Warning>
+
+## Query windows
+
+```lua
+zl.get_windows() -> { window, ... }
+zl.window_count() -> integer
+```
+
+`zl.get_windows()` returns an array with one table per window Zoolander manages, on every output. Before the compositor starts, the array is empty. Each window table has these fields:
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `address` | Opaque handle for this window. Pass it to `zl.move_window_workspace`. | light userdata |
+| `app_id` | App ID (X11: `WM_CLASS` class). | string |
+| `title` | Window title. | string |
+| `tag` | xdg-toplevel-tag tag, empty when unset. | string |
+| `workspace` | Table with `name` (string) and `special` (bool, `true` for `special` and `special:name`). | table |
+| `mapped` | `true` when the window is mapped. | bool |
+| `floating` | `true` when the window floats. | bool |
+| `fullscreen` | `true` when the window is fullscreen. | bool |
+| `pinned` | `true` when the window is pinned to all workspaces. | bool |
+| `gtk_modal` | `true` when GTK marks the window modal. | bool |
+| `appmenu_service`, `appmenu_path` | KDE app menu D-Bus service and object path. | string |
+| `gtk_application_id` | GTK application ID. | string |
+| `gtk_app_menu_path`, `gtk_menubar_path` | GTK menu object paths. | string |
+| `gtk_window_object_path`, `gtk_application_object_path` | GTK window and application object paths. | string |
+| `gtk_unique_bus_name` | GTK application's unique D-Bus name. | string |
+| `gtk_a11y_bus_name`, `gtk_a11y_object_path` | GTK accessibility bus name and object path. | string |
+
+String fields are empty when the client does not set them.
+
+`zl.window_count()` returns the number of windows Zoolander manages, the same as `#zl.get_windows()`. It returns `0` before the compositor starts.
+
+### Window addresses
+
+An `address` is valid only in the config that returned it. It stays the same for the same window on later `zl.get_windows()` calls. Each call forgets the addresses of windows that have closed. When you pass a closed window's address to `zl.move_window_workspace`, the call returns `false`.
+
+```lua
+-- Move every Firefox window to workspace 2
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, string.byte("w"), function()
+    for _, window in ipairs(zl.get_windows()) do
+        if window.app_id == "firefox" then
+            zl.move_window_workspace("2", false, window.address)
+        end
+    end
+end)
+```
+
+```lua
+-- Print a short window list from outside
+-- zoolanderctl eval 'return windows_summary()'
+function windows_summary()
+    local lines = {}
+    for _, w in ipairs(zl.get_windows()) do
+        lines[#lines + 1] = string.format("%s [%s] on %s", w.title, w.app_id, w.workspace.name)
+    end
+    return table.concat(lines, "; ")
+end
+```
+
+`zoolanderctl eval` runs Lua in the live config, so it can call global functions the config defines. See [zoolanderctl](/zoolander/ipc/zoolanderctl).
+
+## Examples
+
+Count windows on a workspace before switching:
+
+```lua
+local function windows_on(name)
+    local n = 0
+    for _, w in ipairs(zl.get_windows()) do
+        if w.workspace.name == name then n = n + 1 end
+    end
+    return n
+end
+
+zl.bind(zl.MOD_LOGO, string.byte("e"), function()
+    if windows_on("3") == 0 then zl.exec_command("otter-files") end
+    return zl.workspace("3")
+end)
+```
+
+Place workspaces when a second monitor appears:
+
+```lua
+zl.on("output_added", function(monitor)
+    if monitor.name == "DP-2" then
+        for _, name in ipairs({ "6", "7", "8" }) do
+            zl.set_workspace_persistent(name, true, monitor.name)
+        end
+    end
+end)
+```

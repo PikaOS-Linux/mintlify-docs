@@ -1,0 +1,330 @@
+---
+title: "Example config"
+sidebarTitle: "Example config"
+description: "A complete, annotated multi-file Zoolander config for an Otter Shell desktop, and the built-in emergency config."
+---
+
+This config is based on the Zoolander author's own desktop config, with personal paths, apps and monitor names replaced by generic ones. It runs Otter Shell on two monitors. Copy the files into `~/.config/zoolander/` and adjust them.
+
+The [Zoolander repository](https://git.pika-os.com/otter-shell/zoolander) has the original in `config/ferreo`. That version also includes a `split_workspaces.lua` module that gives each monitor its own numbered set of workspaces, and a `layouts.lua` module with bindings for the spatial layouts. It is one person's setup, not a built-in profile.
+
+## File layout
+
+```text
+~/.config/zoolander/
+├── init.lua       settings, then requires the other modules
+├── monitors.lua   output rules
+├── env.lua        environment for clients
+├── autostart.lua  programs to start with the session
+├── keybinds.lua   key, mouse and scroll bindings
+└── windows.lua    window and layer rules
+```
+
+All the files sit in the config directory itself, so saving any of them reloads the config.
+
+## init.lua
+
+```lua
+require("monitors")
+
+-- Tiling: Dwindle with a 60% split and one master window.
+zl.set_layout("dwindle", 0.6, 1)
+zl.set_dwindle({
+    preserve_split = false,
+    smart_split = false,
+    smart_resizing = true,
+    force_split = 0,
+    split_width_multiplier = 1.0,
+})
+
+-- Workspace 3 scrolls horizontally instead of tiling.
+zl.set_workspace_layout("3", "scrolling", 0.6, 1)
+
+-- Three-finger touchpad swipes switch workspaces.
+zl.set_workspace_gesture(true, 3)
+
+-- Input. Leave out `layout` to use XKB_DEFAULT_LAYOUT or /etc/default/keyboard.
+zl.set_keyboard({ repeat_rate = 50, repeat_delay = 300, numlock = true })
+zl.set_pointer({ left_handed = false, accel_profile = "flat", follow_mouse = 2 })
+
+-- Let games tear and use VRR when fullscreen. HDR switches on when content needs it.
+zl.set_presentation({
+    allow_tearing = true,
+    immediate_fullscreen = true,
+    vrr = 2,
+    direct_scanout = true,
+    hdr = "auto",
+})
+
+-- Gaps, borders, rounding and opacity.
+zl.set_window_style({
+    gaps_in = 3,
+    gaps_out = 6,
+    border_size = 2,
+    active_border = "#dbab96ff",
+    inactive_border = "#201e1eff",
+    rounding = 20,
+    rounding_power = 4,
+    active_opacity = 0.98,
+    inactive_opacity = 0.95,
+    fullscreen_opacity = 1.0,
+    shadow = {
+        enabled = false,
+        range = 35,
+        offset_y = 12,
+        color = "#00000073",
+    },
+})
+
+-- Server-side title bars with close and fullscreen buttons.
+zl.set_ssd({
+    enabled = true,
+    border = 2,
+    titlebar = 24,
+    active_titlebar = "#10151fff",
+    inactive_titlebar = "#0b0f17ff",
+    show_title = true,
+    title_font = "sans-serif",
+    title_font_size = 13,
+    title_color = "#eaf0faff",
+    title_align = "center",
+    buttons = {
+        { action = "close", side = "right", width = 24, color = "#d75f5fff" },
+        { action = "fullscreen", side = "right", width = 24, color = "#5082d2ff" },
+    },
+})
+
+-- Native overview: workspaces side by side, rail at the top.
+zl.set_overview({ axis = "horizontal", rail = "top" })
+
+-- Blur behind translucent windows, and dim unfocused ones.
+zl.set_blur({
+    enabled = true,
+    size = 2,
+    passes = 4,
+    noise = 0.02,
+    contrast = 1.55,
+    brightness = 0.75,
+    vibrancy = 0.55,
+    vibrancy_darkness = 0.25,
+})
+zl.set_dim({ inactive = true, strength = 0.1, special = 0.3, around = 0.02 })
+
+-- Animations. One curve for everything, longer for workspaces and layers.
+zl.set_animations_enabled(true)
+local decel = { x1 = 0.1, y1 = 1, x2 = 0, y2 = 1 }
+zl.set_animation_leaf("windows_in", { duration = 400, curve = decel, style = "slide" })
+zl.set_animation_leaf("windows_out", { duration = 400, curve = decel, style = "slide" })
+zl.set_animation_leaf("windows_move", { duration = 400, curve = decel })
+zl.set_animation_leaf("fade", { duration = 400, curve = decel })
+zl.set_animation_leaf("workspaces", { duration = 800, curve = decel })
+zl.set_animation_leaf("layers", { duration = 800, curve = decel, style = "slide" })
+
+require("env")
+require("autostart")
+require("keybinds")
+require("windows")
+```
+
+Each `set_animation_leaf` call resets `enabled`, `duration`, `style` and `percent` to their defaults when you leave them out, so give each leaf every field you want. See [Animations](/zoolander/configuring/animations).
+
+## monitors.lua
+
+```lua
+-- List output names with: zoolanderctl eval 'return zl.monitor_info(0).name'
+-- (use 1, 2 and so on for the other monitors), or with wlr-randr.
+-- A 4K panel at scale 2 is 1920 logical pixels wide, so the second
+-- monitor starts at x = 1920.
+zl.output_rule({
+    output = "DP-1",
+    width = 3840,
+    height = 2160,
+    refresh = 144,
+    x = 0,
+    y = 0,
+    scale = 2,
+})
+
+zl.output_rule({
+    output = "HDMI-A-1",
+    width = 2560,
+    height = 1440,
+    refresh = 144,
+    x = 1920,
+    y = 0,
+    scale = 1,
+})
+```
+
+Each output name can have one rule. See [Monitors](/zoolander/configuring/monitors).
+
+## env.lua
+
+```lua
+-- These only reach programs Zoolander starts after this point.
+zl.set_env("XDG_CURRENT_DESKTOP", "Zoolander")
+zl.set_env("XDG_SESSION_DESKTOP", "Zoolander")
+zl.set_env("XDG_SESSION_TYPE", "wayland")
+zl.set_env("MOZ_ENABLE_WAYLAND", "1")
+zl.set_env("GDK_BACKEND", "wayland")
+zl.set_env("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
+zl.set_env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
+
+-- Also sets the cursor Zoolander draws.
+zl.set_env("XCURSOR_THEME", "Adwaita")
+zl.set_env("XCURSOR_SIZE", "24")
+```
+
+See [Environment variables](/zoolander/configuring/environment-variables).
+
+## autostart.lua
+
+```lua
+local function run(command)
+    assert(zl.exec_command(command))
+end
+
+-- Startup handlers run once, after the compositor is up. They do not run
+-- again on reload, so the shell is not started twice.
+zl.on("startup", function()
+    -- Hand the session variables to D-Bus and systemd, so portals and
+    -- D-Bus-activated services find this compositor.
+    run("dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP")
+
+    run("otter-wallpaper &")
+    run("otter-osd &")
+    run("otter-notifications &")
+    run("otter-polkit &")
+    run("otter-idle &")
+    run("otter-theme-gen &")
+    run("otter-clip daemon &")
+    run("otter-bar &")
+end)
+```
+
+`zl.exec_command` runs `/bin/sh -c`, so `&` and other shell syntax work. It returns `true` when the process started, not when the command succeeded.
+
+## keybinds.lua
+
+```lua
+local SUPER, SHIFT, CTRL = zl.MOD_LOGO, zl.MOD_SHIFT, zl.MOD_CTRL
+
+local function command(value)
+    return function() return zl.exec_command(value) end
+end
+
+-- XKB keysyms for keys that have no zl.KEY_* constant.
+local XF86AudioRaiseVolume = 0x1008ff13
+local XF86AudioLowerVolume = 0x1008ff11
+local XF86AudioMute = 0x1008ff12
+local XF86MonBrightnessUp = 0x1008ff02
+local XF86MonBrightnessDown = 0x1008ff03
+local Print = 0xff61
+
+-- Apps.
+zl.bind(SUPER, zl.KEY_RETURN, command("otter-term"), { description = "Terminal" })
+zl.bind(SUPER, "d", command("otter-launcher"), { description = "Launcher" })
+zl.bind(SUPER + SHIFT, "q", command("otter-logout"), { description = "Log out" })
+zl.bind(SUPER, zl.KEY_ESCAPE, command("zoolanderctl reload && notify-send 'Config reloaded'"))
+
+-- Windows.
+zl.bind(SUPER, "q", function() return zl.close_window() end)
+zl.bind(SUPER, "f", function() return zl.toggle_fullscreen() end)
+zl.bind(SUPER, "s", function() return zl.toggle_floating() end)
+zl.bind(SUPER, "a", function() return zl.toggle_pin() end)
+zl.bind(SUPER, zl.KEY_TAB, function() return zl.toggle_overview() end)
+zl.bind(SUPER, "z", function() return zl.toggle_special_workspace("") end)
+
+for name, key in pairs({ left = zl.KEY_LEFT, right = zl.KEY_RIGHT, up = zl.KEY_UP, down = zl.KEY_DOWN }) do
+    zl.bind(SUPER, key, function() return zl.focus_direction(name) end)
+    zl.bind(SUPER + SHIFT, key, function() return zl.move_window_direction(name) end, { repeating = true })
+end
+
+-- Workspaces 1 to 9. Super+Shift+N moves the window without following it.
+for index = 1, 9 do
+    local name = tostring(index)
+    zl.bind(SUPER, name, function() return zl.workspace(name) end)
+    zl.bind(SUPER + SHIFT, name, function() return zl.move_window_workspace(name, false) end)
+end
+
+-- Super+drag moves, Super+right-drag resizes (button codes from linux/input-event-codes.h).
+zl.bind_mouse(SUPER, 272, function() return zl.begin_move() end)
+zl.bind_mouse(SUPER, 273, function() return zl.begin_resize() end)
+
+-- Media keys work on the lock screen too, and volume repeats while held.
+local locked = { locked = true }
+local locked_repeat = { locked = true, repeating = true }
+zl.bind(0, XF86AudioRaiseVolume, command("otter-osd volume-up 5"), locked_repeat)
+zl.bind(0, XF86AudioLowerVolume, command("otter-osd volume-down 5"), locked_repeat)
+zl.bind(0, XF86AudioMute, command("otter-osd volume-mute-toggle"), locked)
+zl.bind(0, XF86MonBrightnessUp, command("otter-osd brightness-up 5"), locked_repeat)
+zl.bind(0, XF86MonBrightnessDown, command("otter-osd brightness-down 5"), locked_repeat)
+
+-- Screenshots.
+zl.bind(0, Print, command("otter-screenshot --freeze"))
+zl.bind(SHIFT, Print, command("otter-screenshot --fullscreen"))
+zl.bind(CTRL, Print, command("otter-screenshot --output ~/Pictures/screenshot.png"))
+```
+
+See [Binds](/zoolander/configuring/binds) and [Dispatchers](/zoolander/configuring/dispatchers).
+
+## windows.lua
+
+```lua
+-- Float small utility windows.
+zl.add_window_rule("app_id", "^(com.saivert.pwvucontrol)$", { float = true })
+zl.add_window_rule("title", "^(Sharing)$", { float = true })
+
+-- Games: fullscreen Steam games, and tell the compositor .exe windows are games.
+zl.add_window_rule("app_id", "^(steam_app_.*)$", { fullscreen = true })
+zl.add_window_rule("app_id", "^(.*\\.exe)$", { content = "game" })
+
+-- Keep the screen awake while gamescope runs.
+zl.add_window_rule("app_id", "^(gamescope)$", { idle_inhibit = true })
+
+-- Otter Shell overlays appear at once, without an animation.
+for _, namespace in ipairs({
+    "^(otter-launcher)$",
+    "^(otter-logout)$",
+    "^(otter-polkit)$",
+    "^(otter-screenshot)$",
+    "^(otter-wallpaper)$",
+    "^(otter-dock)$",
+}) do
+    zl.add_layer_no_animation_rule(namespace)
+end
+
+-- Blur behind the polkit dialog, and slide notifications and the OSD in.
+zl.add_layer_blur_rule("^(otter-polkit)$", 0.5)
+zl.add_layer_animation_rule("^(otter-notifications)$", "slide right")
+zl.add_layer_animation_rule("^(otter-osd)$", "slide bottom")
+```
+
+Inside `^(...)$`, `.*` is the only wildcard and `\` escapes one character. In a Lua string you write that backslash as `\\`. See [Window rules](/zoolander/configuring/window-rules).
+
+## The emergency config
+
+Zoolander runs this built-in config when `init.lua` is missing or fails to load at startup. It is useful as the smallest config that gives you a working session:
+
+```lua
+zl.set_layout("dwindle", 0.6, 1)
+zl.set_keyboard({ repeat_rate = 50, repeat_delay = 300, numlock = true })
+zl.set_pointer({ accel_profile = "flat", follow_mouse = 2 })
+zl.set_presentation({ allow_tearing = false, immediate_fullscreen = false, vrr = 0, direct_scanout = false, hdr = "off" })
+zl.set_ssd(false)
+zl.set_blur({ enabled = false })
+zl.set_animations_enabled(false)
+zl.bind(zl.MOD_LOGO, zl.KEY_RETURN, function() return zl.exec_command("otter-term") end)
+zl.bind(zl.MOD_LOGO, string.byte("d"), function() return zl.exec_command("otter-launcher") end)
+zl.bind(zl.MOD_LOGO, string.byte("q"), function() return zl.close_window() end)
+zl.bind(zl.MOD_LOGO, string.byte("f"), function() return zl.toggle_fullscreen() end)
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, string.byte("q"), function() return zl.exec_command("otter-logout") end)
+zl.bind(zl.MOD_LOGO, string.byte("1"), function() return zl.workspace("1") end)
+zl.bind(zl.MOD_LOGO, string.byte("2"), function() return zl.workspace("2") end)
+zl.bind(zl.MOD_LOGO, string.byte("3"), function() return zl.workspace("3") end)
+zl.bind(zl.MOD_LOGO, string.byte("4"), function() return zl.workspace("4") end)
+zl.bind(zl.MOD_LOGO, string.byte("5"), function() return zl.workspace("5") end)
+zl.on("startup", function() zl.exec_command("otter-wallpaper"); zl.exec_command("otter-bar") end)
+```
+
+If you do not use Otter Shell, replace `otter-term`, `otter-launcher` and `otter-logout` with your own terminal, launcher and logout command when you copy it.

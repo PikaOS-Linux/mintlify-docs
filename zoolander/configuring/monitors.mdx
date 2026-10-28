@@ -1,0 +1,253 @@
+---
+title: "Monitors"
+sidebarTitle: "Monitors"
+description: "Set each output's mode, position, scale and rotation with zl.output_rule, query monitors from Lua, and handle hotplug."
+---
+
+Zoolander calls a connected display an output, or a monitor in the Lua API. You configure outputs with `zl.output_rule` and read their state with the monitor query functions.
+
+```lua
+zl.output_rule({
+    output = "DP-3",
+    width = 3840,
+    height = 2160,
+    refresh = 240,
+    x = 0,
+    y = 0,
+    scale = 2,
+})
+```
+
+## Output names
+
+A rule matches an output by its exact name. On real hardware, Zoolander names outputs after the DRM connector, as `<type>-<number>`:
+
+| Connector | Example name |
+| --- | --- |
+| DisplayPort | `DP-1`, `DP-2` |
+| HDMI | `HDMI-A-1` |
+| Laptop panel | `eDP-1` |
+| DVI | `DVI-D-1`, `DVI-I-1` |
+| VGA | `VGA-1` |
+| Other connector types | `LVDS-1`, `DSI-1`, `Virtual-1`, `USB-1` |
+
+When Zoolander runs nested inside another compositor, its output is `NESTED-1`. With the headless backend, it is `HEADLESS-1`.
+
+To see the names on your machine, run:
+
+```bash
+zoolanderctl eval "local o={} for i=0,zl.monitor_count()-1 do o[#o+1]=zl.monitor_info(i).name end return table.concat(o,' ')"
+```
+
+Displays that mark themselves as non-desktop, such as VR headsets, are not lit as outputs. Zoolander offers them for DRM leasing instead.
+
+## zl.output_rule
+
+```lua
+zl.output_rule(options)
+```
+
+Adds a rule for one output. You can have up to 16 rules, one per output name. A second rule for the same name, or a 17th rule, raises the error `zl.output_rule: duplicate or too many rules`.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `output` | Output name, 1 to 127 bytes. | string | required |
+| `width` | Mode width in pixels, 1 to 16384. | integer | required |
+| `height` | Mode height in pixels, 1 to 16384. | integer | required |
+| `refresh` | Refresh rate in Hz, 1 to 1000. Fractions such as `59.94` are allowed. | number | required |
+| `x` | Horizontal position in the global layout, in logical pixels. -100000 to 100000. | number | `0` |
+| `y` | Vertical position in the global layout, in logical pixels. -100000 to 100000. | number | `0` |
+| `scale` | Scale factor, 0.01 to 8. Fractional values such as `1.5` work. | number | `1` |
+| `transform` | Rotation and flip. See [Transforms](#transforms). | string | `"normal"` |
+
+`width`, `height` and `refresh` are all required, even if you only want to change the scale. Zoolander rounds `x` and `y` to whole pixels and stores `refresh` in millihertz.
+
+An unknown field logs `zoolander: zl.output_rule: unknown field <name>` and the rule still applies. The one exception is `bitdepth`, which raises an error, because native 10-bit scanout is not available yet.
+
+### Mode selection
+
+Zoolander looks for an advertised mode with exactly `width` by `height` and a refresh rate within 1 Hz of `refresh`. If it finds one, it uses it. If not, it asks the output for a custom mode with those values. Prefer a mode that the monitor lists. You can see them with `wlr-randr`.
+
+### Positions and scale
+
+`x` and `y` are in logical pixels, after scaling. A 3840 by 2160 output at scale 2 is 1920 by 1080 logical pixels wide. The next output to its right starts at `x = 1920`:
+
+```lua
+zl.output_rule({ output = "DP-3", width = 3840, height = 2160, refresh = 240, x = 0, y = 0, scale = 2 })
+zl.output_rule({ output = "DP-2", width = 2560, height = 1440, refresh = 240, x = 1920, y = 0, scale = 1 })
+```
+
+`zl.focus_monitor` and `zl.move_window_direction` use these positions to find the monitor in a direction.
+
+### Transforms
+
+| Value | Effect |
+| --- | --- |
+| `"normal"` | No rotation. |
+| `"rotate_90"` or `"90"` | Rotate 90 degrees. |
+| `"rotate_180"` or `"180"` | Rotate 180 degrees. |
+| `"rotate_270"` or `"270"` | Rotate 270 degrees. |
+| `"flipped"` | Mirror horizontally. |
+| `"flipped_90"` | Mirror, then rotate 90 degrees. |
+| `"flipped_180"` | Mirror, then rotate 180 degrees. |
+| `"flipped_270"` | Mirror, then rotate 270 degrees. |
+
+```lua
+zl.output_rule({
+    output = "HDMI-A-1",
+    width = 1920, height = 1080, refresh = 60,
+    x = 2560, y = 0,
+    transform = "90",
+})
+```
+
+### What output rules do not set
+
+`zl.output_rule` has no options for turning an output off, mirroring, variable refresh rate or HDR.
+
+- VRR, HDR, SDR brightness and SDR saturation are global settings in `zl.set_presentation`. They apply to every output. See [Variables](/zoolander/configuring/variables).
+- To turn an output off or change it while Zoolander runs, use a client of the wlr-output-management protocol, such as `wlr-randr` or `kanshi`.
+
+```lua
+zl.set_presentation({ vrr = "fullscreen", hdr = "auto" })
+```
+
+## When rules apply
+
+- At startup, and each time an output connects, Zoolander applies every rule whose output is present. A rule also turns its output on.
+- When you reload the config, Zoolander compares the new rules with the ones it last applied. If any rule changed, it applies the whole set again. If none changed, it leaves outputs alone, so a reload does not undo a change you made with `wlr-randr`.
+- A rule for an output that is not connected waits until that output appears.
+
+### Outputs without a rule
+
+An output with no rule keeps the mode the backend picks, at scale 1 with no transform. Zoolander places it so it does not overlap the others:
+
+1. An output that was unplugged and plugged back in returns to its earlier position, scale and transform.
+2. An output placed earlier in this session returns to that position.
+3. Any other output goes to the right of the rightmost output, at `y = 0`.
+
+## Hotplug
+
+When an output connects:
+
+1. Zoolander applies its rule, if there is one.
+2. If the output was connected earlier in the session, its workspaces and their windows come back to it.
+3. Otherwise it gets a new workspace called `1`.
+4. Handlers for the `output_added` event run with a monitor table for the new output.
+
+When an output disconnects:
+
+1. Handlers for the `output_removed` event run with a monitor table for that output.
+2. Zoolander moves special workspaces that were on it to the first remaining output.
+3. Its regular workspaces and their windows stay parked until the output returns. If you switch to a parked workspace by name with `zl.workspace`, Zoolander shows it, with its windows, on the active monitor.
+4. If the last output disconnects and a different one connects, the new output takes the windows of the last one.
+
+React to hotplug with `zl.on`:
+
+```lua
+zl.on("output_added", function(monitor)
+    zl.workspace_on_monitor(monitor.name, "1")
+end)
+
+zl.on("output_removed", function(monitor)
+    zl.exec_command("notify-send 'Disconnected " .. monitor.name .. "'")
+end)
+```
+
+The [split workspaces recipe](/zoolander/configuring/workspaces#split-workspaces-recipe) shows a full hotplug handler. Events are covered on [Hooks and events](/zoolander/configuring/hooks-and-events).
+
+## Monitor queries
+
+| Function | Arguments | Description |
+| --- | --- | --- |
+| `zl.monitor_count()` | none | Number of connected monitors. Returns `0` before startup. |
+| `zl.monitor_info(index)` | `index` | A monitor table for the monitor at zero-based `index`, or `nil` if there is none. |
+| `zl.active_monitor_index()` | none | Zero-based index of the active monitor, or `-1` when there is none or before startup. |
+| `zl.monitor_at_cursor_index()` | none | Zero-based index of the monitor under the pointer, or `-1` when the pointer is in a gap or before startup. |
+| `zl.focus_monitor(direction)` | `"left"`, `"right"`, `"up"` or `"down"` | Moves focus and the pointer to the nearest monitor in that direction. See [Dispatchers](/zoolander/configuring/dispatchers#focus_monitor). |
+
+Indexes follow the order in which outputs connected. Disconnected outputs are skipped, so an index can change after hotplug. Look monitors up by `name` if you need a stable key.
+
+The active monitor is the one with focus. A monitor becomes active when keyboard focus lands on one of its windows, or when the pointer moves onto it, even if it has no windows.
+
+### Monitor table fields
+
+`zl.monitor_info` returns a table with these fields. The `output_added` and `output_removed` handlers get the same table.
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `id` | The output's `wl_output` global name in the Wayland registry. | integer |
+| `name` | Output name, such as `DP-1`. | string |
+| `mirror` | Whether the output mirrors another. Zoolander currently always reports `false`. | boolean |
+| `active_workspace` | `{ name = string }`, the regular workspace shown on the monitor. `name` is `""` when there is none. | table |
+
+```lua
+local function monitors()
+    local list = {}
+    for i = 0, zl.monitor_count() - 1 do
+        list[#list + 1] = zl.monitor_info(i)
+    end
+    return list
+end
+
+zl.bind(zl.MOD_LOGO, "m", function()
+    local current = zl.monitor_info(zl.active_monitor_index())
+    zl.exec_command("notify-send '" .. current.name .. ": " .. current.active_workspace.name .. "'")
+end)
+```
+
+## zl.set_output_size
+
+```lua
+zl.set_output_size(width, height) -> boolean
+```
+
+Sets the size of the first output, in pixels. Both arguments must be integers. Called at the top level of the first config run, before the compositor starts, it records the size for startup and returns `true`. Called later, it asks the first output for a custom mode of that size and returns whether the request went through. This is most useful for the nested and headless backends, where the output is a window or a buffer. For a real monitor, use `zl.output_rule`.
+
+```lua
+zl.set_output_size(1600, 900)
+```
+
+## Examples
+
+### Laptop with an external monitor above it
+
+```lua
+zl.output_rule({ output = "eDP-1", width = 2880, height = 1800, refresh = 120, x = 0, y = 1080, scale = 2 })
+zl.output_rule({ output = "DP-1", width = 1920, height = 1080, refresh = 60, x = 0, y = 0, scale = 1 })
+```
+
+The laptop panel is 1440 by 900 logical pixels at scale 2. The external monitor sits above it, so the panel starts at `y = 1080`.
+
+### Per-machine rules
+
+`require` loads Lua modules from beside `init.lua`. Use a global or a module to pick rules per machine:
+
+```lua
+-- monitors.lua
+if ZL_AMD_VM_TEST then
+    zl.output_rule({ output = "HDMI-A-1", width = 1920, height = 1080, refresh = 240, x = 0, y = 0 })
+    zl.output_rule({ output = "DP-1", width = 1920, height = 1080, refresh = 240, x = 1920, y = 0 })
+    return
+end
+
+zl.output_rule({ output = "DP-3", width = 3840, height = 2160, refresh = 240, x = 0, y = 0, scale = 2 })
+zl.output_rule({ output = "DP-2", width = 2560, height = 1440, refresh = 240, x = 1920, y = 0, scale = 1 })
+```
+
+```lua
+-- init.lua
+require("monitors")
+```
+
+`ZL_AMD_VM_TEST` is an ordinary Lua global that the config sets for one machine. Zoolander gives it no meaning. Set it before `require("monitors")` runs.
+
+### Bind keys to monitors
+
+```lua
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, zl.KEY_LEFT, function() zl.focus_monitor("left") end)
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, zl.KEY_RIGHT, function() zl.focus_monitor("right") end)
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT + zl.MOD_CTRL, zl.KEY_RIGHT, function() zl.move_window_direction("right") end)
+```
+
+`zl.move_window_direction` moves a window to the next monitor once it reaches the edge of the layout.

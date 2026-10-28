@@ -1,0 +1,183 @@
+---
+title: "Testing Zooland"
+sidebarTitle: "Testing"
+description: "Run the Zooland test suites, use the in-process harness and raw-wire client, and drive input and vblanks deterministically."
+---
+
+Zooland tests are otr files with `test` blocks. They live in two packages:
+
+- `otr/`: unit tests beside the code, such as `loop/loop.otr`, the codec in `protocols/wire/`, and `render/color_test.otr`
+- `otr/tests/`: the integration package, with its own `otr.toml`, protocol suites, backend tests, and render tests
+
+Zoolander's `otr/tests/` builds the full compositor root against Zooland for end-to-end tests.
+
+## Run tests
+
+Zoolander's `tests/run.sh` runs every test in both repositories. It finds each otr file with `test` blocks, runs it with `otr test` from its package directory, and runs `check-generated.sh`. Zooland must be checked out next to Zoolander.
+
+| Command | Runs |
+| --- | --- |
+| `tests/run.sh --unit [PATTERN]` | Everything that needs no compositor, GPU, or seat, on this machine |
+| `tests/run.sh --vm [PATTERN]` | Copies both repositories into the test VM and runs everything there |
+| `tests/run.sh --gpu [PATTERN]` | Only the real-GPU checks. Refuses unless inside a VM with an amdgpu card. |
+| `tests/run.sh --vm --gpu [PATTERN]` | Copies both repositories into the VM and runs the real-GPU checks there |
+
+`PATTERN` limits the run to tests whose path or name contains it.
+
+A file is VM-only when it sits in an integration package (a `tests/` directory with its own `otr.toml`), or its name contains `drm`, `vk_`, `spawn`, or `runtime_test`. The VM launcher marks the guest with `ZOO_VM_HARNESS=1`.
+
+<Warning>
+Never run VM-only tests on your desktop session. They start compositors, open render and DRM devices, and can take seat or DRM master ownership.
+</Warning>
+
+A file that reads `build_options.perf_gates` runs a second time with `--release -D perf_gates`, because its timing budgets describe optimized builds. In `--gpu` mode, `vk_dmabuf_check_test.otr` also runs under the Khronos validation layer, which must stay silent.
+
+`otr test` has no skip state. A test that cannot run prints a `SKIP` line and passes, and the runner counts those lines.
+
+The runner leaves out `*_lvp_test.otr` files. Run them with `otr/tools/vk-lvp-check.sh`, which puts each file in a `bwrap` sandbox with no GPU nodes, where the Vulkan loader sees only lavapipe.
+
+To run one file directly:
+
+```bash
+cd zooland/otr
+otr test loop/loop.otr
+cd tests && otr test harness_test.otr
+```
+
+## Test support
+
+`otr/tests/` provides four layers of fixture. Pick the smallest one that covers your test.
+
+| Module | What it gives you |
+| --- | --- |
+| `wclient.otr` | `WClient`, a raw-wire client over the generated interface tables |
+| `harness.otr` | `Harness`, a server and loop with no library stores, plus protocol helpers that work with any fixture |
+| `fixture.otr` | `Fixture(Hooks)`, the production server, loop, and library stores with Zooland's default hooks |
+| `backend_root.otr` | `Root`, a loop, the backend pools, and a software renderer, with sinks that record what a backend announces |
+
+`fail_at.otr` provides an allocator that lets a set number of allocations through, then fails every later one. `Fixture.up_with` and Zoolander's `Rig.up_in` take an allocator, so out-of-memory tests can fail the stores, server, and loop mid-operation.
+
+### The raw-wire client
+
+`WClient` talks to the server over a socketpair. It builds requests from the generated descriptors and decodes events by name:
+
+| Method | Use |
+| --- | --- |
+| `bind_proxy(registry, name, I, version)` | Binds a global and returns its proxy |
+| `new_proxy(key, version)` | Allocates a client-side object ID |
+| `request(I, target, "name", .{ args })` | Sends a request |
+| `send_raw`, `send_raw_with_fds` | Sends hand-built bytes, for malformed-input tests |
+| `expect_named(I, sender, "name")` | Reads the next event and checks its name |
+| `expect_no_event`, `expect_closed`, `expect_delete_id` | Checks for silence, a closed connection, or a `delete_id` |
+| `take_fd(index)` | Takes an fd that arrived with an event |
+
+Events expose their arguments by index: `uint(i)`, `int(i)`, `fixed(i)`, `string(i)`, `object(i)`, and `array(i)`.
+
+`harness.otr` adds free functions that take any fixture with `tick`: `get_registry_drained`, `create_surface`, `shm_buffer`, `attach_commit`, `expect_killed`, and `expect_live_roundtrip`.
+
+## Write a protocol test
+
+A protocol suite builds a `Fixture` with its own `Hooks`, registers the globals it needs, and ticks the loop after each client write. This is the start of `xdg_shell_test.otr`:
+
+```otr
+const Fx = fixture.Fixture(Hooks)
+
+/// What the xdg_shell policy saw: the bound wm_base and the pongs that matched a ping.
+const Hooks = struct {
+    pub const State = struct {
+        pub pongs: [8]u32 = [8]u32{ 0, 0, 0, 0, 0, 0, 0, 0 }
+        pub pong_n: usize = 0
+        pub bound_base: ?shell_ids.WmBaseId = null
+    }
+}
+
+fn up() !Fx {
+    var fx = try Fx.up()
+    errdefer fx.deinit()
+    try fx.register_core(.{})
+    _ = try fx.register_xdg_shell(.{ policy: policy.Hook(Fx).of(u8, on_xdg, 0) })
+    return fx
+}
+```
+
+A test then connects a client, binds globals, and checks events. This is a shortened version of the suite's first test:
+
+```otr
+test "ping/pong: serial match clears the outstanding ping and fires the hook" {
+    var fx = try up()
+    defer fx.deinit()
+    var wc = try fx.connect()
+    defer wc.deinit()
+    b := try bind_all(&mut fx, &mut wc)
+    base := fx.state.bound_base.?
+    s1 := ping(&mut fx, base).?
+    try fx.tick()
+    try testing.expect_equal(u32, s1, (try wc.expect_named(protocols.xdg_wm_base, b.wm, "ping")).uint(0))
+    try wc.request(protocols.xdg_wm_base, b.wm, "pong", .{ s1 })
+    try fx.tick()
+    try harness.expect_live_roundtrip(&mut fx, &mut wc)
+}
+```
+
+`fx.tick()` runs one loop iteration with a zero timeout. Bytes written before the call are received, dispatched, and their events flushed, so tests stay deterministic.
+
+Use `fx.add_ext("name")` to publish an extension global the way a compositor does. `add_authorized_ext` makes a `deny_by_default` global visible to every client. `add_privileged_ext` hides it from security-context clients.
+
+## Drive input
+
+You can inject input at three levels.
+
+### Seat level
+
+Call the seat modules directly with a system host. This tests protocol delivery without a backend. From `seat_test.otr`:
+
+```otr
+var h = Fx.Host.init_system(&mut fx)
+surf_sid := inp.surface(&h, surf)
+// Held keys and modifiers accumulate before focus without events or serials.
+try testing.expect(keyboard.key(&mut h, s, null, 1, 30, .pressed) == null)
+enter_serial := keyboard.enter(&mut h, s, surf_sid).?
+try h.ctx.tick()
+e := try wc.expect_named(protocols.wl_keyboard, kb, "enter")
+try testing.expect_equal(u32, enter_serial, e.uint(0))
+```
+
+`input_fixture.otr` has helpers such as `bind_seat`, `get_keyboard`, `bind_compositor`, and `surface`, which maps a client proxy to its `SurfaceId`.
+
+### Backend level
+
+Push `InputEvent` values through a headless backend's `input` sink with `Headless.inject`. From `backend_test.otr`:
+
+```otr
+Headless.inject(&mut root, h, .pointer_motion{ time_ms: 10, dx: 1.5, dy: -2.25 })
+Headless.inject(&mut root, h, .pointer_button{ time_ms: 12, button: 0x110, state: .pressed })
+Headless.inject(&mut root, h, .keyboard_key{ time_ms: 14, key: 30, state: .pressed })
+Headless.inject(&mut root, h, .touch_down{ time_ms: 16, id: 7, x: 3.0, y: 4.0 })
+Headless.inject(&mut root, h, .touch_frame{})
+```
+
+With no sink installed, injection is a silent no-op.
+
+### Compositor level
+
+Zoolander's `otr/tests/rig.otr` starts the production root on the headless backend and software renderer, the way `main.run` starts it. Its end-to-end helpers feed events straight into Zoolander's input routing:
+
+```otr
+pub fn inject(r: &mut Rig, ev: backend.InputEvent) void { input.on_event(&mut r.root, ev) }
+```
+
+## Control vblanks
+
+Headless outputs present on a timer by default. On the timer path, a present can land mid-setup. For deterministic frame tests, create the backend with `auto_vblank: false` and complete frames yourself:
+
+```otr
+h := try root.add_headless(.{ auto_vblank: false, outputs: &outputs })
+// ... commit a frame
+Headless.fire_vblank(&mut root, h, 0)
+```
+
+Set `double_buffered: true` on an output to alternate two images like a KMS swapchain. Damage tracking must then cover two frames of changes.
+
+## Drive a DRM backend without hardware
+
+`backend_root.otr` can add a DRM backend with no device (`add_fake_drm` and `add_fake_drm_output`). Use it to test commit, modeset, gamma, and lease paths. Real DRM and Vulkan checks (`*drm_check_test.otr`, `*vk_*_check_test.otr`, `*gamma_check_test.otr`, `*e2e_drm_smoke_test.otr`) need a real GPU and run only with `--gpu`.

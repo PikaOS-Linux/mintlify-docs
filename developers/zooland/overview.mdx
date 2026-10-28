@@ -1,0 +1,114 @@
+---
+title: "Zooland overview"
+sidebarTitle: "Overview"
+description: "Zooland is an otr Wayland compositor library with its own wire implementation, generated protocol bindings, backends, and renderers."
+---
+
+Zooland is a library for building Wayland compositors in otr. It implements the Wayland wire protocol itself and does not link libwayland. It provides protocol state machines, a Linux event loop, headless, nested, and DRM/KMS backends, and software and Vulkan renderers.
+
+[Zoolander](/zoolander/overview) is the compositor built on Zooland. Zoolander adds window management, layouts, Lua configuration, decorations, Xwayland, and the control socket. Zooland contains none of that policy.
+
+## Design goals
+
+Zooland handles the protocol and leaves policy to you. It validates requests, tracks object lifetimes, and sends events. Your compositor decides where windows go, what gets focus, and what gets drawn.
+
+The wire codec, object maps, and fd passing are written in otr, so there is no libwayland dependency. The protocol bindings are generated from vendored XML and checked in.
+
+Persistent state holds generational IDs such as `ClientId`, `ResourceId`, and `SurfaceId`. Pools can move their storage when they grow, so nothing keeps a pointer into them.
+
+Every module is generic over a root struct that your compositor owns. The library has no global state and no C ABI. Its public interface is otr modules and types.
+
+A protocol error kills only the client that caused it. The rest of the compositor keeps running.
+
+## Module map
+
+The package root is `otr/` in the `zooland` repository. You import modules by their path inside the package, for example `import zooland.server` or `import zooland.backend.headless`.
+
+| Area | Modules | Responsibility |
+| --- | --- | --- |
+| Wire | `wire/`, `protocols/wire/` | Message encoding and decoding, signatures, object maps, send and receive queues, `SCM_RIGHTS` accounting |
+| Generated bindings | `protocols/generated.otr`, `protocols/generated/` | One module per protocol XML file, produced by the scanner in `tools/scanner/` |
+| Event loop | `loop/loop.otr`, `loop/timer.otr`, `loop/signal.otr` | epoll loop, timer heap on one timerfd, deferred calls, POSIX signals |
+| Server | `server.otr`, `library.otr`, `shared_host.otr` | Listening socket, clients, resources, registry, the semantic stores, and the host type handlers run with |
+| Core protocols | `core/` | `wl_compositor`, `wl_surface`, `wl_subcompositor`, `wl_shm`, `wl_output`, regions, callbacks, the surface commit pipeline |
+| Shells | `shell/` | `xdg_shell`, layer shell, session lock, Xwayland shell |
+| Seat | `seat/` | `wl_seat`, pointer, keyboard, touch, grabs, data device, drag and drop, xkbcommon keymaps |
+| dma-buf | `dmabuf/` | `zwp_linux_dmabuf_v1`, feedback tables, `wl_drm`, the DRM syncobj manager |
+| Extensions | `ext/` | Every other protocol, each declared as a global descriptor in `ext/globals.otr` |
+| Rendering | `render/` | The renderer contract in `render/api.otr`, the software renderer (`swrender*.otr`), and the Vulkan renderer (`vk_*.otr`) |
+| Backends | `backend/` | The backend contract in `backend/api.otr`, headless, nested, DRM/KMS, libinput, libseat, and udev |
+
+See [Architecture](/developers/zooland/architecture) for how these pieces fit together.
+
+## Add Zooland to a package
+
+Zooland requires otr 0.2.2 or later. Declare it as a path dependency in your package's `otr.toml`:
+
+```toml
+[dependencies]
+zooland = "../zooland/otr"
+```
+
+Zoolander uses `zooland = "../../zooland/otr"` because its manifest sits in `zoolander/otr/`.
+
+Zooland's own manifest only asks pkg-config for `xkbcommon`. Your package supplies the rest of the C link set:
+
+- The DRM backend links `drm`, `gbm`, `input`, `seat`, and `udev`.
+- The Vulkan renderer loads `libvulkan.so.1` at runtime. It needs a Vulkan 1.3 driver for the display's GPU with the dma-buf and DRM-modifier extensions.
+- Without a usable Vulkan device, the DRM backend renders in software into dumb buffers.
+
+Zoolander's `otr/otr.toml` shows a complete link set.
+
+## Build and check
+
+Zooland has no executable or `build.otr` of its own. A consumer builds it as part of its package. Zoolander builds from `otr-out/` so compiler caches stay out of the tree:
+
+```bash
+cd zoolander
+./vendor/fetch-luajit.sh
+mkdir -p otr-out && cd otr-out
+otr build ../otr/native_main.otr --release --cpu baseline \
+    -rpath '$ORIGIN/../lib/zoolander' -o zoolander
+```
+
+Three scripts in `otr/tools/` maintain generated code:
+
+| Script | Purpose |
+| --- | --- |
+| `gen-protocols.sh` | Regenerates `otr/protocols/generated.otr` and `otr/protocols/generated/` from `protocols/*.xml` |
+| `gen-shaders.sh` | Rebuilds the SPIR-V in `otr/render/shaders/spv/` with `glslc` and `spirv-val`, and the otr word arrays in `otr/render/shaders/generated/` |
+| `check-generated.sh` | Fails when the checked-in bindings, shaders, or shader manifest are stale |
+
+## Run the tests
+
+Every test in Zooland and Zoolander runs through Zoolander's `tests/run.sh`. Zooland must be checked out next to Zoolander.
+
+```bash
+cd zoolander
+tests/run.sh --unit          # tests that need no compositor, GPU, or seat
+tests/run.sh --vm            # copy both repositories into the test VM and run everything
+tests/run.sh --vm --gpu      # only the real-GPU checks, in the AMD passthrough VM
+tests/run.sh --unit loop     # limit the run to paths containing a pattern
+```
+
+To run one file, call `otr test` from its package directory. Zooland has two packages: `otr/` and the integration package in `otr/tests/`.
+
+```bash
+cd zooland/otr
+otr test loop/loop.otr
+cd tests && otr test harness_test.otr
+```
+
+<Warning>
+Tests that start a compositor, open a render or DRM device, or take seat or DRM master ownership run only inside the test VM. `tests/run.sh` refuses them outside it. Never run them on your active desktop session.
+</Warning>
+
+See [Testing](/developers/zooland/testing) for the fixtures and how to drive input.
+
+## Next
+
+- [Architecture](/developers/zooland/architecture): event loop, object model, commits, buffers, and rendering flow
+- [Protocols and codegen](/developers/zooland/protocols-and-codegen): the scanner, generated API, and supported interfaces
+- [Backends and rendering](/developers/zooland/backends-and-rendering): DRM, nested, and headless backends, and renderer selection
+- [Building a compositor](/developers/zooland/building-a-compositor): embed Zooland in your own root
+- [Testing](/developers/zooland/testing): fixtures, raw-wire clients, and input injection

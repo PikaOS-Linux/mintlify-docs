@@ -100,6 +100,8 @@ blur = true
 
 Blur is off by default and is not required by either layout. Unsupported compositors still render the normal surface fills.
 
+Some compositors, including Zoolander and Hyprland, blur a window only when it asks. With `blur = true`, Files, Settings, Monitor, Shot, Assistant, the PikaOS installer, First Setup, and Welcome request `ext-background-effect` blur behind the whole window. Terminal and Packages do the same. These apps draw their background with the theme's surface opacity, so the blur shows through.
+
 ## App overrides
 
 Apps can override selected theme values in their own config. Missing optional color keys inherit the shared theme. Settings marks present overrides with **App override** and offers **Reset** to remove only that key.
@@ -110,7 +112,7 @@ Do not assume that an empty string has the same meaning for every field. Use Set
 
 [otter-theme-gen](/desktop/otter-theme-gen) watches the wallpaper state from [otter-wallpaper](/desktop/otter-wallpaper) and writes `generated-colors.conf`. Select that file as the color source through Settings. Generated colors do not replace layout, density, typography, or decoration choices.
 
-The **Theme Gen** tab controls the generator and optional templates for other apps. Hyprland template output uses `~/.config/hypr/otter-theme.lua`; enabling the template does not configure your compositor's imports for you.
+The **Theme Gen** tab controls the generator and optional templates for other apps. Hyprland template output uses `~/.config/hypr/otter-theme.lua` and Zoolander template output uses `~/.config/zoolander/otter-theme.lua`; enabling a template does not configure your compositor's imports for you.
 
 ## Hot reload
 

@@ -12,6 +12,10 @@ Each proxy has one owner. State records store copyable `wl.Id` identities rather
 
 There is no callback-plus-userdata or `SubscriberList` API. Dispatch the connection, pump relevant components, then drain events in your app loop.
 
+## Native transport
+
+Neither `otter_wayland` nor `otter_wayland_core` links libwayland-client. The client owns its Unix socket, wire objects, queued messages, and received descriptors in otr. The full package uses system xkbcommon; core needs neither rendering nor xkbcommon.
+
 ## Lightweight clients
 
 Protocol-only applications can use `otter_wayland_core` from `otr/core/`. It excludes render and xkbcommon-dependent modules. Use either `otter_wayland` or core, never both: their types and hub contexts are distinct package identities.
@@ -20,7 +24,7 @@ Protocol-only applications can use `otter_wayland_core` from `otr/core/`. It exc
 
 `otter_wayland_lua` provides `otter.wayland`. Read outputs, toplevels, and workspaces without an action capability. Activation, closing, and workspace changes require `wayland-actions`; clipboard reads and writes require `clipboard`.
 
-The binding opens its own connection lazily and registers its descriptor with the plugin host. `subscribe` callbacks run through the host loop, not from libwayland callbacks.
+The binding opens its own connection lazily and registers its descriptor with the plugin host. `subscribe` callbacks run through the host loop, not from protocol dispatch.
 
 ## Reference pages
 

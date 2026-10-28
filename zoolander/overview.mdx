@@ -1,0 +1,67 @@
+---
+title: "Zoolander"
+sidebarTitle: "Overview"
+description: "Zoolander is a Wayland compositor configured in Lua. It runs on DRM, nested in another compositor, or headless, and works alongside Otter Shell."
+---
+
+Zoolander is a Wayland compositor that you configure in Lua. It is built on [Zooland](/developers/zooland/overview), a compositor library with its own Wayland wire implementation. Zoolander is an optional compositor. You can run Otter Shell on it, but the `otter-shell` metapackage does not install it.
+
+## Features
+
+| Area | What Zoolander does |
+| --- | --- |
+| Backends | DRM/KMS on real hardware, nested as a window inside another Wayland compositor, or headless with no display. |
+| Rendering | Vulkan 1.3 on the GPU that drives the display. Falls back to a software renderer when Vulkan cannot drive it. |
+| Presentation | HDR (`off`, `auto`, `always`), variable refresh rate, tearing for fullscreen games, and direct scanout. |
+| X11 apps | Rootless Xwayland. It starts when the first X11 client connects and stops 10 seconds after the last one leaves. |
+| Layouts | Dwindle, master/stack, grid, monocle, spiral, scrolling and floating, plus the spatial layouts Canvas, Side Shelves, Islands, Lanes, Accordion, Workbench, Pairs and Anchors. |
+| Overview | A native, workspace-aware overview, toggled with `zl.toggle_overview()`. |
+| Decorations | Optional server-side decorations with title bars and buttons. They can follow the Otter Shell theme. |
+| Effects | Blur behind translucent windows and layers, rounded corners, shadows, inactive dimming and animations. |
+| Input | libinput devices, tablets, touch, gestures, and input methods over input-method v1 and v2. |
+| Control | A local control socket and the `zoolanderctl` command for status, reload, workspace queries and Lua `eval`. |
+| Configuration | One Lua file, `init.lua`, with optional modules beside it. Saving a file reloads the config. A failed reload keeps the previous one. |
+
+## How Zoolander relates to Zooland
+
+Zooland is the library underneath. It provides the Wayland protocol state machines, the event loop, the software and Vulkan renderers, and the headless, nested and DRM backends. It does not depend on libwayland.
+
+Zoolander is the compositor you run. It decides which protocol globals to advertise, manages windows and workspaces, draws decorations and the overview, and runs your Lua config. If you want to build your own compositor on the same base, read the [Zooland developer docs](/developers/zooland/overview).
+
+## How Zoolander relates to Otter Shell
+
+Otter Shell does not ship a compositor. Zoolander is one of the compositors you can run it on. A few things connect the two:
+
+- The emergency config starts `otter-wallpaper` and `otter-bar`, and binds `otter-term`, `otter-launcher` and `otter-logout`.
+- `zl.set_ssd({ follow_theme = true })` takes decoration colors, font, density and button order from the Otter theme in `~/.config/otter-shell/theme.conf`.
+- The installed portal config prefers `xdg-desktop-portal-otter`, then the `wlr` and `gtk` portals.
+- Otter components can ask the control socket whether a workspace is occupied.
+
+Zoolander works without Otter Shell. Without an Otter theme, it uses its own defaults and whatever you set in Lua.
+
+<Note>
+  Use `zl.toggle_overview()` for a workspace overview on Zoolander. `otter-overview` cannot recover Zoolander's workspace membership from the foreign-toplevel protocol and may group windows under the wrong workspace.
+</Note>
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/zoolander/installation">
+    Install the package, start a session, and check your first launch.
+  </Card>
+  <Card title="Configuring" icon="sliders" href="/zoolander/configuring/overview">
+    Learn where the config lives, how reload works, and how to change a setting.
+  </Card>
+  <Card title="Example config" icon="file-code" href="/zoolander/configuring/example-config">
+    Start from a complete, annotated multi-file config.
+  </Card>
+  <Card title="zoolanderctl" icon="terminal" href="/zoolander/ipc/zoolanderctl">
+    Query and control a running compositor from a script.
+  </Card>
+  <Card title="Protocols" icon="plug" href="/zoolander/protocols">
+    See every Wayland global Zoolander advertises and its version.
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/zoolander/troubleshooting">
+    Read the logs, fix GPU and seat problems, and recover a broken config.
+  </Card>
+</CardGroup>

@@ -1,0 +1,137 @@
+---
+title: "Supported protocols"
+sidebarTitle: "Protocols"
+description: "Every Wayland global Zoolander advertises, the highest version it offers, and which globals sandboxed clients cannot see."
+---
+
+These are the Wayland globals Zoolander advertises, with the highest version it offers. The protocol code lives in [Zooland](/developers/zooland/overview). Zoolander decides which globals to register and which clients may see them.
+
+To see what a running session advertises, run `wayland-info` inside it.
+
+## Privileged globals
+
+Globals marked **Privileged** are hidden from clients that connect through `wp_security_context_manager_v1`. Flatpak and other sandboxes connect that way. Every other local client can bind them.
+
+Privileged globals include data control, output management, virtual input, screen capture and session lock. Any process that can reach your Wayland socket can use them, so treat that socket as trusted session access.
+
+## Core
+
+| Interface | Version | Notes |
+| --- | --- | --- |
+| `wl_compositor` | 7 | |
+| `wl_subcompositor` | 1 | |
+| `wl_shm` | 3 | ARGB8888 and XRGB8888 |
+| `wl_seat` | 11 | One seat |
+| `wl_output` | 4 | One per enabled output |
+| `wl_data_device_manager` | 4 | |
+| `wl_fixes` | 2 | |
+| `xdg_wm_base` | 7 | |
+| `zxdg_output_manager_v1` | 3 | |
+| `zxdg_decoration_manager_v1` | 2 | |
+| `org_kde_kwin_server_decoration_manager` | 1 | |
+| `zwlr_layer_shell_v1` | 5 | Privileged |
+| `ext_session_lock_manager_v1` | 1 | Privileged |
+| `xwayland_shell_v1` | 1 | Shown only to Zoolander's own Xwayland |
+
+## Surfaces and presentation
+
+| Interface | Version | Notes |
+| --- | --- | --- |
+| `wp_viewporter` | 1 | |
+| `wp_fractional_scale_manager_v1` | 1 | |
+| `wp_single_pixel_buffer_manager_v1` | 1 | |
+| `wp_content_type_manager_v1` | 1 | |
+| `wp_alpha_modifier_v1` | 1 | |
+| `ext_background_effect_manager_v1` | 1 | Blur behind a surface |
+| `wp_tearing_control_manager_v1` | 1 | |
+| `wp_fifo_manager_v1` | 1 | |
+| `wp_commit_timing_manager_v1` | 1 | |
+| `wp_presentation` | 2 | |
+| `wp_color_manager_v1` | 3 | ICC and parametric descriptions |
+| `wp_color_representation_manager_v1` | 1 | Premultiplied and straight alpha. BT.601, BT.709 and BT.2020 in full and limited range only when the renderer imports YCbCr dma-bufs. |
+| `frog_color_management_factory_v1` | 1 | Mapped onto `wp_color_manager_v1`. The last request before a commit wins. |
+
+## Windows
+
+| Interface | Version | Notes |
+| --- | --- | --- |
+| `xdg_activation_v1` | 1 | |
+| `xdg_wm_dialog_v1` | 1 | |
+| `xdg_system_bell_v1` | 1 | |
+| `xdg_toplevel_icon_manager_v1` | 1 | |
+| `xdg_toplevel_tag_manager_v1` | 1 | Window rules can match the tag. `zl.get_windows` reports it. |
+| `zxdg_exporter_v2`, `zxdg_importer_v2` | 1 | |
+| `zxdg_exporter_v1`, `zxdg_importer_v1` | 1 | Share handles with v2 |
+| `gtk_shell1` | 7 | |
+| `org_kde_kwin_appmenu_manager` | 1 | |
+| `ext_foreign_toplevel_list_v1` | 1 | Privileged |
+| `zwlr_foreign_toplevel_manager_v1` | 3 | Privileged |
+| `hyprland_toplevel_mapping_manager_v1` | 1 | Privileged |
+| `ext_workspace_manager_v1` | 1 | |
+| `xdg_toplevel_drag_manager_v1` | 1 | Tab tear-off. The dragged window follows the pointer. |
+| `xdg_session_manager_v1` | 1 | Only with an absolute `XDG_STATE_HOME` or `HOME` to keep sessions in |
+
+## Input
+
+| Interface | Version | Notes |
+| --- | --- | --- |
+| `zwp_pointer_constraints_v1` | 1 | |
+| `zwp_relative_pointer_manager_v1` | 1 | |
+| `zwp_pointer_gestures_v1` | 3 | |
+| `wp_cursor_shape_manager_v1` | 2 | |
+| `wp_pointer_warp_v1` | 1 | |
+| `zwp_input_timestamps_manager_v1` | 1 | Microsecond libinput time. Millisecond time for virtual devices. |
+| `zwp_tablet_manager_v2` | 2 | |
+| `zwp_text_input_manager_v3` | 2 | |
+| `zwp_text_input_manager_v1` | 1 | |
+| `zwp_text_input_manager_v2` | 1 | |
+| `zwp_input_method_manager_v2` | 1 | Privileged |
+| `zwp_input_method_v1` | 1 | Privileged. One input method per seat across v1 and v2. |
+| `zwp_input_panel_v1` | 1 | Privileged |
+| `zwp_keyboard_shortcuts_inhibit_manager_v1` | 1 | Privileged |
+| `zwp_virtual_keyboard_manager_v1` | 1 | Privileged |
+| `zwlr_virtual_pointer_manager_v1` | 2 | Privileged |
+| `ext_transient_seat_manager_v1` | 1 | Privileged. Every request is denied. Input, focus and the cursor follow the one seat. |
+| `zwp_idle_inhibit_manager_v1` | 1 | |
+| `ext_idle_notifier_v1` | 2 | |
+| `hyprland_global_shortcuts_manager_v1` | 1 | Privileged. Sandboxed apps reach it through the GlobalShortcuts portal. |
+
+## Clipboard, capture and outputs
+
+| Interface | Version | Notes |
+| --- | --- | --- |
+| `zwp_primary_selection_device_manager_v1` | 1 | |
+| `ext_data_control_manager_v1` | 1 | Privileged |
+| `zwlr_data_control_manager_v1` | 2 | Privileged |
+| `zwlr_screencopy_manager_v1` | 3 | Privileged |
+| `ext_output_image_capture_source_manager_v1` | 1 | Privileged |
+| `ext_foreign_toplevel_image_capture_source_manager_v1` | 1 | Privileged. Registered only when window capture is available. |
+| `hyprland_workspace_image_capture_source_manager_v1` | 1 | Privileged. See [Workspace capture](#workspace-capture). |
+| `ext_image_copy_capture_manager_v1` | 1 | Privileged |
+| `zwlr_output_manager_v1` | 4 | Privileged |
+| `zwlr_output_power_manager_v1` | 1 | Privileged |
+| `wp_security_context_manager_v1` | 1 | Privileged |
+
+### Workspace capture
+
+`hyprland_workspace_image_capture_source_manager_v1` sources take an `ext_workspace_handle_v1`. Frames are the size of the workspace's output and are rendered offscreen, so a hidden workspace can be captured too.
+
+- `windows_only` draws the workspace's windows and their popups on a transparent background.
+- `everything` adds the backdrop, layer surfaces and pinned windows.
+
+Frames follow that output's repaints, like output capture, and never include the cursor. A removed workspace gives transparent, empty frames.
+
+## Hardware
+
+These need the DRM backend. The renderer and the device decide whether each one is registered.
+
+| Interface | Version | Registered when |
+| --- | --- | --- |
+| `zwp_linux_dmabuf_v1` | 6 | The renderer imports dma-bufs (Vulkan with the dma-buf and DRM-modifier extensions). |
+| `wl_drm` | 2 | Same, and the device has a render node. It names the render node, and buffers come through `create_prime_buffer`. |
+| `wp_linux_drm_syncobj_manager_v1` | 1 | The device supports syncobj timelines. |
+| `zwlr_gamma_control_manager_v1` | 1 | Privileged. An output has a gamma LUT. |
+| `wp_drm_lease_device_v1` | 1 | Privileged. Always on DRM, even before a headset or other non-desktop connector is plugged in. |
+| `zwlr_export_dmabuf_manager_v1` | 1 | Privileged. The Vulkan renderer draws outputs into exported scanout images, and frames are the scanout buffer itself. Not offered when frames are copied into dumb buffers. |
+
+The software renderer imports no dma-bufs. On the nested and headless backends, and on DRM without Vulkan, Zoolander does not advertise `zwp_linux_dmabuf_v1` or `wl_drm`, so clients use `wl_shm` buffers.

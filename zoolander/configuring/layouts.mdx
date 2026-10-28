@@ -1,0 +1,431 @@
+---
+title: "Layouts"
+sidebarTitle: "Layouts"
+description: "Pick a tiling or spatial layout, set one per workspace, tune Dwindle and the spatial layouts, and drive layouts from Lua with zl.layout."
+---
+
+Zoolander arranges each workspace with one layout. You set a global layout with `zl.set_layout`, give single workspaces their own with `zl.set_workspace_layout`, and switch the focused workspace at runtime with `zl.layout`.
+
+There are two families:
+
+- **Classic tilers**: `dwindle`, `master_stack`, `grid`, `monocle`, `spiral`, `scrolling` and `floating`.
+- **Spatial layouts**: `canvas`, `lanes`, `accordion`, `workbench` and `pairs`. Windows keep their real size and the layout moves a camera or groups them. The layout switcher adds three entries built on these: Side Shelves, Islands and Anchors.
+
+## Set the global layout
+
+```lua
+zl.set_layout(name [, ratio [, master_count [, axis]]])
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `name` | Layout name. See [Layout names](#layout-names). `master` is an alias for `master_stack`. | string | `master_stack` when the config never calls `zl.set_layout` |
+| `ratio` | A fraction in `(0, 1]`, or a whole number `2..999` read as thousandths (`600` is `0.6`). A ratio of `1` is stored as `0.999`. | number | `0.6` |
+| `master_count` | Number of master windows, `1..65535`. | integer | `1` |
+| `axis` | `horizontal` or `vertical`. | string | `horizontal` |
+
+Each call sets all four values. An argument you leave out goes back to its default; it does not keep the value from an earlier call.
+
+```lua
+zl.set_layout("dwindle")
+zl.set_layout("master", 0.55, 2)          -- two masters, 55% wide
+zl.set_layout("scrolling", 0.5, 1, "vertical")
+```
+
+Invalid arguments raise a Lua error, for example `zl.set_layout: unknown layout name` or `zl.set_layout: ratio must be a fraction in (0, 1] or whole thousandths 2..999`.
+
+### Layout names
+
+| Name | Family | Uses `ratio` | Uses `master_count` | Uses `axis` |
+| --- | --- | --- | --- | --- |
+| `dwindle` | Classic | No. Splits start at half and you resize them. | No | No |
+| `master_stack` | Classic | Width of the master column | Yes | No |
+| `grid` | Classic | No | No | No |
+| `monocle` | Classic | No | No | No |
+| `spiral` | Classic | No | No | No |
+| `scrolling` | Classic | Column width (or row height) as a share of the output | No | `vertical` scrolls up and down instead of sideways |
+| `floating` | Classic | No | No | No |
+| `canvas` | Spatial | No | No | No |
+| `lanes` | Spatial | No | No | `vertical` starts the lanes as columns |
+| `accordion` | Spatial | No | No | No |
+| `workbench` | Spatial | No | No | No |
+| `pairs` | Spatial | No | No | No |
+
+### Global and per-workspace layouts
+
+Every workspace keeps its own layout. The global layout is what a new workspace starts with, unless a workspace rule names it.
+
+When you call `zl.set_layout` at runtime (from a binding or `zoolanderctl eval`), the focused workspace on the focused output also switches to the new layout. On a config load or reload that changes the global layout, the focused workspace adopts it only when no `zl.set_workspace_layout` rule covers that workspace. Other workspaces keep the layout they have, including one you picked with the layout switcher.
+
+## Set a layout per workspace
+
+```lua
+zl.set_workspace_layout(workspace, name [, ratio [, master_count [, axis]]])
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `workspace` | Workspace name, 1 to 127 bytes. | string | required |
+| `name`, `ratio`, `master_count`, `axis` | Same meaning, limits and defaults as `zl.set_layout`. | | |
+
+A second call with the same workspace name replaces its rule. A config holds up to 32 workspace layout rules. Past that, or for an empty or too long name, the call raises `zl.set_workspace_layout: invalid name or rule limit reached`.
+
+```lua
+zl.set_workspace_layout("3", "scrolling", 0.6, 1)
+zl.set_workspace_layout("4", "canvas")
+zl.set_workspace_layout("5", "lanes", 0.6, 1, "vertical")   -- lanes as columns
+```
+
+See [Workspaces](/zoolander/configuring/workspaces) for naming, persistence and special workspaces.
+
+## The layout switcher
+
+The switcher steps the focused workspace through 15 entries, in this order:
+
+`dwindle`, `master_stack`, `grid`, `monocle`, `spiral`, `scrolling`, `floating`, `canvas`, `shelves`, `islands`, `lanes`, `accordion`, `workbench`, `pairs`, `anchors`.
+
+The last eight are the presets. `zl.layout("preset", n)` picks one by number:
+
+| # | Entry | Layout underneath | What you get |
+| --- | --- | --- | --- |
+| 1 | `canvas` | `canvas` | A two-dimensional desk. Windows keep their size and place, and a per-workspace camera shows part of it. |
+| 2 | `shelves` | `floating` on first use | Floating windows in the middle and live app shelves on both edges. Once shelves are on, this preset only turns them on beside the current spatial layout. |
+| 3 | `islands` | `canvas` | Canvas with named groups drawn as outlined islands. |
+| 4 | `lanes` | `lanes` | Named rows. Each row scrolls sideways and one vertical camera moves between rows. |
+| 5 | `accordion` | `accordion` | One window expanded, the others as live previews in side trays. |
+| 6 | `workbench` | `workbench` | A primary window with tools attached as tabs on its left, right and bottom edges. |
+| 7 | `pairs` | `pairs` | Two panes side by side or stacked. Each pane has its own list of windows. |
+| 8 | `anchors` | `canvas` | Canvas with the focused window pinned to the screen while the view moves. |
+
+Side Shelves, Islands and Anchors are an arrangement plus a placement. Stepping away from one turns off what it turned on. When a workspace switches layout, it keeps its ratio, master count and axis.
+
+```lua
+-- Super+L / Super+Shift+L step forward and back
+zl.bind(zl.MOD_LOGO, string.byte("l"), function() return zl.layout("layout_cycle", 1) end)
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, string.byte("l"), function() return zl.layout("layout_cycle", -1) end)
+
+-- Jump straight to one entry, without the on-screen toast
+zl.bind(zl.MOD_LOGO + zl.MOD_ALT, string.byte("c"), function() return zl.layout("layout_set", 1, "canvas") end)
+```
+
+## Dwindle
+
+Dwindle keeps a binary split tree per workspace. Each new tiled window splits the window it lands next to. The split runs side by side when the target is wider than it is tall (scaled by `split_width_multiplier`) and stacked otherwise. Every split starts at half. You change split sizes with `zl.resize_window` or a pointer resize.
+
+Set the options with `zl.set_dwindle`:
+
+```lua
+zl.set_dwindle({
+    preserve_split = false,
+    smart_split = false,
+    smart_resizing = true,
+    force_split = 0,
+    split_width_multiplier = 1.0,
+})
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `preserve_split` | When `true`, each split keeps its direction when the geometry changes. When `false`, the direction is chosen again from the split's current shape every time the workspace is arranged. | bool | `false` |
+| `smart_split` | Choose both the split direction and the side for a new window from where the pointer is in the target window. It takes precedence over `force_split` and `split_width_multiplier` for that window. | bool | `false` |
+| `smart_resizing` | Start a pointer resize of a tiled window from the corner nearest the pointer. When `false`, a tiled resize always starts from the bottom-right corner. | bool | `false` |
+| `force_split` | Which side the new window takes. `0` follows the pointer (the half of the target it is in), `1` always puts the new window left or top, `2` always right or bottom. | int `0..2` | `0` |
+| `split_width_multiplier` | Multiplies the target's width before comparing it with its height. Values above `1` favour side-by-side splits. | float `0.1..4` | `1.0` |
+
+Fields you leave out keep their current value. Unknown fields log a warning and the rest of the table still applies.
+
+<Note>The `zl.set_dwindle` options apply only to `dwindle`. `spiral` uses a fixed cascade and has no options.</Note>
+
+## Master
+
+`master_stack` (alias `master`) puts the master windows in a column on the left and stacks the rest in a column on the right. The masters split their column's height evenly, as do the stacked windows. When a workspace has no more windows than `master_count`, they stack at full width.
+
+You configure Master through the `zl.set_layout` arguments. There is no separate options function.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `ratio` | Width of the master column as a share of the work area. | number | `0.6` |
+| `master_count` | How many windows sit in the master column. | integer | `1` |
+
+```lua
+zl.set_layout("master_stack", 0.65, 1)
+zl.set_workspace_layout("2", "master", 0.5, 2)
+```
+
+## Scrolling
+
+`scrolling` places windows in a strip of equal columns that is wider than the screen. The view scrolls to keep the focused window visible.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `ratio` | Width of each column as a share of the output (row height when vertical). | number | `0.6` |
+| `axis` | `horizontal` scrolls sideways. `vertical` stacks rows and scrolls up and down. | string | `horizontal` |
+
+```lua
+zl.set_workspace_layout("3", "scrolling", 0.5)
+zl.set_workspace_layout("6", "scrolling", 0.5, 1, "vertical")
+```
+
+## Other classic layouts
+
+| Layout | Arrangement |
+| --- | --- |
+| `grid` | Equal cells. The number of columns is the smallest whole number whose square covers the window count. |
+| `monocle` | Every tiled window fills the work area. |
+| `spiral` | Each window takes half of the space that is left, taking the left, top, right and bottom halves in turn. The last window fills what remains. || `floating` | Windows keep the position and size they have. A window that enters the layout gets a starting floating rectangle once. |
+
+## Spatial layouts
+
+The spatial layouts keep each window's real client size. How the window is shown is separate: it can be scaled (shelf cards, Accordion previews), clipped (lane bands) or hidden (background tabs).
+
+Configure them with `zl.set_spatial`:
+
+```lua
+zl.set_spatial({
+    fallback_width = 0.667,
+    fallback_height = 0.75,
+    width_cap = 1440,
+    shelf_mode = "auto",
+    shelf_width = 0,
+    snap = 12,
+    reveal_margin = 24,
+    pan_fingers = 3,
+})
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `fallback_width` | Width for a new window that has no size of its own, as a share of the main area. | float `0.2..1` | `0.667` |
+| `fallback_height` | Height for a new window that has no size of its own, as a share of the main area. | float `0.2..1` | `0.75` |
+| `width_cap` | Largest fallback width in pixels. `0` means no cap. | int `0..16384` | `1440` |
+| `shelf_mode` | `auto` shows shelves as panels when there is room and as drawers when there is not. `persistent` always uses panels, `drawer` always uses drawers. | string | `auto` |
+| `shelf_width` | Width of a persistent shelf in pixels. `0` is adaptive (a sixth of the work area). | int `0..1200` | `0` |
+| `snap` | Edge snapping distance while you drag a window, in pixels. `0` turns snapping off. | int `0..64` | `12` |
+| `reveal_margin` | Margin kept around a window when the view moves to reveal it, in pixels. | int `0..200` | `24` |
+| `pan_fingers` | Touchpad swipe finger count that pans Canvas and Lanes 1:1. `0` turns it off. | int `0..5` | `3` |
+
+Fields you leave out keep their current value. A value outside its range or of the wrong type raises an error such as `zl.set_spatial: snap must be a number`.
+
+### Reduced motion
+
+```lua
+zl.set_reduced_motion(true)
+```
+
+`zl.set_reduced_motion(enabled)` takes a boolean. When it is `true`, camera and layout movement in the spatial layouts happens at once instead of animating. Tune those animations with the `camera` and `layout` leaves on the [Animations](/zoolander/configuring/animations) page.
+
+## Run layout actions
+
+```lua
+zl.layout(action [, a [, b]]) -> "done" | "no_target" | "unavailable"
+```
+
+`zl.layout` runs one layout action on the focused workspace. The meaning of the shared families (`focus`, `move`, `resize`, `cycle`) follows the focused window's layout and placement. On the classic tilers, `focus`, `move` and `resize` do the same as `zl.focus_direction`, `zl.move_window_direction` and a 20 px `zl.resize_window`, and `cycle` moves focus to the next or previous visible window.
+
+### Results
+
+| Result | Meaning |
+| --- | --- |
+| `done` | The action ran. |
+| `no_target` | Nothing to act on in that direction or context. The compositor shows a short hint such as "No window to the left". This is not an error. |
+| `unavailable` | The action does not apply to the focused layout or placement, or the compositor has not started yet. |
+
+### Arguments
+
+`a` and `b` are optional and default to `0`.
+
+- A number is rounded to an integer. Its absolute value must be at most `1e9`.
+- `true` is `1` and `false` is `0`.
+- `"left"`, `"right"`, `"up"` and `"down"` are directions. Only `a` may be a direction, and only for actions that take one.
+- `"next"` is `1`. `"prev"` and `"previous"` are `-1`.
+- Any other string, up to 64 bytes, is text. The action reads text from `a`, or from `b` when `a` is not text.
+
+A direction passed to an action that takes none raises an error such as `zl.layout: pan takes no left direction`.
+
+### Actions
+
+| Action | Arguments | Effect |
+| --- | --- | --- |
+| `focus` | `a`: direction | Focus a neighbour. On Canvas this includes windows off screen, and the view follows. In Lanes, left and right move within a lane and up and down move between lanes. |
+| `move` | `a`: direction, `b`: step in px (Canvas, default 20) | Move or reorder: translate on Canvas, reorder in lanes and preview trays, move between lanes or panes, move a workbench tool to another edge. |
+| `resize` | `a`: direction, `b`: step in px (Canvas, default 20) | Resize the window or the relevant divider: pair split, workbench attachment, lane height, shelf width. |
+| `cycle` | `a`: `1` / `-1` (`left`/`up` is `-1`, `right`/`down` is `1`) | Next or previous unit: window, lane, workbench, pane member or shelf card. |
+| `primary` | none | The layout's primary action: center (Canvas), maximize or restore (Accordion), focus the primary (Workbench), switch pane (Pairs), open a shelf app in the main area. |
+| `region` | `a`: `1` / `-1` | Cycle focus regions: main area, left shelf, right shelf, anchors. |
+| `inspect` | none | Show the focused window at a readable size. Run it again to put it back. |
+| `pan` | `a`, `b`: pixels | Pan the camera by `a` and `b` logical pixels, animated. |
+| `pan_direct` | `a`, `b`: pixels | Pan the camera by `a` and `b` without animation. |
+| `center` | none | Center the view on the focused window. |
+| `reveal` | none | Move the view so the focused window is visible. |
+| `park` | `a`: `left` (0) or `right` (1) | Park the focused window in the left or right shelf. |
+| `promote` | none | Open a shelved window in the main area, or return a promoted window to its shelf. |
+| `anchor` | none | Anchor the focused window to the view, or release it. |
+| `shelves` | none | Turn shelves on or off for the workspace. |
+| `undo` | none | Undo the last layout change. Layout switches, group edits, parking, anchoring and spatial moves and resizes are recorded. |
+| `preset` | `a`: `1..8` | Switch to a preset. See [The layout switcher](#the-layout-switcher). |
+| `layout_cycle` | `a`: `1` / `-1`, text `"quiet"` skips the toast | Next or previous switcher entry for the focused workspace. |
+| `layout_set` | text: entry name, `a`: `1` skips the toast | Switch to a named switcher entry, for example `"dwindle"`, `"islands"` or `"anchors"`. Returns `no_target` when the workspace is already on it and `unavailable` for an unknown name. |
+| `zoom` | `a`: notches | Zoom a Canvas in (positive) or out (negative). `0` goes back to 1:1 around the focused window. Other layouts return `unavailable`. |
+| `group_new` | text: optional name | New lane (Lanes), pair (Pairs) or island (Canvas). In Workbench, detach the focused window into a new workbench. |
+| `group_add` | none | Add the focused window to the active group. |
+| `group_remove` | none | Remove the focused window from its group. In Workbench, detach it. |
+| `group_cycle` | `a`: `1` / `-1` | Next or previous group: lane, workbench, pair or island. |
+| `group_rename` | text: new name | Rename the active group. |
+| `set_primary` | none | Make the focused window the workbench primary. |
+| `attach` | `a`: `left` (1), `right` (2) or `down` (3, bottom) | Attach the focused window as a workbench tool on that edge. |
+| `detach` | none | Detach the focused workbench tool. |
+| `swap` | none | Swap the two panes (Pairs). |
+| `orientation` | none | Toggle orientation in Accordion, Pairs and Lanes (rows or columns). Other layouts return `unavailable`. |
+| `tab` | `a`: `1` / `-1` | Next or previous tool tab on the focused workbench edge. |
+| `windows` | none | Toggle the window picker: every window on the workspace, searchable. |
+| `commands` | none | Toggle the command sheet, which lists every layout action with its keys. |
+
+```lua
+local L, S, A, C = zl.MOD_LOGO, zl.MOD_SHIFT, zl.MOD_ALT, zl.MOD_CTRL
+local function layout(action, a, b)
+    return function() return zl.layout(action, a, b) end
+end
+
+zl.bind(L, string.byte("]"), layout("cycle", "next"))
+zl.bind(L, string.byte("["), layout("cycle", "prev"))
+zl.bind(L + A, zl.KEY_RETURN, layout("primary"))
+zl.bind(L + A, string.byte("1"), layout("park", "left"))
+zl.bind(L + A, string.byte("2"), layout("park", "right"))
+zl.bind(L + A, string.byte("u"), layout("undo"))
+zl.bind(L + C, zl.KEY_SPACE, layout("commands"))
+zl.bind(L + C, string.byte("="), layout("zoom", 1), { repeating = true })
+zl.bind(L + C, string.byte("-"), layout("zoom", -1), { repeating = true })
+zl.bind(L + C + S, zl.KEY_DOWN, layout("pan", 0, 120), { repeating = true })
+zl.bind(L + A, string.byte("g"), layout("group_new", "Research"))
+```
+
+<Note>`zl.layout` needs a running compositor. At the top level of the config it returns `unavailable` and logs one warning. Call it from a binding or a [`startup` handler](/zoolander/configuring/hooks-and-events).</Note>
+
+## Read the layout state
+
+### `zl.layout_context()`
+
+Returns a table for the focused workspace, or `nil` before the compositor starts or when there is no focused workspace.
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `layout` | The arrangement, one of the names in [Layout names](#layout-names). | string |
+| `entry` | The switcher entry the workspace is on, one of the 15 entries in [The layout switcher](#the-layout-switcher). Islands reports `layout = "canvas"` and `entry = "islands"`. | string |
+| `placement` | Where the focused window sits: `main`, `shelf` or `anchor`. | string |
+| `spatial` | `true` when a spatial arrangement or placement owns the shared action families. | bool |
+| `has_window` | `true` when an eligible window has focus. | bool |
+
+Use it to make one key do different things per layout:
+
+```lua
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, zl.KEY_LEFT, function()
+    local context = zl.layout_context()
+    if context and context.spatial then return zl.layout("move", "left") end
+    return zl.move_window_workspace("1")
+end)
+
+-- Zoom on a Canvas, switch workspace everywhere else
+zl.bind_axis(zl.MOD_LOGO, zl.AXIS_UP, function()
+    local context = zl.layout_context()
+    if context and context.layout == "canvas" then return zl.layout("zoom", 1) end
+    return zl.workspace("1")
+end)
+```
+
+### `zl.layout_info()`
+
+Returns a JSON string that describes the focused workspace, at most 96 KiB. It returns an empty string before the compositor starts. If the window list does not fit, `truncated` is `true`.
+
+| Key | Description |
+| --- | --- |
+| `layout`, `layout_name` | Arrangement name and its display name. |
+| `workspace` | Workspace number. |
+| `output` | Output name. |
+| `area` | Main area as `[x, y, w, h]`. |
+| `camera` | Camera position `[x, y]` (spatial workspaces). |
+| `lanes_y` | Vertical camera offset in Lanes. |
+| `shelves` | Whether shelves are on. |
+| `inspect` | Address of the inspected window, `0` for none. |
+| `groups` | Groups, each with `id`, `kind`, `order`, `name`, `origin`, `height` and `split`. |
+| `active` | Active group IDs per group kind. |
+| `focus` | Address of the focused window, `0` for none. |
+| `hint` | Text of the current layout hint. |
+| `windows` | Windows on the workspace and pinned windows. Each has `a` (address), `geom`, `shown`, `world`, `placed`, `normal`, `place`, `side`, `group`, `role`, `order`, `scale`, `hidden`, `input`, `floating`, `minimized` and `title`. |
+| `truncated` | `true` when windows were left out to fit the limit. |
+
+```sh
+zoolanderctl eval 'return zl.layout_info()'
+```
+
+See [zoolanderctl](/zoolander/ipc/zoolanderctl) for `eval`.
+
+## Custom Lua layouts
+
+Pass a function to `zl.set_layout` instead of a name to place tiled windows yourself:
+
+```lua
+zl.set_layout(function(index, count, width, height)
+    return x, y, w, h
+end)
+```
+
+| Argument | Description |
+| --- | --- |
+| `index` | Zero-based position of the window among the workspace's tiled windows. |
+| `count` | Number of tiled windows on the workspace. |
+| `width`, `height` | Size of the workspace's main area in pixels. |
+
+Return `x`, `y`, `w` and `h` relative to the top-left corner of the main area. Zoolander applies the inner gaps to what you return.
+
+How the compositor treats the result:
+
+- The function starts from the built-in placement of the classic layout set before it. Call `zl.set_layout("grid")` (or another name) first to choose that starting point; with no earlier call it is `master_stack`. A missing return value keeps that built-in value, so `return nil, nil, 800` changes only the width.
+- A result with a width or height of `0` or less, or one equal to the built-in rectangle, keeps the built-in placement.
+- If the function raises an error, Zoolander logs it and uses the built-in placement.
+- The function only runs for classic tilers. Spatial layouts and `floating` ignore it.
+- If the function triggers another arrange (for example by calling `zl.workspace`), that nested arrange uses the built-in placement and logs one warning.
+- Calling `zl.set_layout` with a name replaces the function. A config reload that does not set the function again removes it.
+
+This example builds a centered column with every window the same size:
+
+```lua
+zl.set_layout(function(index, count, width, height)
+    local w = math.floor(width * 0.6)
+    local h = math.floor(height / count)
+    return math.floor((width - w) / 2), index * h, w, h
+end)
+```
+
+## Examples
+
+A dwindle desktop with a scrolling workspace and a canvas:
+
+```lua
+zl.set_layout("dwindle")
+zl.set_dwindle({ smart_resizing = true, split_width_multiplier = 1.2 })
+zl.set_workspace_layout("3", "scrolling", 0.6)
+zl.set_workspace_layout("4", "canvas")
+zl.set_spatial({ snap = 16, pan_fingers = 4 })
+```
+
+A layout switcher limited to four entries, built on `zl.layout_context` and `layout_set`:
+
+```lua
+local entries = { "dwindle", "canvas", "shelves", "lanes" }
+
+local function step(by)
+    return function()
+        local context = zl.layout_context()
+        local current = context and context.entry
+        local index = 0
+        for i, name in ipairs(entries) do
+            if name == current then index = i end
+        end
+        local target = index == 0 and entries[1] or entries[((index - 1 + by) % #entries) + 1]
+        return zl.layout("layout_set", 0, target)
+    end
+end
+
+zl.bind(zl.MOD_LOGO, string.byte("l"), step(1))
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, string.byte("l"), step(-1))
+```

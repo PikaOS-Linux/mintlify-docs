@@ -16,6 +16,12 @@ otter-installer
 
 The wizard collects locale, keyboard layout, timezone, target drive, desktop or shell modules, and optional software. Account creation happens in [First Setup](/apps/otter-first-setup) after reboot.
 
+## Desktop
+
+The **Desktop** step offers Zoolander, Hyprland, Niri, Mango, GNOME, KDE Plasma, and COSMIC. It shows only the desktops the install pool offers. The pool advertises Zoolander through the `wm-zoolander` recipe module or a `zoolander` package.
+
+[Zoolander](/zoolander/overview) is the first card and the default choice. If the pool does not offer it, the installer selects the first offered desktop instead. Zoolander pairs with the Otter, Noctalia, and Dank panels, like the other tiling desktops. GNOME, KDE Plasma, and COSMIC keep their own shells.
+
 ## Storage
 
 Automatic installation defaults to XFS, with ext4 and Btrfs available. Advanced options cover home layout, encryption, swap, and rEFInd. Manual mode opens Blivet to edit partitions, then validates the partition assignments before installation.
@@ -28,4 +34,4 @@ The privileged helper uses `pikainstall` to validate and prepare the target. Ans
 
 Progress shows the active stage and elapsed time. **Restart** becomes available only after the helper exits successfully. If installation fails, the final screen shows the helper output, including authorization errors.
 
-After reboot, First Setup completes identity and remaining setup tasks. The installer does not make a compositor part of the `otter-shell` package; desktop choices belong to the PikaOS installation profile.
+After reboot, First Setup completes identity and remaining setup tasks. The installer does not make a compositor part of the `otter-shell` package; desktop choices belong to the PikaOS installation profile. Zoolander installs as its own package.
