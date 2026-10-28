@@ -1,10 +1,10 @@
 ---
 title: "Libraries overview"
 sidebarTitle: "Overview"
-description: "Shared otr libraries and optional Lua bindings in Otter Shell v0.13.0."
+description: "Shared otr libraries and optional Lua bindings in Otter Shell v0.13.12."
 ---
 
-Otter Shell v0.13.0 applications use shared libraries written in otr. Each component's implementation lives in its `otr/` directory. Examples from `src/*.zig` use a different API.
+Otter Shell v0.13.12 applications use shared libraries written in otr. Each component's implementation lives in its `otr/` directory. Examples from `src/*.zig` use a different API.
 
 Libraries are source dependencies for developers, not separate desktop applications. Each package declares its dependencies and build options in `otr.toml`.
 
@@ -58,6 +58,6 @@ otr options use `-D name=value`, not Zig's `-Doptimize=ReleaseFast` syntax. Read
 
 ## Source and checks
 
-Each library is an independent repository under [git.pika-os.com/otter-shell](https://git.pika-os.com/otter-shell). Use its v0.13.0 `otr/` source and `otr/API.md` where provided. Public declarations and consumer checks are the final authority if a migration note is stale.
+Each library is an independent repository under [git.pika-os.com/otter-shell](https://git.pika-os.com/otter-shell). Use its v0.13.12 `otr/` source and `otr/API.md` where provided. Public declarations and consumer checks are the final authority if a migration note is stale.
 
 From a component repository root, `otr run otr/build.otr --release-fast -- check` runs its API and formatting checks. Other steps depend on the component: read `otr/build.otr` before running tests, E2E fixtures, or benchmarks. Run graphical verification only in an isolated headless environment, never against your live desktop.
