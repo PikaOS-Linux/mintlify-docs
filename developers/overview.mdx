@@ -4,7 +4,7 @@ sidebarTitle: "Overview"
 description: "The released otr architecture, shared native libraries, Lua extension platform, and per-component repository workflow."
 ---
 
-Otter Shell v0.13.0 uses otr 0.2.0 for its native applications and libraries. Lua scripts provide plugins and selected surface UIs through `otter-lua`. Shared layout, drawing, Wayland, configuration, and desktop services stay native.
+Otter Shell v0.13.12 uses otr 0.2.5 for its native applications and libraries. Lua scripts provide plugins and selected surface UIs through `otter-lua`. Shared layout, drawing, Wayland, configuration, and desktop services stay native.
 
 ## Repository structure
 
@@ -40,7 +40,7 @@ The otr applications statically link their Otter libraries and support [Lua plug
 
 ## Toolchain and retained Zig code
 
-Use otr **0.2.0** and matching **v0.13.0** component trees. System development dependencies vary by package; [Building](/developers/building) explains runners, dependency preparation, and verification.
+Use otr **0.2.5** and the component versions pinned in `otter-zenith`. System development dependencies vary by package; [Building](/developers/building) explains runners, dependency preparation, and verification.
 
 Zig 0.17.0 builds the terminal `vt/`, package-manager `zapt/`, highlighting `zhl/`, and static PipeWire boundaries. The browser remains on its separate `zig-maint` source/library set and WPE WebKit packaging path. Otter Bench and its separate gaming packaging also retain their own Zig library pins; do not build them against otr-only library siblings. Legacy differential scripts can require a preserved historical tree or frozen Zig artifacts; removed root Zig build files are not available in a clean otr checkout. Use `zig build` only where the component's instructions call for it.
 
