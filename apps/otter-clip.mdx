@@ -6,7 +6,7 @@ description: "Clipboard manager with searchable history. Access entries via Supe
 
 `otter-clip` keeps a bounded history of text and images from the Wayland data-control protocol. Press Super+V for the launcher popup.
 
-The same package ships `otter-copy` and `otter-paste`, which talk to data-control directly. In packaged installs they shadow `wl-copy` and `wl-paste`, so existing apps and scripts keep working.
+The same package ships `otter-copy` and `otter-paste`, which talk to data-control directly. In packaged installs they shadow `wl-copy` and `wl-paste`, so existing apps and scripts keep working. Plain text, including text inferred as `text/plain`, is also offered as `text/plain;charset=utf-8` and `UTF8_STRING`, so apps that ask for those targets can paste it.
 
 ## Starting the daemon
 

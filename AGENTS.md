@@ -18,7 +18,8 @@
 - **`otter-shell`** is the base metapackage; **`otter-shell-extras`** adds `otter-transcribe`, `otter-vox`, Otter Assistant (`otter-assist`, `otter-assistant`, `otter-assist-data`), and model packages (`otter-assist-model`, `otter-transcribe-model`, `otter-vox-model`)
 - **`otter-gaming-utils`** is a separate metapackage (not in `otter-shell`) for Otter Bench / Otter HUD; packaging repo is [otter-gaming-utils](https://git.pika-os.com/otter-shell/otter-gaming-utils)
 - Otter Shell does **not** ship a compositor. Do not document River or any compositor as the default.
-- The greeter (`otter-greeter`) uses Hyprland for the login screen only. User sessions use their own compositor.
+- **Zoolander** is a separate compositor package (source: `/home/ferreo/zoo/zoolander`, library: `/home/ferreo/zoo/zooland`). It has its own tab under `zoolander/` and developer pages under `developers/zooland/`. Verify config options against its otr source, not `docs/LUA-API.md`.
+- The greeter (`otter-greeter`) runs on Zoolander for the login screen and depends on the `zoolander` package, so installing `otter-shell` pulls Zoolander in indirectly. Hyprland is only suggested. User sessions use their own compositor.
 - `otter-cue` may appear in zenith pins for library work. Do not document it as a packaged end-user app unless `debian/control` lists it.
 
 ## Style preferences

@@ -1,0 +1,421 @@
+---
+title: "Variables"
+sidebarTitle: "Variables"
+description: "Every global Zoolander setting: input, presentation, Xwayland, overview, window style, decorations, blur, dim, bell, and output size."
+---
+
+Zoolander reads its settings from Lua setter calls in `~/.config/zoolander/init.lua`. Each setter owns one group of options. This page lists every option of the global setters, with its type, range and default.
+
+Layouts, monitors, workspaces, window rules and animations have their own pages. See [Layouts](/zoolander/configuring/layouts), [Monitors](/zoolander/configuring/monitors), [Workspaces](/zoolander/configuring/workspaces), [Window rules](/zoolander/configuring/window-rules) and [Animations](/zoolander/configuring/animations).
+
+## How setters apply
+
+- A table setter starts from the current values and changes only the keys you pass. Two calls to the same setter in one file merge.
+- Each config load, including a hot reload, first resets every setting to its built-in default. An option you delete from the file goes back to its default on the next reload.
+- A key the setter does not know prints a warning such as `zoolander: zl.set_blur: unknown field sizee` on stderr. The rest of the call still applies.
+- A value of the wrong type or outside its range raises a Lua error. The whole config load then fails. On a reload, the previous config stays active. On the first load, Zoolander starts with a small built-in emergency config instead.
+
+```lua
+-- Both calls apply: size stays 4 after the second call.
+zl.set_blur({ size = 4 })
+zl.set_blur({ passes = 2 })
+```
+
+## Types
+
+| Type | Description |
+| --- | --- |
+| bool | Lua `true` or `false`. Numbers and strings are rejected. |
+| int | A Lua number. Zoolander checks the range first, then rounds to the nearest whole number, so `gaps_in = 3.6` becomes `4`. |
+| float | A Lua number. NaN and infinity are rejected. |
+| color | A string: `"#RGB"`, `"#RGBA"`, `"#RRGGBB"` or `"#RRGGBBAA"`. Alpha comes last. You may put `_` between hex digits, as in `"#20_1e_1e_ff"`. Without alpha the colour is opaque. |
+| enum | A string from a fixed list, such as `"flat"`. A few enums also take their index as a number. The table says so where it applies. |
+| string | A Lua string. Length limits are listed per option. |
+
+Ranges in the tables are inclusive. `0..256` means any value from 0 to 256.
+
+## Keyboard
+
+`zl.set_keyboard(table)` sets key repeat, Num Lock and the XKB keymap.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `repeat_rate` | Repeated key presses per second while a key is held. `0` turns key repeat off. Range `0..1000`. | int | `25` |
+| `repeat_delay` | Milliseconds a key must be held before it starts to repeat. Range `0..5000`. | int | `600` |
+| `numlock` | Turns Num Lock on (`true`) or off (`false`) when the config applies. | bool | `false` |
+| `rules` | XKB rules name. At most 127 bytes. | string | unset |
+| `model` | XKB keyboard model, such as `"pc105"`. At most 127 bytes. | string | unset |
+| `layout` | XKB layout, or a comma-separated list such as `"us,de"`. At most 127 bytes. | string | unset |
+| `variant` | XKB variant for the layout, such as `"dvorak"`. At most 127 bytes. | string | unset |
+| `options` | XKB options, such as `"caps:escape"`. At most 127 bytes. | string | unset |
+
+An XKB name you leave unset, or set to `""`, comes from the matching `XKB_DEFAULT_RULES`, `XKB_DEFAULT_MODEL`, `XKB_DEFAULT_LAYOUT`, `XKB_DEFAULT_VARIANT` or `XKB_DEFAULT_OPTIONS` environment variable. If that is also empty, Zoolander reads `XKBMODEL`, `XKBLAYOUT`, `XKBVARIANT` and `XKBOPTIONS` from `/etc/default/keyboard`. If nothing names a layout, the layout is `us`. A variant from the environment or the file only counts when no earlier source named the layout.
+
+```lua
+zl.set_keyboard({
+    repeat_rate = 50,
+    repeat_delay = 300,
+    numlock = true,
+    layout = "us,de",
+    options = "grp:alt_shift_toggle,caps:escape",
+})
+```
+
+## Pointer
+
+`zl.set_pointer(table)` sets libinput pointer options for every mouse and touchpad, and how focus follows the pointer.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `left_handed` | Swaps the left and right buttons. | bool | `false` |
+| `accel_profile` | libinput acceleration profile. `"adaptive"` speeds the pointer up as you move faster. `"flat"` applies one constant factor. | enum: `adaptive`, `flat` | `"adaptive"` |
+| `sensitivity` | libinput pointer speed. Range `-1..1`. `0` is the device default. | float | `0` |
+| `follow_mouse` | How keyboard focus follows the pointer. See the list below. Also accepts `0..3`. | enum: `disabled` (0), `focus` (1), `click` (2), `detached` (3) | `"focus"` |
+
+`follow_mouse` values:
+
+- `disabled` (`0`): moving the pointer does not change keyboard focus. Click a window to focus it.
+- `focus` (`1`): keyboard focus moves to the window under the pointer as you move it.
+- `click` (`2`): click a window to focus it. Moving the pointer only moves focus when it crosses between a floating and a tiled window.
+- `detached` (`3`): the pointer and keyboard focus are separate. Clicking a window sends it the click without focusing it.
+
+### Turn off mouse acceleration
+
+The built-in profile is `adaptive`. Set `accel_profile` to `flat` to turn acceleration off. Use `sensitivity` to adjust the constant speed.
+
+```lua
+zl.set_pointer({ accel_profile = "flat", sensitivity = 0 })
+```
+
+## Touchpad and gestures
+
+Zoolander has no touchpad-specific options such as tap-to-click or natural scrolling. `zl.set_pointer` applies to touchpads as well as mice.
+
+Two setters on other pages control touchpad gestures:
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `zl.set_workspace_gesture(enabled, fingers)` | Turns the touchpad swipe that switches workspaces on or off. `fingers` is `2..10`. Leave it out to keep the current count. | bool, int | `false`, `3` |
+| `pan_fingers` in `zl.set_spatial` | Finger count of the swipe that pans the Canvas and Lanes layouts. `0` turns it off. | int | `3` |
+
+```lua
+zl.set_workspace_gesture(true, 3)
+```
+
+See [Workspaces](/zoolander/configuring/workspaces) and [Layouts](/zoolander/configuring/layouts) for details.
+
+## Presentation
+
+`zl.set_presentation(table)` controls tearing, variable refresh rate, direct scanout, HDR and repaint behaviour.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `allow_tearing` | Allows tearing page flips. A frame only tears when the output supports async page flips, a single window covers the output in fullscreen, and either `immediate_fullscreen` is on or the client asks to tear. | bool | `false` |
+| `immediate_fullscreen` | With `allow_tearing`, lets every fullscreen window tear, even one that did not ask to. | bool | `false` |
+| `vrr` | Variable refresh rate. See the list below. Also accepts `0..3`. | enum: `off` (0), `always` (1), `fullscreen` (2), `fullscreen_content` (3) | `"off"` |
+| `direct_scanout` | Lets a fullscreen client buffer go straight to the display plane, skipping composition, when nothing else needs drawing. | bool | `true` |
+| `hdr` | HDR output mode on HDR-capable outputs. See the list below. | enum: `off`, `auto`, `always` | `"auto"` |
+| `sdr_brightness` | Brightness of SDR content while an output runs in HDR. Range `0.1..4`. | float | `1` |
+| `sdr_saturation` | Saturation of SDR content while an output runs in HDR. Range `0..2`. | float | `1` |
+| `partial_damage` | Repaints only the parts of the screen that changed. Set `false` to render every frame in full, for example to rule out a damage bug. | bool | `true` |
+
+`vrr` values:
+
+- `off`: never use adaptive sync.
+- `always`: use adaptive sync on every output that supports it.
+- `fullscreen`: use it while a fullscreen window covers the output.
+- `fullscreen_content`: use it while a fullscreen window covers the output and its content type is `video` or `game`.
+
+`hdr` values:
+
+- `off`: always drive the output in SDR.
+- `auto`: switch to HDR when a single fullscreen window that covers the output has HDR content. Without a fullscreen window, switch when any visible window has HDR content.
+- `always`: drive HDR-capable outputs in HDR all the time.
+
+```lua
+zl.set_presentation({
+    allow_tearing = true,
+    immediate_fullscreen = true,
+    vrr = "fullscreen",
+    hdr = "auto",
+})
+```
+
+## Xwayland
+
+`zl.set_xwayland(table)` controls X11 app support.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled` | Runs an X display for X11 apps. With `false`, no X socket listens, child processes get no `DISPLAY` or `XAUTHORITY`, and a running Xwayland stops. Setting it back to `true` listens again. The next X11 client starts Xwayland. | bool | `true` |
+| `force_zero_scaling` | X11 clients see unscaled physical pixels instead of logical coordinates, so they render sharp on scaled outputs. They then draw at their own size and may look small. | bool | `false` |
+
+```lua
+zl.set_xwayland({ enabled = true, force_zero_scaling = true })
+```
+
+## Overview
+
+`zl.set_overview(table)` sets the workspace overview layout.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `axis` | Direction the workspace cards are laid out in. | enum: `vertical`, `horizontal` | `"vertical"` |
+| `rail` | Edge of the screen that holds the rail of workspace thumbnails. | enum: `bottom`, `top` | `"bottom"` |
+
+```lua
+zl.set_overview({ axis = "horizontal", rail = "top" })
+```
+
+The overview open and close transition uses the `workspaces` animation. See [Animations](/zoolander/configuring/animations).
+
+## Window style
+
+`zl.set_window_style(table)` sets gaps, borders, rounding, opacity and shadows for all windows. [Window rules](/zoolander/configuring/window-rules) can override `border_size`, `rounding` and shadows per window.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `gaps_in` | Gap between tiled windows, in logical pixels. Range `0..256`. | int | `0` |
+| `gaps_out` | Gap between tiled windows and the edge of the output. Range `0..256`. | int | `0` |
+| `border_size` | Border width in logical pixels. Range `0..64`. See [Borders](#borders). | int | `2` |
+| `active_border` | Start colour of the focused window's border gradient. | color | about `#598cf2` |
+| `active_border_end` | End colour of the focused window's border gradient. If you leave it out, it keeps its current value. It does not follow `active_border`. | color | about `#598cf2` |
+| `active_border_angle` | Angle of the focused border gradient, in degrees. Range `-360..360`. | float | `0` |
+| `inactive_border` | Start colour of unfocused window borders. | color | about `#40404d` |
+| `inactive_border_end` | End colour of unfocused window borders. Keeps its current value when left out. | color | about `#40404d` |
+| `inactive_border_angle` | Angle of the unfocused border gradient, in degrees. Range `-360..360`. | float | `0` |
+| `rounding` | Corner radius in logical pixels. `0` gives square corners. Range `0..128`. | int | `0` |
+| `rounding_power` | Shape of the rounded corner. `2` is a circular arc. Higher values give a squarer, squircle-like corner. Range `2..10`. | float | `2` |
+| `active_opacity` | Opacity of the focused window. Range `0..1`. | float | `1` |
+| `inactive_opacity` | Opacity of unfocused windows. Range `0..1`. | float | `1` |
+| `fullscreen_opacity` | Opacity of fullscreen windows. Range `0..1`. | float | `1` |
+| `shadow` | Drop shadow options. See the next table. | table | see below |
+
+### Shadow
+
+The `shadow` key takes a nested table. Keys you leave out keep their current values.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled` | Draws a drop shadow behind windows. | bool | `false` |
+| `range` | Shadow size in logical pixels. Range `0..256`. | int | `16` |
+| `sharp` | Edge hardness. `0` fades smoothly over `range`. `1` gives a solid shadow that ends at half of `range`. Range `0..1`. | float | `0` |
+| `render_power` | Falloff curve of the shadow. Higher values fade faster. Range `1..8`. | float | `2` |
+| `offset_x` | Horizontal shadow offset in logical pixels. Range `-256..256`. | int | `0` |
+| `offset_y` | Vertical shadow offset in logical pixels. Range `-256..256`. | int | `0` |
+| `scale` | Multiplies `range`. The window outline the shadow starts from does not grow. Range `0.5..2`. | float | `1` |
+| `color` | Shadow colour of the focused window. | color | `#00000066` |
+| `color_inactive` | Shadow colour of unfocused windows. | color | `#00000066` |
+
+### Borders
+
+The border width and colours come from one of two places:
+
+- If any border key (`border_size`, `active_border`, `active_border_end`, `active_border_angle`, `inactive_border`, `inactive_border_end`, `inactive_border_angle`) has been set through `zl.set_window_style`, the window style values apply to every window.
+- Otherwise the border comes from `zl.set_ssd`. With decorations off, that means no border at all. With decorations on, it is `border` from `zl.set_ssd`, `2` by default.
+
+So with no border keys anywhere in your config, windows have no border, even though `border_size` defaults to `2`.
+
+When `follow_theme` in `zl.set_ssd` is `true` and an Otter Shell theme is installed, the theme's border colours replace the colours you set here. The width still comes from your config. See [Server-side decorations](#server-side-decorations).
+
+```lua
+zl.set_window_style({
+    gaps_in = 3,
+    gaps_out = 6,
+    border_size = 2,
+    active_border = "#dbab96",
+    active_border_end = "#dbab96",
+    inactive_border = "#201e1e",
+    inactive_border_end = "#201e1e",
+    rounding = 20,
+    rounding_power = 4,
+    active_opacity = 0.98,
+    inactive_opacity = 0.95,
+    shadow = {
+        enabled = true,
+        range = 35,
+        render_power = 4,
+        offset_y = 12,
+        scale = 1.05,
+        color = "#00000073",
+    },
+})
+```
+
+## Server-side decorations
+
+`zl.set_ssd` controls title bars drawn by the compositor. It takes either a boolean or a table.
+
+The boolean form only changes `enabled`:
+
+```lua
+zl.set_ssd(true)
+```
+
+The table form takes these keys:
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled` | Draws title bars on windows that accept server-side decorations. | bool | `false` |
+| `floating_workspaces_only` | Only decorates windows on workspaces that use the floating layout. With `false`, every window that accepts decorations gets a title bar. | bool | `true` |
+| `include_floating_windows` | With `floating_workspaces_only`, also decorates floating windows on tiled workspaces. | bool | `true` |
+| `follow_theme` | Takes title bar and border styling from the Otter Shell theme when one is installed. See the note below. | bool | `true` |
+| `border` | Border width in logical pixels, used while `zl.set_window_style` sets no border key. Range `0..64`. | int | `2` |
+| `titlebar` | Title bar height in logical pixels. Range `0..128`. | int | `22` |
+| `active_border` | Start colour of the focused border, used while `zl.set_window_style` sets no border key. | color | about `#598cf2` |
+| `active_border_end` | End colour of the focused border. If you leave it out but set `active_border`, it follows `active_border`. | color | about `#598cf2` |
+| `active_border_angle` | Angle of the focused border gradient. Range `-360..360`. | float | `0` |
+| `inactive_border` | Start colour of unfocused borders. | color | about `#40404d` |
+| `inactive_border_end` | End colour of unfocused borders. Follows `inactive_border` when only that is set. | color | about `#40404d` |
+| `inactive_border_angle` | Angle of the unfocused border gradient. Range `-360..360`. | float | `0` |
+| `active_titlebar` | Title bar colour of the focused window. | color | about `#292e3d` |
+| `inactive_titlebar` | Title bar colour of unfocused windows. | color | about `#1a1a21` |
+| `show_title` | Draws the window title in the title bar. | bool | `true` |
+| `title_font` | Font for titles: one or more comma-separated families, then optional style words, as in `"Inter, sans-serif Semi-Bold Italic"`. At most 127 bytes. Empty means `sans-serif`. | string | `""` |
+| `title_font_size` | Title font size. Range `1..128`. | int | `13` |
+| `title_color` | Title text colour of the focused window. | color | about `#ebf0fa` |
+| `inactive_title_color` | Title text colour of unfocused windows. Follows `title_color` when only that is set. | color | about `#ebf0fa` |
+| `title_align` | Title position in the bar. | enum: `left`, `center`, `right` | `"center"` |
+| `buttons` | List of title bar buttons, at most 8. See the next table. Passing `buttons` replaces the whole list. | table | no buttons |
+
+Each entry in `buttons` is a table:
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `action` | What the button does. Required. | enum: `close`, `minimize`, `maximize`, `fullscreen` | none |
+| `side` | Side of the title bar the button sits on. | enum: `left`, `right` | `"right"` |
+| `width` | Button width in logical pixels. Range `1..128`. | int | the `titlebar` height |
+| `color` | Button colour. | color | about `#bf333d` |
+
+<Note>
+With `follow_theme = true`, an installed Otter Shell theme (`~/.config/otter-shell/theme.conf`, or `/etc/otter-shell/theme.conf` when that file is missing) supplies the border colours, title bar colours, title colours, title bar height, title font and size, and buttons. Those values replace what you set in `zl.set_ssd` and the border colours from `zl.set_window_style`. Border width is not taken from the theme. Set `follow_theme = false` to use your own values. Without a theme file, your values apply.
+</Note>
+
+```lua
+zl.set_ssd({
+    enabled = true,
+    follow_theme = false,
+    titlebar = 24,
+    active_titlebar = "#10151f",
+    inactive_titlebar = "#0b0f17",
+    title_font = "sans-serif",
+    title_font_size = 13,
+    title_color = "#eaf0fa",
+    title_align = "center",
+    buttons = {
+        { action = "close", side = "right", width = 24, color = "#d75f5f" },
+        { action = "fullscreen", side = "right", width = 24, color = "#5082d2" },
+    },
+})
+```
+
+Use the `decorate` window rule to turn decorations on or off for single apps. See [Window rules](/zoolander/configuring/window-rules).
+
+## Blur
+
+`zl.set_blur(table)` sets the background blur behind translucent surfaces.
+
+With `enabled`, Zoolander blurs the backdrop behind every translucent window. A window drawn below full opacity counts as translucent. A surface that asks for blur through `ext-background-effect-v1` gets blur in its own region, whether `enabled` is on or not. Layer surfaces such as bars only get global blur through `zl.add_layer_blur_rule`. See [Window rules](/zoolander/configuring/window-rules).
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled` | Blurs behind translucent windows. | bool | `true` |
+| `size` | Blur radius per pass. Range `1..40`. | int | `8` |
+| `passes` | Number of blur passes. More passes give a stronger, smoother blur at a higher GPU cost. Range `1..8`. | int | `1` |
+| `ignore_opacity` | Draws the blur at full strength whatever the surface's own opacity. With `false`, the blur fades with the surface opacity. | bool | `true` |
+| `popups` | Also blurs behind popups, such as menus and X11 override-redirect windows. | bool | `false` |
+| `popups_ignorealpha` | Popup pixels with alpha below this value get no blur. Range `0..1`. | float | `0.2` |
+| `input_methods` | Also blurs behind input method popups. | bool | `false` |
+| `input_methods_ignorealpha` | Input method pixels with alpha below this value get no blur. Range `0..1`. | float | `0.2` |
+| `noise` | Amount of noise added to the blur. Range `0..1`. | float | `0.0117` |
+| `contrast` | Contrast of the blurred backdrop. Above `1`, darks get darker and lights get lighter without clipping. Below `1`, both move towards grey. Range `0..2`. | float | `0.8916` |
+| `brightness` | Brightness of the blurred backdrop. Range `0..2`. | float | `1` |
+| `vibrancy` | Saturation boost of the blurred backdrop. Range `0..1`. | float | `0.1696` |
+| `vibrancy_darkness` | Holds `vibrancy` back on dark colours. At `1`, black gets no saturation boost. Range `0..1`. | float | `0` |
+
+```lua
+zl.set_blur({
+    enabled = true,
+    size = 2,
+    passes = 4,
+    noise = 0.02,
+    contrast = 1.55,
+    brightness = 0.75,
+    vibrancy = 0.55,
+    vibrancy_darkness = 0.25,
+})
+```
+
+## Dim
+
+`zl.set_dim(table)` darkens windows and backgrounds.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `inactive` | Dims unfocused windows. | bool | `false` |
+| `strength` | How much `inactive` dims unfocused windows. Range `0..1`. | float | `0.5` |
+| `special` | How much the screen behind an open special workspace is dimmed. Range `0..1`. | float | `0.2` |
+| `around` | How much the screen behind a window with the `dim_around` rule is dimmed. Range `0..1`. | float | `0` |
+
+```lua
+zl.set_dim({ inactive = true, strength = 0.1, special = 0.3, around = 0.02 })
+```
+
+## Reduced motion
+
+`zl.set_reduced_motion(bool)` makes spatial layout motion immediate. Camera pans, reveals and selection changes in spatial layouts (the `camera` and `layout` animations) skip their animation. Other animations still run.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `zl.set_reduced_motion(enabled)` | Turns reduced motion on or off. | bool | `false` |
+
+```lua
+zl.set_reduced_motion(true)
+```
+
+## Bell sound
+
+`zl.set_bell_sound(name)` picks the sound played when an app rings the system bell through `xdg-system-bell`.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `zl.set_bell_sound(name)` | Bell sound name. `"none"` or `""` mutes the bell. `"default"` restores `error`. Returns `true` on success and `false` for an unknown name, which leaves the setting unchanged. | string | `"error"` |
+
+Sound names: `chime`, `sparkle`, `droplet`, `bloom`, `whisper`, `tick`, `press`, `release`, `toggle`, `success`, `error`, `page`, `loading`, `ready`, `pulse`, `scan`, `arrival`.
+
+```lua
+zl.set_bell_sound("droplet")
+```
+
+## Output size
+
+`zl.set_output_size(width, height)` sets the size of the primary output in logical pixels. Both arguments must be whole numbers.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `zl.set_output_size(width, height)` | Called before the compositor starts, it records the size and applies it at startup, and returns `true`. Called later, it asks the primary output for a mode of that size (scaled by the output scale) at its current refresh rate and returns whether that worked. | int, int | the output's own mode |
+
+This size is not part of the reset on reload. For per-monitor modes, positions and scale, use `zl.output_rule` on the [Monitors](/zoolander/configuring/monitors) page.
+
+```lua
+zl.set_output_size(1920, 1080)
+```
+
+## Settings read from outside Lua
+
+| Source | What it sets | Default |
+| --- | --- | --- |
+| `XCURSOR_THEME` | Cursor theme name. Zoolander falls back to `default`, then `Adwaita`. | unset |
+| `XCURSOR_SIZE` | Cursor size in pixels. | `24` |
+| `XCURSOR_PATH` | Extra cursor theme search path. | unset |
+| `XKB_DEFAULT_*` and `/etc/default/keyboard` | Keymap names left unset in `zl.set_keyboard`. | layout `us` |
+| `~/.config/otter-shell/theme.conf` | Decoration and border styling while `follow_theme` is on. Changes reload live. | `/etc/otter-shell/theme.conf` |
+
+Zoolander reads the `XCURSOR_*` values from `zl.set_env` first, then from its own environment. So you can set the cursor from your config:
+
+```lua
+zl.set_env("XCURSOR_THEME", "Adwaita")
+zl.set_env("XCURSOR_SIZE", "32")
+```
+
+See [Environment variables](/zoolander/configuring/environment-variables) for `zl.set_env` and the variables Zoolander reads at startup.

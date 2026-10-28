@@ -25,6 +25,8 @@ For another desktop name, create or edit `$XDG_CONFIG_HOME/xdg-desktop-portal/po
 default=otter;
 ```
 
+On Zoolander, the `zoolander` package installs `/usr/share/xdg-desktop-portal/zoolander-portals.conf`. It prefers the `otter` backend, then `wlr`, then `gtk`, when `XDG_CURRENT_DESKTOP` is `Zoolander`.
+
 An existing user selection file takes precedence over desktop defaults. Review it before changing it; this choice selects Otter for all interfaces, not only file picking.
 
 At session startup, import the compositor's display environment so activated services can connect to it:
@@ -74,7 +76,15 @@ If picking fails, check that the packaged `otter-files` is installed at its norm
 
 ## Screen sharing
 
-ScreenCast offers native monitor/window selection with thumbnails and exports the selected source as a PipeWire video stream. Source availability follows detected capture capabilities. PipeWire, a working session bus, and a compositor capture path are required.
+ScreenCast offers native monitor, workspace, and window selection with thumbnails and exports the selected source as a PipeWire video stream. Source availability follows detected capture capabilities. PipeWire, a working session bus, and a compositor capture path are required.
+
+### Source chooser
+
+The chooser lists screens, windows, and workspaces under section headers, three cards to a row. Scroll it with the mouse wheel, drag the scrollbar thumb, or move the keyboard focus; the list follows the focused card.
+
+Workspaces appear when the compositor implements `hyprland-workspace-image-capture-source-v1`, as Zoolander and Hyprland do, and the request asks for monitors or virtual sources. They are listed in number order. Where Zoolander or Hyprland report occupancy, empty workspaces stay hidden until you tick **Show empty workspaces**.
+
+A shared workspace streams as a virtual source when the request includes virtual sources, and as a monitor otherwise. The stream includes that output's wallpaper and panels, even while another workspace is visible.
 
 On the EXT image-copy capture path, each stream keeps one capture session and reuses its capture buffer. Frames follow compositor damage rather than reopening a capture session for every frame. The PipeWire source retains the latest frame and supplies it when a consumer starts streaming, so an unchanged desktop has an initial image without waiting for another screen update.
 

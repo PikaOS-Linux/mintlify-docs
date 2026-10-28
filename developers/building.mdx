@@ -1,15 +1,15 @@
 ---
 title: "Build Otter Shell from source"
 sidebarTitle: "Building"
-description: "Build the v0.13.0 release with otr 0.2.0, package-root build runners, and pinned native dependencies."
+description: "Build the v0.13.12 release with otr 0.2.5, package-root build runners, and pinned native dependencies."
 ---
 
-Otter Shell v0.13.0 uses otr 0.2.0 for native applications and libraries. Each component has its own repository and `otr/build.otr` runner. Run it from the component's repository root, not from its `otr/` directory.
+Otter Shell v0.13.12 uses otr 0.2.5 for native applications and libraries. Each component has its own repository and `otr/build.otr` runner. Run it from the component's repository root, not from its `otr/` directory.
 
 ## Prerequisites
 
-- Install **otr 0.2.0**. The packaging pin is `otter-zenith/otr-toolchain.pin`.
-- Keep sibling library repositories at the matching **v0.13.0** release. Package manifests in `otr/otr.toml` refer to sibling packages.
+- Install **otr 0.2.5**. The packaging pin is `otter-zenith/otr-toolchain.pin`.
+- Keep sibling library repositories at the versions pinned in `otter-zenith`. Package manifests in `otr/otr.toml` refer to sibling packages.
 - Install system development headers required by the component. Common dependencies include Wayland, Fontconfig, FreeType, and xkbcommon. `otter-zenith/debian/control` contains the complete packaging build dependencies.
 - Keep **Zig 0.17.0** available for the intentional Zig dependencies below and differential test baselines. Zig is not the primary application build tool.
 - Use an isolated headless compositor for visual E2E tests. Do not capture your running desktop session.

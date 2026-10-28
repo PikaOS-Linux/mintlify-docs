@@ -12,6 +12,8 @@ The overlay uses `zwlr_layer_shell_v1` on the output under the cursor. It is not
 
 Niri has its own overview. That one uses [otter-wallpaper](/desktop/otter-wallpaper) `overview_enabled` for a blurred backdrop. `otter-overview` is a separate app.
 
+[Zoolander](/zoolander/overview) also draws its own overview. On Zoolander, bind `zl.toggle_overview()` rather than `otter-overview`. `otter-overview` cannot read Zoolander's workspace membership from the foreign-toplevel protocol, so it may group windows under the wrong workspace. The [taskbar](/desktop/otter-taskbar) task view button opens the Zoolander overview for you.
+
 ## Usage
 
 ```bash

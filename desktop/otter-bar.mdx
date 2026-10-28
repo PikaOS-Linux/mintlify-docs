@@ -8,8 +8,8 @@ description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other
 
 ## Features
 
-- Workspace indicator and switcher (otter-tag, Mango/dwl IPC, ext-workspace)
-- Active window title with icon
+- Workspace indicator and switcher (otter-tag, Mango/dwl IPC, ext-workspace). On Zoolander, it asks Zoolander's control socket which workspaces hold windows
+- Active window title with icon. It stays on the correct output when a window briefly overlaps a second output, as Zoolander reports during move and workspace animations
 - Clock with timezone-aware formatting and date tooltip
 - Battery via UPower (auto-hides when no battery)
 - Brightness from `/sys/class/backlight/`
@@ -94,6 +94,10 @@ Add `keyboard_layout` to a layout section to show the current XKB layout. Set `k
 ### System tray
 
 Set `system_tray_always_show = true` to show tray icons without the expand button.
+
+With more than one output, each bar expands and collapses its own tray. Clicking the expand button changes only the bar you clicked. The width eases over `system_tray_animation_duration` milliseconds (default `750`), stepped on that output's frame callbacks.
+
+Tray menus blur only their visible panels when theme blur is on. Reserved space beside a cascading submenu stays clear.
 
 ### Weather widget
 

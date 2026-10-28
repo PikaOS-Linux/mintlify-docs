@@ -1,0 +1,388 @@
+---
+title: "Binds"
+sidebarTitle: "Binds"
+description: "Bind keys, mouse buttons and scroll directions to Lua functions with zl.bind, zl.bind_mouse and zl.bind_axis, and forward keys to application global shortcuts."
+---
+
+A bind connects a key, mouse button or scroll direction, plus a set of modifiers, to a Lua function. When you press the combination, Zoolander calls the function. You make binds in your config with `zl.bind`, `zl.bind_mouse` and `zl.bind_axis`. The functions you call from a bind are listed on [Dispatchers](/zoolander/configuring/dispatchers).
+
+```lua
+zl.bind(zl.MOD_LOGO, zl.KEY_RETURN, function()
+    zl.exec_command("otter-term")
+end)
+```
+
+## Bind functions
+
+| Function | Arguments | Description |
+| --- | --- | --- |
+| `zl.bind` | `modifiers, key, callback [, options]` | Binds a keyboard key. Returns an integer bind ID. |
+| `zl.bind_mouse` | `modifiers, button, callback [, options]` | Binds a pointer button. Returns an integer bind ID. |
+| `zl.bind_axis` | `modifiers, axis, callback [, options]` | Binds one scroll direction. Returns an integer bind ID. |
+| `zl.bind_global_shortcut` | `modifiers, key, app_id, id [, options]` | Sends a key to a shortcut that an application registered. Returns an integer bind ID. |
+| `zl.bindings` | none | Lists the binds your config made. |
+| `zl.global_shortcuts` | none | Lists the shortcuts that applications have registered. |
+
+### Arguments
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `modifiers` | Sum of `zl.MOD_*` constants, or `0` for no modifier. | integer | required |
+| `key` | A keysym number, such as `zl.KEY_RETURN` or `0x1008ff13`, or a one-character string from ASCII 32 to 126, such as `"q"`. | integer or string | required |
+| `button` | A Linux evdev button code, such as `272` for the left button. | integer | required |
+| `axis` | One of `zl.AXIS_LEFT`, `zl.AXIS_RIGHT`, `zl.AXIS_UP` or `zl.AXIS_DOWN`. | integer | required |
+| `callback` | Function to run. It gets no arguments and its return value is ignored. | function | required |
+| `options` | Options table. See [Bind options](#bind-options). | table | `nil` |
+
+Each function raises a Lua error when an argument has the wrong type. For example, `zl.bind(zl.MOD_LOGO, "Return", f)` fails because a string key must be one character long. Use `zl.KEY_RETURN` instead.
+
+## Bind options
+
+Pass options as the fourth argument.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `locked` | Run the bind while the session is locked, for example media and volume keys. Keys only. | boolean | `false` |
+| `repeating` | Run the bind again while you hold the key, at the keyboard repeat rate. Keys only. | boolean | `false` |
+| `description` | Text that `zl.bindings()` reports, for key cheat sheets. At most 127 bytes. | string | `""` |
+
+`zl.bind_mouse` and `zl.bind_axis` read only `description`. Zoolander logs a warning for any other field, including `locked` and `repeating`, and still makes the bind.
+
+```lua
+zl.bind(0, 0x1008ff13, function()
+    zl.exec_command("otter-osd volume-up 5")
+end, { locked = true, repeating = true, description = "Volume up" })
+```
+
+### How `repeating` works
+
+A repeating bind first fires on the key press. After the delay set by `repeat_delay` in `zl.set_keyboard`, it fires again at `repeat_rate` times per second. Repeat stops when you:
+
+- release the key,
+- press another key,
+- change the held modifiers,
+- move focus to another window, workspace, output or layout.
+
+A config reload also stops the repeat. With `repeat_rate = 0`, binds do not repeat.
+
+```lua
+zl.set_keyboard({ repeat_rate = 50, repeat_delay = 300 })
+```
+
+## Modifiers
+
+Combine modifiers by adding them, or with `bit.bor`.
+
+| Constant | Value | Keys |
+| --- | --- | --- |
+| `zl.MOD_SHIFT` | `1` | Left and right Shift |
+| `zl.MOD_CTRL` | `2` | Left and right Control |
+| `zl.MOD_ALT` | `4` | Left Alt and Right Alt (AltGr) |
+| `zl.MOD_LOGO` | `8` | Left and right Super |
+
+```lua
+local mod = zl.MOD_LOGO
+zl.bind(mod + zl.MOD_SHIFT, "q", function() zl.quit() end)
+zl.bind(bit.bor(mod, zl.MOD_CTRL), zl.KEY_LEFT, function() zl.workspace("1") end)
+```
+
+The modifier set must match exactly. A bind on `zl.MOD_LOGO` does not fire for Super+Shift. Caps Lock and Num Lock are not modifiers here, so they never stop a bind from matching.
+
+Zoolander tracks modifiers from the physical keys. It updates them before it looks up a bind. To bind a modifier key on its own, include its own bit. For example, Super_L alone is `zl.bind(zl.MOD_LOGO, 0xffeb, f)`.
+
+## Keys and keysyms
+
+Zoolander matches binds against keysyms, the key names XKB uses, such as `Return`, `q` or `XF86AudioMute`. Each keysym has a number. You can find names and numbers in `xkbcommon/xkbcommon-keysyms.h`, or by running `wev` or `xkbcli interactive-wayland` and pressing the key.
+
+There are three ways to give a key:
+
+| Form | Example | Notes |
+| --- | --- | --- |
+| Constant | `zl.KEY_TAB` | For the common non-printing keys listed below. |
+| One-character string | `"q"`, `"1"`, `"/"` | ASCII 32 to 126. Printable Latin keysyms equal their ASCII code. |
+| Keysym number | `0x1008ff12` | Any keysym, such as media keys. |
+
+<Warning>
+Zoolander matches the key's unshifted keysym in the active layout, not the character the key types. Bind letters in lowercase. `"Q"` never fires, because the Q key's unshifted keysym is `q`. For Super+Shift+1, bind `zl.MOD_LOGO + zl.MOD_SHIFT` with `"1"`, not `"!"`.
+</Warning>
+
+Because the lookup uses the active layout, a letter bind such as `"q"` only matches while a layout that has `q` on that key is active.
+
+### Key constants
+
+| Constant | Keysym | Value |
+| --- | --- | --- |
+| `zl.KEY_BACKSPACE` | `BackSpace` | `0xff08` |
+| `zl.KEY_TAB` | `Tab` | `0xff09` |
+| `zl.KEY_RETURN` | `Return` | `0xff0d` |
+| `zl.KEY_ESCAPE` | `Escape` | `0xff1b` |
+| `zl.KEY_SPACE` | `space` | `0x0020` |
+| `zl.KEY_LEFT` | `Left` | `0xff51` |
+| `zl.KEY_UP` | `Up` | `0xff52` |
+| `zl.KEY_RIGHT` | `Right` | `0xff53` |
+| `zl.KEY_DOWN` | `Down` | `0xff54` |
+| `zl.KEY_F1` | `F1` | `0xffbe` |
+
+F2 to F12 follow F1 in the keysym table, so F*n* is `zl.KEY_F1 + n - 1`.
+
+```lua
+zl.bind(zl.MOD_LOGO, zl.KEY_F1 + 4, function() zl.exec_command("otter-keybindhelp") end) -- Super+F5
+```
+
+### Other common keysyms
+
+These are standard XKB keysym values. Zoolander has no constants for them, so use the number.
+
+| Keysym | Value |
+| --- | --- |
+| `Print` | `0xff61` |
+| `Caps_Lock` | `0xffe5` |
+| `Super_L` | `0xffeb` |
+| `XF86MonBrightnessUp` | `0x1008ff02` |
+| `XF86MonBrightnessDown` | `0x1008ff03` |
+| `XF86AudioLowerVolume` | `0x1008ff11` |
+| `XF86AudioMute` | `0x1008ff12` |
+| `XF86AudioRaiseVolume` | `0x1008ff13` |
+| `XF86AudioPlay` | `0x1008ff14` |
+| `XF86AudioStop` | `0x1008ff15` |
+| `XF86AudioPrev` | `0x1008ff16` |
+| `XF86AudioNext` | `0x1008ff17` |
+| `XF86Calculator` | `0x1008ff1d` |
+
+### Binding by name
+
+`zl.bind` does not parse key names. If you want to write binds as text, add a small helper to your config. This one comes from a working config. It turns `"SUPER + SHIFT + Return"` into a modifier mask and keysym:
+
+```lua
+local named_keys = {
+    space = zl.KEY_SPACE, tab = zl.KEY_TAB, ["return"] = zl.KEY_RETURN,
+    escape = zl.KEY_ESCAPE, left = zl.KEY_LEFT, right = zl.KEY_RIGHT,
+    up = zl.KEY_UP, down = zl.KEY_DOWN, print = 0xff61,
+    xf86audioraisevolume = 0x1008ff13, xf86audiolowervolume = 0x1008ff11,
+    xf86audiomute = 0x1008ff12,
+}
+
+local function bind(description, action, options)
+    local modifiers = 0
+    local key
+    for token in description:gmatch("[^+]+") do
+        local value = token:match("^%s*(.-)%s*$"):lower()
+        if value == "shift" then modifiers = modifiers + zl.MOD_SHIFT
+        elseif value == "ctrl" or value == "control" then modifiers = modifiers + zl.MOD_CTRL
+        elseif value == "alt" then modifiers = modifiers + zl.MOD_ALT
+        elseif value == "super" or value == "logo" then modifiers = modifiers + zl.MOD_LOGO
+        else key = value end
+    end
+    local keysym = named_keys[key] or (#key == 1 and string.byte(key))
+    assert(keysym, "unknown key: " .. tostring(key))
+    return zl.bind(modifiers, keysym, action, options)
+end
+
+bind("SUPER + Return", function() zl.exec_command("otter-term") end)
+bind("SUPER + SHIFT + Q", function() zl.exec_command("otter-logout") end)
+bind("XF86AudioRaiseVolume", function() zl.exec_command("otter-osd volume-up 5") end,
+    { locked = true, repeating = true })
+```
+
+The helper lowercases every token, so `"Q"` becomes `q` and matches.
+
+## Mouse binds
+
+`zl.bind_mouse` takes a Linux evdev button code. Zoolander has no button constants. These are the usual codes from `linux/input-event-codes.h`:
+
+| Button | evdev name | Code |
+| --- | --- | --- |
+| Left | `BTN_LEFT` | `272` |
+| Right | `BTN_RIGHT` | `273` |
+| Middle | `BTN_MIDDLE` | `274` |
+| Side (back) | `BTN_SIDE` | `275` |
+| Extra (forward) | `BTN_EXTRA` | `276` |
+
+A mouse bind fires on the button press. The window under the pointer gets focus first, unless `follow_mouse` in `zl.set_pointer` is `"detached"`. Then the callback runs. Zoolander keeps both the press and the release from the client.
+
+The usual use is moving and resizing windows with Super and a drag:
+
+```lua
+zl.bind_mouse(zl.MOD_LOGO, 272, function() zl.begin_move() end)   -- Super + left drag moves
+zl.bind_mouse(zl.MOD_LOGO, 273, function() zl.begin_resize() end) -- Super + right drag resizes
+```
+
+Press Escape during the drag to put the window back where it started.
+
+## Scroll binds
+
+`zl.bind_axis` binds one scroll direction. The bind runs once for each wheel step. If you scroll three notches, it runs three times. Zoolander does not send bound scroll events to the client.
+
+| Constant | Value | Direction |
+| --- | --- | --- |
+| `zl.AXIS_LEFT` | `0` | Horizontal scroll left |
+| `zl.AXIS_RIGHT` | `1` | Horizontal scroll right |
+| `zl.AXIS_UP` | `2` | Wheel up |
+| `zl.AXIS_DOWN` | `3` | Wheel down |
+
+Any other value raises an error.
+
+```lua
+zl.bind_axis(zl.MOD_LOGO, zl.AXIS_DOWN, function() zl.workspace("2") end)
+zl.bind_axis(zl.MOD_LOGO, zl.AXIS_UP, function() zl.workspace("1") end)
+```
+
+## When binds run
+
+- If several binds match the same combination, all of them run, in the order you made them.
+- Keyboard binds run before an input method sees the key. A bind still fires while a text field has focus.
+- A consumed key press also consumes its release. The focused client never sees either.
+- Ctrl+Alt+F1 to F12 switch virtual terminals before Zoolander looks up binds.
+- While the window picker or the command sheet is open, it takes keys pressed without Super or Alt before binds see them.
+- When a client inhibits keyboard shortcuts, for example a virtual machine viewer, no key, mouse or scroll binds run. While the session is locked, binds with `locked = true` still run.
+- If a callback raises an error, Zoolander logs it as `keybind handler: <message>` and keeps running.
+
+## Global shortcuts
+
+Some applications register shortcuts through the `hyprland_global_shortcuts_manager_v1` protocol, directly or through the GlobalShortcuts portal. `zl.bind_global_shortcut` sends a key to one of these shortcuts. The application learns when the key goes down and when it comes back up. It never receives the key event itself.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `modifiers` | Sum of `zl.MOD_*` constants. | integer | required |
+| `key` | Keysym number or one-character string, as for `zl.bind`. | integer or string | required |
+| `app_id` | The application ID the shortcut was registered with. 1 to 255 bytes. | string | required |
+| `id` | The shortcut ID. 1 to 255 bytes. | string | required |
+| `options.locked` | Deliver the shortcut while the session is locked. This is the only option. | boolean | `false` |
+
+The bind exists before the application registers the shortcut. It keeps the key from other clients even while no application has registered it.
+
+```lua
+zl.bind_global_shortcut(zl.MOD_LOGO, "r", "org.example.Recorder", "record")
+```
+
+To find the `app_id` and `id` values, start the application and list the registered shortcuts:
+
+```bash
+zoolanderctl eval "local o={} for _,s in ipairs(zl.global_shortcuts()) do o[#o+1]=s.app_id..' '..s.id end return table.concat(o,', ')"
+```
+
+`zl.global_shortcuts()` returns one table per registered shortcut:
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `app_id` | Application ID. | string |
+| `id` | Shortcut ID. | string |
+| `description` | The application's description of the shortcut. | string |
+| `trigger` | The key combination the application suggests, in its own words. | string |
+
+## Listing binds
+
+`zl.bindings()` returns the binds your current config made, in the order it made them. Global shortcut binds appear as keys. A cheat sheet can use the list.
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `kind` | `"key"`, `"mouse"` or `"axis"`. | string |
+| `modifiers` | The modifier mask the bind was made with. | integer |
+| `mods` | The modifiers as text, in the order `SUPER`, `CTRL`, `ALT`, `SHIFT`, joined by `+`. Empty when there are none. | string |
+| `key` | The XKB keysym name for keys, such as `Return`, `q` or `XF86AudioRaiseVolume`. `mouse:<code>` for buttons. `wheel_left`, `wheel_right`, `wheel_up` or `wheel_down` for scroll binds. | string |
+| `description` | The bind's description, or `""`. | string |
+| `locked` | The `locked` option. Always `false` for mouse and scroll binds. | boolean |
+| `repeating` | The `repeating` option. Always `false` for mouse and scroll binds. | boolean |
+
+```lua
+local function cheat_sheet()
+    local lines = {}
+    for _, b in ipairs(zl.bindings()) do
+        if b.description ~= "" then
+            lines[#lines + 1] = b.mods .. " " .. b.key .. ": " .. b.description
+        end
+    end
+    return table.concat(lines, "\n")
+end
+```
+
+`zoolanderctl eval` replaces line breaks in its reply with spaces. To read the list from a script, join it with other separators:
+
+```bash
+zoolanderctl eval "local o={} for _,b in ipairs(zl.bindings()) do o[#o+1]=table.concat({b.kind,b.mods,b.key,b.description},'\31') end return table.concat(o,'\30')"
+```
+
+## Changing and removing binds
+
+There is no `zl.unbind`. Binds belong to the config run that made them. To change or remove a bind, edit your config and save it.
+
+When you save `init.lua` or a `.lua` module beside it, Zoolander reloads the whole config in a new Lua state:
+
+1. It runs the new config from the start. Every `zl.bind` call makes a new bind.
+2. If the run succeeds, Zoolander removes every bind from the previous run. Only the new binds stay.
+3. If the run fails, Zoolander removes the binds the failed run made and keeps the previous config, binds included.
+
+So you never need to clean up binds by hand, and a typo in your config does not leave you without binds. You can also reload with `zoolanderctl reload`. See [zoolanderctl](/zoolander/ipc/zoolanderctl).
+
+<Note>
+A bind made inside a callback, such as a startup handler, also belongs to the running config. The next successful reload removes it like any other bind.
+</Note>
+
+## Examples
+
+### Workspace keys
+
+Bind Super+1 to Super+9 to switch workspace and Super+Shift+1 to 9 to move the focused window:
+
+```lua
+for i = 1, 9 do
+    local name = tostring(i)
+    zl.bind(zl.MOD_LOGO, name, function() zl.workspace(name) end)
+    zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, name, function()
+        zl.move_window_workspace(name, false)
+    end)
+end
+```
+
+`name` is a one-character string, so it works as both the key and the workspace name. For per-monitor workspace sets, see the [split workspaces recipe](/zoolander/configuring/workspaces#split-workspaces-recipe).
+
+### Window management
+
+```lua
+local mod = zl.MOD_LOGO
+
+zl.bind(mod, "q", function() zl.close_window() end)
+zl.bind(mod, "f", function() zl.toggle_fullscreen() end)
+zl.bind(mod, "s", function() zl.toggle_floating() end)
+zl.bind(mod, "a", function() zl.toggle_pin() end)
+zl.bind(mod, "z", function() zl.toggle_special_workspace("") end)
+zl.bind(mod, zl.KEY_TAB, function() zl.toggle_overview() end)
+
+for _, dir in ipairs({ "left", "right", "up", "down" }) do
+    local key = ({ left = zl.KEY_LEFT, right = zl.KEY_RIGHT, up = zl.KEY_UP, down = zl.KEY_DOWN })[dir]
+    zl.bind(mod, key, function() zl.focus_direction(dir) end)
+    zl.bind(mod + zl.MOD_SHIFT, key, function() zl.move_window_direction(dir) end)
+end
+```
+
+### Resize with repeat
+
+```lua
+local hold = { repeating = true }
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, zl.KEY_RIGHT, function() zl.resize_window(40, 0) end, hold)
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, zl.KEY_LEFT, function() zl.resize_window(-40, 0) end, hold)
+```
+
+### Media keys that work on the lock screen
+
+```lua
+local locked = { locked = true }
+zl.bind(0, 0x1008ff14, function() zl.exec_command("playerctl play-pause") end, locked)
+zl.bind(0, 0x1008ff16, function() zl.exec_command("playerctl previous") end, locked)
+zl.bind(0, 0x1008ff17, function() zl.exec_command("playerctl next") end, locked)
+```
+
+### Zoom a Canvas with the wheel
+
+```lua
+zl.bind_axis(zl.MOD_LOGO, zl.AXIS_UP, function() zl.layout("zoom", 1) end)
+zl.bind_axis(zl.MOD_LOGO, zl.AXIS_DOWN, function() zl.layout("zoom", -1) end)
+```
+
+`zl.layout` actions are covered on [Layouts](/zoolander/configuring/layouts). To scroll through workspaces instead, see `cycle_workspaces` in the [split workspaces recipe](/zoolander/configuring/workspaces#split-workspaces-recipe).
+
+## Related
+
+- [Dispatchers](/zoolander/configuring/dispatchers): the actions you call from binds.
+- [Variables](/zoolander/configuring/variables): `zl.set_keyboard` for repeat rate and keymap, and `zl.set_pointer` for `follow_mouse`.
+- [Lua API](/zoolander/configuring/lua-api): every `zl` function.

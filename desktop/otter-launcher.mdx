@@ -21,6 +21,16 @@ bind = $mainMod, D, exec, otter-launcher
 
 The launcher exits after you launch an item or press **Escape**. A socket prevents duplicate overlays. Run it again to close an open launcher.
 
+## Recent apps
+
+Recent apps are on by default. The last 32 distinct apps you launched through Otter Launcher appear first, ranked by launch count. When two apps have the same count, the more recently used one comes first. The remaining apps stay alphabetical.
+
+Launching a 33rd distinct app drops the least recently launched one and its count. History lives in `$XDG_CACHE_HOME/otter-shell/launcher-recent` (normally `~/.cache/otter-shell/launcher-recent`).
+
+To sort alphabetically and stop reading or recording history, set `recent_apps = false` in `otter-launcher.conf` or turn it off in the **Launcher** tab of otter-settings.
+
+When you search, literal name matches come before keyword, desktop ID, and ordered-letter matches such as `ff` for Firefox. Within each group, recent-app ranking applies first, then names sort alphabetically. Descriptions are not searched.
+
 ## Launcher extensions
 
 Extensions appear above app matches:
@@ -66,6 +76,7 @@ Config: `~/.config/otter-shell/otter-launcher.conf`. Created on first run.
 <Tip>Size, colors, and placeholder text: [otter-settings](/desktop/otter-settings), **Launcher** tab.</Tip>
 
 ```conf
+recent_apps = true
 width_percent = 30
 height_percent = 35
 border_width = 2

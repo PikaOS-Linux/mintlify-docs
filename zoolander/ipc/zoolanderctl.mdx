@@ -1,0 +1,192 @@
+---
+title: "zoolanderctl and the control socket"
+sidebarTitle: "zoolanderctl"
+description: "Query and control a running Zoolander from the command line or a script. Covers every zoolanderctl command, the socket path, and the line protocol."
+---
+
+`zoolanderctl` sends one command to a running Zoolander and prints the reply. It talks to the control socket, a Unix stream socket with a simple line protocol. You can also use the socket directly from any program.
+
+## Usage
+
+```text
+zoolanderctl COMMAND [ARGS...]
+```
+
+```bash
+zoolanderctl status
+zoolanderctl reload
+zoolanderctl workspace 3
+zoolanderctl eval 'return zl.window_count()'
+```
+
+`zoolanderctl help`, `-h` or `--help` prints the command list.
+
+## Commands
+
+| Command | Description | Reply |
+| --- | --- | --- |
+| `ping` | Check that the compositor answers. | `OK pong` |
+| `version` | Control protocol version. | `OK version 1` |
+| `status` | Reload counters, config state, decoration state and renderer. | `OK reloads=N fails=N config_ok=BOOL ssd=on\|off renderer="..."` |
+| `reload` | Reload the config now. | `OK reload ok`, or `ERR` and the error message |
+| `workspace NAME` | Whether a workspace has windows. | `OK occupied`, `OK empty` or `ERR unknown workspace` |
+| `eval LUA` | Run Lua in the live config runtime and return its first result. | `OK <result>` or `ERR <error>` |
+| `quit` | Stop the compositor. | `OK bye` |
+
+### status
+
+```bash
+$ zoolanderctl status
+OK reloads=1 fails=0 config_ok=true ssd=on renderer="vulkan on <GPU name> (<driver> <driver info>, /dev/dri/card1)"
+```
+
+| Field | Meaning |
+| --- | --- |
+| `reloads` | Successful config loads, including the first one at startup. |
+| `fails` | Failed config loads, including a failed first load. |
+| `config_ok` | Whether the last load attempt succeeded. `false` while the emergency config runs. |
+| `ssd` | Whether server-side decorations are on. |
+| `renderer` | `vulkan on <GPU> (<driver> <driver info>, <device>)` on DRM with Vulkan. `software (dumb buffers on <device>: Vulkan unavailable: <error>)` on DRM without Vulkan. `software` on the nested and headless backends. |
+
+The counters only move when Zoolander watches the config directory. Without a watch, they stay at zero and `config_ok` stays `true`.
+
+### reload
+
+Reads the config file again and runs it in a new runtime. The new runtime replaces the old one only if the whole config succeeds.
+
+```bash
+$ zoolanderctl reload
+OK reload ok
+$ zoolanderctl reload
+ERR init.lua:14: attempt to call field 'set_bluur' (a nil value)
+```
+
+Use it after you edit a module in a subdirectory, because the file watch does not reach subdirectories. If Zoolander has no config path to watch, the reply is `ERR hot reload not configured (no config path resolved)`.
+
+### workspace
+
+```bash
+$ zoolanderctl workspace 2
+OK empty
+```
+
+The name is 1 to 128 bytes. A name Zoolander does not know returns `ERR unknown workspace`. Otter Shell components use this to show which workspaces are occupied.
+
+### eval
+
+Runs a Lua chunk in the active config runtime. It has the same `zl` table and the same powers as your config.
+
+```bash
+$ zoolanderctl eval 'return zl.window_count()'
+OK 4
+$ zoolanderctl eval 'return zl.monitor_info(0).name'
+OK DP-1
+$ zoolanderctl eval 'zl.workspace("3")'
+OK nil
+```
+
+The reply holds the chunk's first return value:
+
+| Lua value | Reply text |
+| --- | --- |
+| `nil` or nothing | `nil` |
+| boolean | `true` or `false` |
+| string or number | the value |
+| anything else | `<value>` |
+
+Return a string if you need a table. Line breaks in the reply become spaces, so join lists with other separators:
+
+```bash
+zoolanderctl eval "local o={} for _,b in ipairs(zl.bindings()) do o[#o+1]=b.mods..' '..b.key end return table.concat(o,';')"
+```
+
+Errors come back as `ERR` with the Lua message. The chunk is named `eval`, so a syntax error reads `ERR eval:1: ...`. Replies are limited to 96 KiB.
+
+Changes made with `eval` last until the next reload replaces the runtime.
+
+### quit
+
+Replies `OK bye`, closes the connection and stops the compositor. Your session ends.
+
+## Exit status
+
+| Status | Meaning |
+| --- | --- |
+| `0` | The reply started with `OK`. |
+| `1` | The reply started with `ERR`, or the connection failed. |
+| `2` | No command given, or an argument contains a newline. |
+
+`zoolanderctl` exits with an error before connecting if `XDG_RUNTIME_DIR` or `WAYLAND_DISPLAY` is unset.
+
+## Socket path
+
+For a Wayland socket named `wayland-N`, Zoolander listens on:
+
+```text
+$XDG_RUNTIME_DIR/zoolander-wayland-N.sock
+```
+
+`zoolanderctl` builds the path from `XDG_RUNTIME_DIR` and the last path component of `WAYLAND_DISPLAY`. Inside a Zoolander session, both are already right. From somewhere else, such as another TTY, an SSH login or the host of a nested session, set `WAYLAND_DISPLAY` to Zoolander's socket name:
+
+```bash
+WAYLAND_DISPLAY=wayland-1 zoolanderctl status
+```
+
+Without `XDG_RUNTIME_DIR`, Zoolander cannot create its Wayland socket and does not start. If it cannot bind the control socket, it logs `control socket disabled: ...` and keeps running.
+
+<Warning>
+  Any process running as your user can connect to the socket. `eval` can run `zl.exec_command`, so treat the socket as trusted local access, like the Wayland socket itself.
+</Warning>
+
+## Protocol
+
+The socket speaks newline-delimited text:
+
+1. On connect, the server sends `ZLCTL 1`.
+2. You send one command per line. A trailing `\r` is ignored.
+3. The server sends one line per command, starting with `OK ` or `ERR `.
+
+You can send several commands on one connection. The command word and its argument are separated by spaces or tabs. Everything after the command word is the argument, so `eval` receives the rest of the line unchanged.
+
+| Limit | Value |
+| --- | --- |
+| Command line length | 2048 bytes. A longer line gets `ERR line too long` and the connection closes. |
+| Simultaneous clients | 32 |
+| `status`, `reload`, `workspace` reply | 512 bytes |
+| `eval` reply | 96 KiB |
+
+Other error replies are `ERR empty command` and `ERR unknown command`.
+
+`zoolanderctl` uses OpenBSD netcat (`nc -U -N`), which the package depends on. Any Unix socket client works:
+
+```bash
+printf 'ping\nstatus\n' | nc -U -N "$XDG_RUNTIME_DIR/zoolander-$WAYLAND_DISPLAY.sock"
+```
+
+```text
+ZLCTL 1
+OK pong
+OK reloads=1 fails=0 config_ok=true ssd=on renderer="software"
+```
+
+## Examples
+
+Reload from a key binding and show a notification:
+
+```lua
+zl.bind(zl.MOD_LOGO, zl.KEY_ESCAPE, function()
+    return zl.exec_command("zoolanderctl reload && notify-send 'Config reloaded'")
+end)
+```
+
+Wait in a script until the compositor answers:
+
+```bash
+until zoolanderctl ping >/dev/null 2>&1; do sleep 0.2; done
+```
+
+Move to workspace 2 only if it already has windows:
+
+```bash
+zoolanderctl workspace 2 | grep -q occupied && zoolanderctl eval 'zl.workspace("2")'
+```

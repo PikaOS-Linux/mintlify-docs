@@ -1,0 +1,410 @@
+---
+title: "Workspaces"
+sidebarTitle: "Workspaces"
+description: "Switch, create and query named workspaces, pin workspaces to monitors, use special workspaces, set per-workspace layouts and swipe gestures, and build per-monitor workspace sets."
+---
+
+Each monitor shows one regular workspace at a time. A workspace has a name, holds windows and belongs to one monitor. On top of the regular workspace, a monitor can show one special workspace, a scratchpad that slides over the rest.
+
+```lua
+zl.bind(zl.MOD_LOGO, "2", function() zl.workspace("2") end)
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "2", function() zl.move_window_workspace("2") end)
+```
+
+## Workspace names
+
+- A name is any string from 1 to 127 bytes. `"1"`, `"web"` and `"chat 2"` are all valid.
+- Names are per monitor. Each new monitor starts with a workspace called `1`, so two monitors can each have a `1`.
+- `special` and names starting with `special:` are reserved for [special workspaces](#special-workspaces).
+- Zoolander creates a workspace the first time you switch to it or move a window to it.
+- Zoolander does not delete a workspace when it becomes empty. A workspace client, such as a bar that speaks `ext-workspace-v1`, can remove one. It cannot remove a persistent workspace or the last regular workspace on a monitor.
+
+## Workspace functions
+
+| Function | Arguments | Description |
+| --- | --- | --- |
+| [`zl.workspace`](#workspace) | `name` | Switches to a workspace, creating it if needed. |
+| [`zl.move_window_workspace`](#move_window_workspace) | `name [, follow [, address]]` | Moves a window to a workspace. |
+| [`zl.toggle_special_workspace`](#special-workspaces) | `name` | Shows or hides a special workspace. |
+| [`zl.workspace_info`](#workspace_info) | `name` | Returns a workspace's name, whether it is special and whether it is empty. |
+| [`zl.workspace_on_monitor`](#workspace_on_monitor) | `monitor, workspace` | Shows a workspace on a named monitor. |
+| [`zl.set_workspace_persistent`](#set_workspace_persistent) | `name, persistent [, monitor]` | Marks a workspace persistent. |
+| [`zl.set_workspace_layout`](#set_workspace_layout) | `name, layout [, ratio [, master_count [, axis]]]` | Gives one workspace its own layout. |
+| [`zl.set_workspace_gesture`](#set_workspace_gesture) | `enabled [, fingers]` | Turns touchpad workspace swipes on or off. |
+
+The action functions (`workspace`, `move_window_workspace`, `toggle_special_workspace`, `workspace_on_monitor` and `set_workspace_persistent`) need the running compositor. At the top level of your first config run they return `false` and print a warning. Call them from a bind or an event handler. `set_workspace_layout` and `set_workspace_gesture` are settings and work anywhere.
+
+### workspace
+
+```lua
+zl.workspace(name) -> boolean
+```
+
+Switches the active monitor to the workspace called `name`. Zoolander looks for it in this order:
+
+1. A workspace with that name on the active monitor. Zoolander shows it there.
+2. A workspace with that name on exactly one other monitor. Zoolander switches that monitor to it. If more than one other monitor has the name, the call returns `false`.
+3. A workspace left behind by a disconnected monitor. Zoolander brings it, with its windows, to the active monitor.
+4. Otherwise, Zoolander creates the workspace on the active monitor.
+
+A name that starts with `special` toggles that special workspace instead. Returns `false` for an empty name or a name over 127 bytes.
+
+### move_window_workspace
+
+```lua
+zl.move_window_workspace(name [, follow [, address]]) -> boolean
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `name` | Target workspace. | string | required |
+| `follow` | Switch to the target after the move. | boolean | `false` |
+| `address` | A window `address` from `zl.get_windows()`. | opaque value | focused window |
+
+Zoolander looks for the target on the window's monitor first, then on exactly one other monitor. If the name is free, it creates the workspace on the window's monitor. If more than one other monitor has the name, the call returns `false`. Special workspace names return `false`. See [Dispatchers](/zoolander/configuring/dispatchers#move_window_workspace).
+
+### workspace_info
+
+```lua
+zl.workspace_info(name) -> table | nil
+```
+
+Returns `nil` when no workspace has that name, or before startup. Otherwise it returns the first workspace with that name:
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `name` | Workspace name. | string |
+| `special` | Whether it is a special workspace. | boolean |
+| `empty` | Whether it holds no windows. | boolean |
+
+```lua
+zl.bind(zl.MOD_LOGO, "e", function()
+    local info = zl.workspace_info("mail")
+    if info == nil or info.empty then
+        zl.workspace("mail")
+        zl.exec_command("thunderbird")
+    else
+        zl.workspace("mail")
+    end
+end)
+```
+
+For a special workspace, pass the full name, such as `"special"` or `"special:term"`.
+
+### workspace_on_monitor
+
+```lua
+zl.workspace_on_monitor(monitor, workspace) -> boolean
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `monitor` | Output name, such as `"DP-1"`. See [Monitors](/zoolander/configuring/monitors#output-names). | string | required |
+| `workspace` | Workspace name, 1 to 127 bytes. | string | required |
+
+Shows `workspace` on `monitor`, creating it there if needed. Returns `false` when no monitor has that name.
+
+Two details make this function suitable for pinning workspace sets to monitors:
+
+- If a persistent workspace was created on `monitor` but now sits on another monitor, Zoolander moves it back.
+- If the monitor's only workspace is empty and not persistent, such as the `1` a new monitor starts with, Zoolander drops it in favour of the one you asked for.
+
+### set_workspace_persistent
+
+```lua
+zl.set_workspace_persistent(name, persistent [, monitor]) -> boolean
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `name` | Workspace name. | string | required |
+| `persistent` | `true` to mark it persistent, `false` to clear the mark. | boolean | required |
+| `monitor` | Output name that holds the workspace. | string | `nil` |
+
+The workspace must already exist. With `monitor`, Zoolander uses the workspace with that name on that monitor. Without it, Zoolander uses the workspace that the last `zl.workspace_on_monitor` call selected, if the name matches. Otherwise it uses the only workspace with that name. Returns `false` when it finds no workspace, or more than one.
+
+A persistent workspace:
+
+- cannot be removed by a workspace client,
+- is not dropped by `zl.workspace_on_monitor`,
+- returns to the monitor it was created on when you call `zl.workspace_on_monitor` for that monitor.
+
+```lua
+zl.on("output_added", function(monitor)
+    for i = 1, 5 do
+        local name = monitor.name .. ":" .. i
+        zl.workspace_on_monitor(monitor.name, name)
+        zl.set_workspace_persistent(name, true, monitor.name)
+    end
+    zl.workspace_on_monitor(monitor.name, monitor.name .. ":1")
+end)
+```
+
+### set_workspace_layout
+
+```lua
+zl.set_workspace_layout(name, layout [, ratio [, master_count [, axis]]])
+```
+
+Gives the workspace called `name` its own layout instead of the global one from `zl.set_layout`. The arguments after `name` are the same as for `zl.set_layout`:
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `name` | Workspace name. | string | required |
+| `layout` | `"dwindle"`, `"master"` (or `"master_stack"`), `"grid"`, `"monocle"`, `"spiral"`, `"scrolling"`, `"floating"`, `"canvas"`, `"lanes"`, `"accordion"`, `"workbench"` or `"pairs"`. | string | required |
+| `ratio` | A fraction in (0, 1], or whole thousandths from 2 to 999. | number | `0.6` |
+| `master_count` | Number of master windows, 1 to 65535. | integer | `1` |
+| `axis` | `"horizontal"` or `"vertical"`. | string | `"horizontal"` |
+
+Calling it again for the same name replaces that workspace's rule. You can have up to 32 rules. An empty name, a name over 127 bytes or a 33rd rule raises an error. Layouts and their options are covered on [Layouts](/zoolander/configuring/layouts).
+
+```lua
+zl.set_layout("dwindle", 0.6, 1)
+zl.set_workspace_layout("3", "scrolling", 0.6, 1)
+```
+
+### set_workspace_gesture
+
+```lua
+zl.set_workspace_gesture(enabled [, fingers])
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled` | Turn workspace swipes on or off. | boolean | `false` |
+| `fingers` | Number of fingers, 2 to 10. If you leave it out, the current count stays. | integer | `3` |
+
+With swipes on, a touchpad swipe with that many fingers does one of two things, depending on its direction:
+
+- Horizontal: when you lift your fingers, Zoolander switches to the next workspace on the active monitor if you swiped left, or the previous one if you swiped right. It wraps around at either end. Short swipes do nothing.
+- Vertical: the overview follows your fingers, and opens or closes depending on how far you swiped.
+
+If the spatial layouts use the same finger count for panning (`pan_fingers` in `zl.set_spatial`), workspace swipes need one finger more. Swipes do nothing while the session is locked. A `fingers` value outside 2 to 10 raises an error.
+
+```lua
+zl.set_workspace_gesture(true, 3)
+```
+
+## Special workspaces
+
+A special workspace is a scratchpad. It opens on top of the monitor's regular workspace and closes again with the same key. While it is open, new windows open on it.
+
+| You pass | Workspace used |
+| --- | --- |
+| `""` | `special` |
+| `"term"` | `special:term` |
+| `"special"` or `"special:term"` | unchanged |
+
+```lua
+zl.bind(zl.MOD_LOGO, "z", function() zl.toggle_special_workspace("") end)
+zl.bind(zl.MOD_LOGO, "t", function() zl.toggle_special_workspace("term") end)
+```
+
+`zl.toggle_special_workspace(name)` shows the special workspace on the active monitor, or hides it if it is already showing there. If it is open on another monitor, it moves to the active monitor. Each special workspace exists once, not once per monitor. When a monitor disconnects, its special workspaces move to the first remaining monitor.
+
+`zl.workspace("special:term")` does the same as `zl.toggle_special_workspace("term")`. `zl.move_window_workspace` refuses special names.
+
+Dim the windows behind an open special workspace with the `special` strength in `zl.set_dim`. See [Variables](/zoolander/configuring/variables).
+
+## Split workspaces recipe
+
+Zoolander has no built-in per-monitor workspace sets. The `split_workspaces.lua` module below is a user module from a working config. It is not part of Zoolander. Copy it beside your `init.lua` to use it.
+
+It gives each monitor its own numbered set. With `workspace_count = 5`, the first monitor owns workspaces 1 to 5, the second 6 to 10, and so on. Super+1 to Super+5 always pick from the active monitor's set.
+
+```lua
+-- init.lua
+local split = require("split_workspaces")
+split.setup({
+    workspace_count = 5,
+    monitor_priority = { "DP-3", "DP-2" },
+    enable_wrapping = false,
+})
+```
+
+```lua
+-- keybinds.lua
+local split = require("split_workspaces")
+
+for i = 1, split.get_amount_of_workspaces() do
+    local key = tostring(i)
+    zl.bind(zl.MOD_LOGO, key, split.workspace(key))
+    zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, key, split.move_to_workspace_silent(key))
+end
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, zl.KEY_LEFT, split.cycle_workspaces("prev"))
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, zl.KEY_RIGHT, split.cycle_workspaces("next"))
+zl.bind_axis(zl.MOD_LOGO, zl.AXIS_DOWN, split.cycle_workspaces("next"))
+zl.bind_axis(zl.MOD_LOGO, zl.AXIS_UP, split.cycle_workspaces("prev"))
+```
+
+`require` caches modules for the life of the config run, so both files get the same module table.
+
+### setup options
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `workspace_count` | Workspaces per monitor. | positive integer | required |
+| `monitor_priority` | Monitor names in slot order. The first name owns 1 to N, the second N+1 to 2N. Other monitors get the next free slot when first seen. | list of strings | `{}` |
+| `enable_wrapping` | Wrap from the last workspace to the first, and back, when cycling. | boolean | `false` |
+| `keep_focused` | After a remap, keep the workspace each monitor showed, if it is still in that monitor's set. | boolean | `true` |
+| `enable_persistent_workspaces` | Mark every mapped workspace persistent. | boolean | `true` |
+
+### Module functions
+
+Each function except `setup` and `get_amount_of_workspaces` returns a callback for `zl.bind` or `zl.bind_axis`.
+
+| Function | Arguments | Description |
+| --- | --- | --- |
+| `setup` | `options` | Stores the options and registers `config_reloaded`, `output_added` and `output_removed` handlers that map every monitor's set. |
+| `workspace` | `index` | Switches to `index` (1 to N) in the active monitor's set. `"+1"` and `"-1"` step relative to the current one. |
+| `move_to_workspace` | `index` | Moves the focused window to `index` in the active monitor's set and follows it. |
+| `move_to_workspace_silent` | `index` | Same, without following. |
+| `cycle_workspaces` | `"next"` or `"prev"` | Steps through the active monitor's set. |
+| `get_amount_of_workspaces` | none | Returns `workspace_count`. |
+| `grab_rogue_windows` | none | Moves every mapped window that sits outside all sets to the active monitor's workspace. |
+
+### How it works
+
+The module uses only the public API. On each event, it walks the monitors with `zl.monitor_count` and `zl.monitor_info`. For each monitor, it creates the monitor's workspaces with `zl.workspace_on_monitor` and marks them with `zl.set_workspace_persistent`. Then it shows the workspace the monitor had before, or the first of its set. When a monitor disconnects, the module remembers that monitor's workspace and remaps the rest.
+
+<Accordion title="split_workspaces.lua">
+
+```lua
+local module = {}
+local config
+local slots = {}
+local next_slot = 1
+local last_active = {}
+
+local function monitors()
+    local values = {}
+    for index = 0, zl.monitor_count() - 1 do
+        table.insert(values, zl.monitor_info(index))
+    end
+    return values
+end
+
+local function monitor_slot(name)
+    if slots[name] then return slots[name] end
+    slots[name] = next_slot
+    next_slot = next_slot + 1
+    return slots[name]
+end
+
+local function map_monitor(monitor)
+    local slot = assert(monitor_slot(monitor.name))
+    local first = (slot - 1) * config.workspace_count + 1
+    local previous = tonumber(last_active[monitor.name] or monitor.active_workspace.name)
+    last_active[monitor.name] = nil
+    for index = first, first + config.workspace_count - 1 do
+        local name = tostring(index)
+        assert(zl.workspace_on_monitor(monitor.name, name))
+        assert(zl.set_workspace_persistent(name, config.enable_persistent_workspaces, monitor.name))
+    end
+    local last = first + config.workspace_count - 1
+    if config.keep_focused and previous and previous >= first and previous <= last then
+        assert(zl.workspace_on_monitor(monitor.name, tostring(previous)))
+    else
+        assert(zl.workspace_on_monitor(monitor.name, tostring(first)))
+    end
+end
+
+local function map_all()
+    for _, monitor in ipairs(monitors()) do map_monitor(monitor) end
+end
+
+local function output_removed(monitor)
+    last_active[monitor.name] = monitor.active_workspace.name
+    map_all()
+end
+
+local function resolve(value)
+    local monitor = assert(zl.monitor_info(zl.active_monitor_index()))
+    local first = (assert(monitor_slot(monitor.name)) - 1) * config.workspace_count + 1
+    local current = tonumber(monitor.active_workspace.name) or first
+    if value == "+1" or value == "-1" then
+        local target = current + tonumber(value)
+        local last = first + config.workspace_count - 1
+        if config.enable_wrapping then
+            if target < first then target = last end
+            if target > last then target = first end
+        else
+            if target < first then target = first end
+            if target > last then target = last end
+        end
+        return tostring(target)
+    end
+    local local_index = assert(tonumber(value))
+    assert(local_index == math.floor(local_index) and local_index >= 1 and local_index <= config.workspace_count, "workspace index out of range")
+    return tostring(first + local_index - 1)
+end
+
+function module.setup(value)
+    assert(type(value) == "table", "split_workspaces.setup expects a table")
+    assert(type(value.workspace_count) == "number" and value.workspace_count == math.floor(value.workspace_count) and value.workspace_count >= 1, "workspace_count must be a positive integer")
+    value.monitor_priority = value.monitor_priority or {}
+    assert(type(value.monitor_priority) == "table", "monitor_priority must be a table")
+    local names = {}
+    for _, name in ipairs(value.monitor_priority) do
+        assert(type(name) == "string" and name ~= "" and not names[name], "monitor_priority entries must be unique names")
+        names[name] = true
+    end
+    config = value
+    slots = {}
+    last_active = {}
+    for index, name in ipairs(config.monitor_priority) do slots[name] = index end
+    next_slot = #config.monitor_priority + 1
+    if config.keep_focused == nil then config.keep_focused = true end
+    if config.enable_persistent_workspaces == nil then config.enable_persistent_workspaces = true end
+    zl.on("config_reloaded", map_all)
+    zl.on("output_added", map_monitor)
+    zl.on("output_removed", output_removed)
+end
+
+function module.workspace(value)
+    return function() return zl.workspace(resolve(value)) end
+end
+
+function module.move_to_workspace(value)
+    return function() return zl.move_window_workspace(resolve(value), true) end
+end
+
+function module.move_to_workspace_silent(value)
+    return function() return zl.move_window_workspace(resolve(value), false) end
+end
+
+function module.cycle_workspaces(direction)
+    return module.workspace(direction == "prev" and "-1" or "+1")
+end
+
+function module.get_amount_of_workspaces()
+    return config.workspace_count
+end
+
+function module.grab_rogue_windows()
+    return function()
+        local active = assert(zl.monitor_info(zl.active_monitor_index()))
+        local mapped = {}
+        for _, monitor in ipairs(monitors()) do
+            local first = (assert(monitor_slot(monitor.name)) - 1) * config.workspace_count + 1
+            for index = first, first + config.workspace_count - 1 do mapped[tostring(index)] = true end
+        end
+        for _, window in ipairs(zl.get_windows()) do
+            if window.mapped and not window.workspace.special and not mapped[window.workspace.name] then
+                assert(zl.move_window_workspace(active.active_workspace.name, false, window.address))
+            end
+        end
+    end
+end
+
+return module
+```
+
+</Accordion>
+
+## Related
+
+- [Dispatchers](/zoolander/configuring/dispatchers): every action you can bind.
+- [Monitors](/zoolander/configuring/monitors): output names, rules and hotplug.
+- [Layouts](/zoolander/configuring/layouts): the layouts `set_workspace_layout` accepts.
+- [Hooks and events](/zoolander/configuring/hooks-and-events): `zl.on` and its events.

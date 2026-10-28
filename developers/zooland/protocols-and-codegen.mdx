@@ -1,0 +1,325 @@
+---
+title: "Protocols and codegen"
+sidebarTitle: "Protocols and codegen"
+description: "How the Zooland scanner turns protocol XML into otr bindings, how to add a protocol, and which interfaces Zooland serves."
+---
+
+Zooland's protocol bindings are generated from vendored XML and checked in. The scanner lives in `otr/tools/scanner/`. The hand-written codec the bindings import lives in `otr/protocols/wire/`; the scanner does not write it.
+
+For the list of protocols as a Zoolander user sees them, see [Zoolander protocols](/zoolander/protocols).
+
+## Scanner inputs
+
+`otr/tools/gen-protocols.sh` runs the scanner with three inputs:
+
+1. `docs/interface-versions.tsv`, the version caps
+2. the output path, `otr/protocols/generated.otr`
+3. all 70 XML files in `protocols/`, in the order the script lists them
+
+<Warning>
+The XML order sets the interface indices. Reordering the list changes every generated file. The script notes that `wl_display` is index 126.
+</Warning>
+
+Each nonempty row of `interface-versions.tsv` has four tab-separated columns:
+
+```text
+xml-file.xml    protocol_name    interface_name    advertised_version
+```
+
+The scanner rejects rows that drift from the XML:
+
+- The file and protocol columns must name the same input, and the interface must exist in it.
+- A cap must be a positive decimal no greater than the XML interface version.
+- Each interface may be capped once.
+
+A cap sets the generated `version` of that interface only. An interface absent from the TSV uses its XML version. The TSV currently lists all 204 interfaces at their XML versions.
+
+## Generated files
+
+The scanner writes two kinds of file:
+
+- `generated/<protocol>.otr`: one module per XML file, holding one namespace per interface. `xdg-shell.xml` becomes `generated/xdg_shell.otr`. It imports only the protocol modules its payloads name.
+- `generated.otr`: a facade that re-exports every interface by its XML name. It also maps interface indices to keys with `interface_key`, and resolves the interface of an object argument with `object_type(desc, arg)`.
+
+Library code imports the facade as `import protocols.generated`. Consumers import it as `import zooland.protocols.generated`.
+
+## Generated interface shape
+
+Each interface namespace contains:
+
+| Declaration | Meaning |
+| --- | --- |
+| `name`, `version`, `id`, `key` | The XML name, the advertised version, the interface index, and its `InterfaceKey` |
+| `requests`, `events` | Message descriptor arrays |
+| One type per enum | Non-exhaustive `enum (u32)`, or a `packed struct { bits: u32 }` for bitfields |
+| One payload type function per request | Takes `Object` and `Created`. A request without arguments uses `decode.NoArgs`. |
+| `Request(Object, Created)` | A union with one payload per request |
+| `decode_request_as(Object, Created, op, body, ctx)` | The request decoder |
+| `send_<event>` | One sender per event |
+
+This is the generated binding for `wp_viewporter`:
+
+```otr
+pub const wp_viewporter = struct {
+    pub const name = "wp_viewporter"
+    pub const version: u32 = 1
+    pub const id: types.IfaceId = 121
+    pub const key: types.InterfaceKey = &descriptor
+    const descriptor = types.Interface{ name: name, version: version, requests: &requests, events: &events }
+
+    pub const requests = [2]types.MsgDesc{
+        .{ name: "destroy", sig: "", destructor: true },
+        .{ name: "get_viewport", sig: "no", types: &objects1 },
+    }
+
+    pub const Error = enum (u32) {
+        viewport_exists = 0,
+        _
+    }
+
+    pub fn GetViewport(comptime Object: type, comptime Created: type) type {
+        return struct {
+            pub id: Created
+            pub surface: Object
+            pub const signature = "no"
+            pub const object_types = [2]?types.InterfaceKey{ wp_viewport.key, wayland_protocol.wl_surface.key }
+        }
+    }
+
+    pub fn Request(comptime Object: type, comptime Created: type) type {
+        return union {
+            destroy: Destroy(Object, Created),
+            get_viewport: GetViewport(Object, Created),
+        }
+    }
+    // decode_request_as follows
+}
+```
+
+`InterfaceKey` is `&static Interface`. Interface identity is the descriptor's address, not its name or index. `generated.wl_surface.key` is the key the server compares resources against.
+
+Names that are otr keywords or primitive type names get a trailing `_`. Names that start with a digit get a leading `_`, as in `transform._90`.
+
+### Wire signatures
+
+`MsgDesc.sig` has one character per wire argument:
+
+| Character | Wire value | Payload field |
+| --- | --- | --- |
+| `i` | signed word | `i32` or enum |
+| `u` | unsigned word | `u32`, enum, or bitfield |
+| `f` | fixed point | `types.Fixed` |
+| `s` | string | `[:0]u8` |
+| `o` | object | `Object` |
+| `n` | typed new ID | `Created` |
+| `N` | `wl_registry.bind` new ID | `types.BindNewId` |
+| `a` | byte array | `[]u8` |
+| `h` | file descriptor | `linux.Fd` |
+
+A `?` prefix is allowed only on `s` or `o` and makes the field optional. `h` consumes one `SCM_RIGHTS` entry and no body bytes.
+
+### Event senders
+
+Each event gets a `send_<name>(w, target, ...)` function that takes the event's arguments in XML order:
+
+```otr
+pub fn send_done(w: anytype, target: types.Target, callback_data: u32) void {
+    encode.send_owned_event(w, target, 0, events[0], .{ callback_data })
+}
+```
+
+Arrays are `[]u8`, strings are `str`, and fds are owned `linux.Fd` values.
+
+## Version handling
+
+Zooland enforces versions in three places.
+
+`Server.Directory.add_global` advertises the generated version when you pass `0`, and caps any other value at it.
+
+Dispatch checks each request's `since` against the resource version before decoding.
+
+An event sender returns without emitting when the target version is below the event's `since`. Events with `deprecated-since` also return when the version is at or above that version. A skipped or failed send still closes every fd argument.
+
+A destructor event sender queues only the event. The caller then retires the resource through normal teardown, so map retirement, `delete_id`, and object teardown happen in order.
+
+## Add a protocol
+
+<Steps>
+  <Step title="Vendor the XML">
+    Copy the protocol XML into `protocols/`.
+  </Step>
+  <Step title="List it in the generator">
+    Add the file to the scanner arguments in `otr/tools/gen-protocols.sh`. Keep the list in the order you intend, because it sets the interface indices.
+  </Step>
+  <Step title="Record versions">
+    Add one row per interface to `docs/interface-versions.tsv`. Use a lower version than the XML only if you implement less than the XML defines.
+  </Step>
+  <Step title="Regenerate">
+    Run `otr/tools/gen-protocols.sh`. It rewrites `otr/protocols/generated.otr` and `otr/protocols/generated/`.
+  </Step>
+  <Step title="Implement the global">
+    Write a module in `otr/ext/` that declares a `Global` descriptor and its request handlers. Add the descriptor to the `all` table in `otr/ext/globals.otr`.
+  </Step>
+  <Step title="Check and test">
+    Run `otr/tools/check-generated.sh`, which regenerates into a temporary directory, checks formatting, and diffs against the checked-in files. Add a protocol suite under `otr/tests/`.
+  </Step>
+</Steps>
+
+### Global descriptors
+
+Each extension module declares its globals as descriptors. A descriptor names one global and may declare these hooks:
+
+| Declaration | Runs |
+| --- | --- |
+| `on_request` | For requests on the manager object, which has no state of its own |
+| `on_bind` | After a client binds the global |
+| `on_applied`, `on_mapped`, `on_latched` | On compositor surface phases, through the ordered commit-hook list |
+| `on_retire` | At teardown, once no client remains |
+| `deny_by_default` | Hides the global from every client until the compositor supplies a filter |
+
+The viewporter module is a compact example. Its manager handler switches on the generated `Request` union:
+
+```otr
+pub const Global = struct {
+    pub const name = "wp_viewporter"
+    pub const on_request = handle_manager
+    pub const on_applied = committed
+}
+pub fn handle_manager(host: anytype, resource: anytype, request: anytype) common.Error!void {
+    H := common.Host(@type_of(host))
+    switch request {
+        .destroy => common.destroy(host, resource),
+        .get_viewport |a| => {
+            surface := core_access.surface_id(host, a.surface) orelse { common.implement_inert(host, a.id)
+                return }
+            if host.surface_companion(surface, .viewport) != null {
+                return common.fail(host, resource, 0, "surface already has a viewport")
+            }
+            try store.ext_install(host, State(H), a.id, .{ surface: surface }, "wp_viewport", handle, destroyed)
+            host.attach_surface_companion(surface, .viewport, a.id, surface_destroyed)
+        },
+    }
+}
+```
+
+`a.id` is the pre-created `wp_viewport` resource. `store.ext_install` attaches typed state and a request handler to it.
+
+Capture, input injection, output management, gamma, data control, and transient seats are marked `deny_by_default`. See [Building a compositor](/developers/zooland/building-a-compositor) for how a compositor publishes descriptors and supplies filters.
+
+## Supported globals
+
+These are the globals Zooland implements, with the version each advertises. Zoolander publishes all of them. Rows marked **privileged** are hidden from security-context clients in Zoolander.
+
+### Core, shells, and buffers
+
+| Global | Version | Module |
+| --- | --- | --- |
+| `wl_compositor` | 7 | `core/` |
+| `wl_subcompositor` | 1 | `core/` |
+| `wl_shm` | 3 | `core/` |
+| `wl_output` | 4 | `core/output.otr` |
+| `wl_seat` | 11 | `seat/` |
+| `wl_data_device_manager` | 4 | `seat/` |
+| `wl_fixes` | 2 | `server.otr` |
+| `xdg_wm_base` | 7 | `shell/xdg_shell.otr` |
+| `zwlr_layer_shell_v1` | 5 | `shell/layer_shell.otr` |
+| `ext_session_lock_manager_v1` | 1 | `shell/session_lock.otr` |
+| `xwayland_shell_v1` | 1 | `shell/xwayland_shell.otr` |
+| `zwp_linux_dmabuf_v1` | 6 | `dmabuf/` |
+| `wl_drm` | 2 | `dmabuf/wl_drm.otr` |
+| `wp_linux_drm_syncobj_manager_v1` | 1 | `dmabuf/syncobj.otr` |
+| `wp_drm_lease_device_v1` | 1 | `ext/drm_lease.otr` |
+
+### Surfaces, timing, and color
+
+| Global | Version |
+| --- | --- |
+| `wp_viewporter` | 1 |
+| `wp_fractional_scale_manager_v1` | 1 |
+| `wp_single_pixel_buffer_manager_v1` | 1 |
+| `wp_alpha_modifier_v1` | 1 |
+| `wp_content_type_manager_v1` | 1 |
+| `wp_tearing_control_manager_v1` | 1 |
+| `wp_fifo_manager_v1` | 1 |
+| `wp_commit_timing_manager_v1` | 1 |
+| `wp_presentation` | 2 |
+| `wp_color_manager_v1` | 3 |
+| `wp_color_representation_manager_v1` | 1 |
+| `frog_color_management_factory_v1` | 1 |
+| `ext_background_effect_manager_v1` | 1 |
+
+### Windows and decorations
+
+| Global | Version |
+| --- | --- |
+| `zxdg_decoration_manager_v1` | 2 |
+| `org_kde_kwin_server_decoration_manager` | 1 |
+| `xdg_toplevel_icon_manager_v1` | 1 |
+| `xdg_toplevel_tag_manager_v1` | 1 |
+| `xdg_toplevel_drag_manager_v1` | 1 |
+| `xdg_wm_dialog_v1` | 1 |
+| `xdg_activation_v1` | 1 |
+| `xdg_system_bell_v1` | 1 |
+| `xdg_session_manager_v1` | 1 |
+| `zxdg_exporter_v1`, `zxdg_importer_v1` | 1 |
+| `zxdg_exporter_v2`, `zxdg_importer_v2` | 1 |
+| `zxdg_output_manager_v1` | 3 |
+| `org_kde_kwin_appmenu_manager` | 1 |
+| `gtk_shell1` | 7 |
+| `ext_workspace_manager_v1` | 1 |
+| `ext_foreign_toplevel_list_v1` (privileged) | 1 |
+| `zwlr_foreign_toplevel_manager_v1` (privileged) | 3 |
+| `hyprland_toplevel_mapping_manager_v1` (privileged) | 1 |
+
+### Input
+
+| Global | Version |
+| --- | --- |
+| `zwp_pointer_constraints_v1` | 1 |
+| `zwp_relative_pointer_manager_v1` | 1 |
+| `zwp_pointer_gestures_v1` | 3 |
+| `wp_cursor_shape_manager_v1` | 2 |
+| `wp_pointer_warp_v1` | 1 |
+| `zwp_input_timestamps_manager_v1` | 1 |
+| `zwp_tablet_manager_v2` | 2 |
+| `zwp_text_input_manager_v3` | 2 |
+| `zwp_text_input_manager_v1`, `zwp_text_input_manager_v2` | 1 |
+| `zwp_input_method_manager_v2` (privileged) | 1 |
+| `zwp_input_method_v1`, `zwp_input_panel_v1` (privileged) | 1 |
+| `zwp_keyboard_shortcuts_inhibit_manager_v1` (privileged) | 1 |
+| `zwp_virtual_keyboard_manager_v1` (privileged) | 1 |
+| `zwlr_virtual_pointer_manager_v1` (privileged) | 2 |
+| `ext_transient_seat_manager_v1` (privileged) | 1 |
+| `hyprland_global_shortcuts_manager_v1` (privileged) | 1 |
+| `zwp_idle_inhibit_manager_v1` | 1 |
+| `ext_idle_notifier_v1` | 2 |
+
+### Clipboard, capture, and output control
+
+| Global | Version |
+| --- | --- |
+| `zwp_primary_selection_device_manager_v1` | 1 |
+| `ext_data_control_manager_v1` (privileged) | 1 |
+| `zwlr_data_control_manager_v1` (privileged) | 2 |
+| `zwlr_screencopy_manager_v1` (privileged) | 3 |
+| `ext_image_copy_capture_manager_v1` (privileged) | 1 |
+| `ext_output_image_capture_source_manager_v1` (privileged) | 1 |
+| `ext_foreign_toplevel_image_capture_source_manager_v1` (privileged) | 1 |
+| `hyprland_workspace_image_capture_source_manager_v1` (privileged) | 1 |
+| `zwlr_export_dmabuf_manager_v1` (privileged) | 1 |
+| `zwlr_output_manager_v1` (privileged) | 4 |
+| `zwlr_output_power_manager_v1` (privileged) | 1 |
+| `zwlr_gamma_control_manager_v1` (privileged) | 1 |
+| `wp_security_context_manager_v1` (privileged) | 1 |
+
+Zoolander publishes some globals only when the hardware allows it:
+
+- `zwlr_export_dmabuf_manager_v1` needs a started DRM backend that exports dma-bufs.
+- `zwlr_gamma_control_manager_v1` needs a DRM backend with gamma support.
+- `wp_drm_lease_device_v1` is published once per started DRM backend.
+- `ext_foreign_toplevel_image_capture_source_manager_v1` needs toplevel capture support.
+- `zwp_linux_dmabuf_v1` needs a renderer that reports dma-buf formats. `wl_drm` also needs an implicit-modifier format and a render node.
+- `wp_linux_drm_syncobj_manager_v1` needs a DRM backend whose device supports syncobj timelines.
+- `xdg_session_manager_v1` needs the session store to be enabled.
+
+`docs/hyprland-matrix.json` records the Hyprland-compatible global set Zooland covers.

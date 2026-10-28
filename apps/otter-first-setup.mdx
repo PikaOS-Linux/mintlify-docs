@@ -18,7 +18,7 @@ otter-first-setup
 
 ## Account and packages
 
-Account creation applies the installed shell profile to the new home and preserves the selected login session. Account and completion steps use a privileged helper; a missing helper is an error, not a successful setup.
+Account creation applies the installed shell profile to the new home and preserves the selected login session. If you chose Zoolander, Hyprland, Niri, or Mango in the installer, First Setup runs `pika-shell-apply` for the new account. It also comments out a live-session autologin for Zoolander, Hyprland, or Niri in `/etc/greetd/paragreet.toml`. Account and completion steps use a privileged helper; a missing helper is an error, not a successful setup.
 
 Driver selection and optional package pages use the shared [Packages](/apps/otter-pkg) transaction UI. Review the proposed changes before installing. The UI shows progress and package questions. A network status check does not by itself disable package actions.
 

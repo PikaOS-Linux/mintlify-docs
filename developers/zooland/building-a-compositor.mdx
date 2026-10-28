@@ -1,0 +1,361 @@
+---
+title: "Build a compositor on Zooland"
+sidebarTitle: "Building a compositor"
+description: "Embed Zooland in your own root: define the root and Backing, register globals, install policy hooks, start a backend, run the loop, and shut down."
+---
+
+This walkthrough builds a compositor root from the real Zooland API. The code comes from two places:
+
+- `otr/tests/fixture.otr` in Zooland, a library-only compositor with Zooland's default hooks and no application policy
+- Zoolander's `otr/comp.otr`, `otr/comp_lifecycle.otr`, `otr/main.otr`, and `otr/backend_bootstrap.otr`, the full compositor
+
+Zooland owns protocol validation and resource lifetimes. You own policy and presentation. Read [Architecture](/developers/zooland/architecture) first for the root, host, and commit model.
+
+## 1. Define the root
+
+The root is a struct you own. It names its own types for the server, loop, host, and library, then holds one of each:
+
+```otr
+pub fn Fixture(comptime Hooks: type) type {
+    return struct {
+        const Self = @This()
+        pub const Server = server.Server(Self, "server", "event_loop")
+        pub const EventLoop = loop.Loop(Self, "event_loop")
+        pub const Host = shared_host.Host(Self, Backing)
+        pub const Library = library.Library(Host)
+        pub runtime: Library
+        pub server: Server
+        pub event_loop: EventLoop
+        pub state: Hooks.State
+        // ...
+    }
+}
+```
+
+The string arguments must match your field names. Declare the server type as `Server`, because `shared_host.Host` reads it as `Ctx.Server`.
+
+Zoolander's root adds a `backend_state: owners.Pools(Self)` field for backends, its own application state, and a renderer table. It builds the host type the same way:
+
+```otr
+pub const Server = server_mod.Server(Self, "server", "event_loop")
+pub const EventLoop = loop_mod.Loop(Self, "event_loop")
+pub const Backing = app_backing.Backing(library_backing)
+pub const NativeHost = shared_host_mod.Host(Self, Backing)
+const Library = LibraryFactory(NativeHost)
+```
+
+## 2. Implement the Backing
+
+The `Backing` type is how the core store reaches your compositor. The library calls these declarations:
+
+| Declaration | Called when |
+| --- | --- |
+| `new_surface(ctx, id)` | A client creates a `wl_surface` |
+| `precommit(ctx, id, explicit_sync)` | Before a commit applies. Return an error to fail it. |
+| `commit(ctx, id)` | After a commit applied and the role postcommit ran |
+| `input_method_changed(ctx)` | The seat's input method changed |
+| `import_dmabuf(ctx, image)` | A client buffer needs importing. Returns an `ImportOutcome`. |
+| `resolve_dmabuf_modifier(ctx, image)` | A buffer uses the implicit modifier |
+| `scanout_for(ctx, id)` | dma-buf feedback asks for a scanout tranche for a surface |
+| `import_timeline`, `release_timeline`, `signal_timeline`, `arm_timeline_event`, `export_timeline` | The syncobj manager needs a DRM timeline operation |
+| `export_implicit_fence(ctx, id)` | An implicit fence is needed for a buffer |
+
+The fixture's `Backing` is the smallest real one. It accepts every commit and forwards the rest to the root:
+
+```otr
+const Backing = struct {
+    pub fn new_surface(ctx: anytype, id: identity.SurfaceId) void {
+        _ = ctx
+        _ = id
+    }
+
+    pub fn precommit(ctx: anytype, id: identity.SurfaceId, explicit_sync: bool) anyerror!void {
+        _ = ctx
+        _ = id
+        _ = explicit_sync
+    }
+
+    pub fn commit(ctx: anytype, id: identity.SurfaceId) void { ctx.commit(id) }
+
+    pub fn input_method_changed(ctx: anytype) void { _ = ctx }
+
+    pub fn import_dmabuf(ctx: anytype, image: &dmabuf_types.ImportImage) dmabuf_types.ImportOutcome { return ctx.import_dmabuf(image) }
+    // resolve_dmabuf_modifier, scanout_for, and the timeline operations forward the same way.
+
+    pub fn export_implicit_fence(ctx: anytype, id: identity.BufferId) ?linux.Fd {
+        _ = ctx
+        _ = id
+        return null
+    }
+}
+```
+
+Zoolander's `Backing` in `otr/app_backing.otr` tracks each new surface, registers a destroy hook for it, and runs its window policy from `commit`.
+
+## 3. Provide root hooks
+
+Extension modules call policy methods on your root by name. The fixture implements each one with Zooland's default behavior, so a protocol works without application policy. Some examples:
+
+```otr
+pub fn decoration_decide(ctx: &mut Self, surface: Host.SurfaceId, requested: decoration.Mode) decoration.Mode {
+    if comptime @has_decl(Hooks, "decoration_decide") { return Hooks.decoration_decide(ctx, surface, requested) }
+    var host = Host.init_system(ctx)
+    return decoration.default_decide(&mut host, requested)
+}
+
+/// With no compositor to apply it, an output configuration fails.
+pub fn configure_outputs(ctx: &mut Self, updates: anytype, test_only: bool) bool {
+    if comptime @has_decl(Hooks, "configure_outputs") { return Hooks.configure_outputs(ctx, updates, test_only) }
+    return false
+}
+
+/// With no DRM device, no client gets a device fd and nothing is leased.
+pub fn lease_open_fd(ctx: &mut Self, id: Host.LeaseDeviceId) ?linux.Fd {
+    if comptime @has_decl(Hooks, "lease_open_fd") { return Hooks.lease_open_fd(ctx, id) }
+    return null
+}
+```
+
+The full set covers gamma, output power, `xdg_output` geometry, activation, dialogs, toplevel tags and icons, toplevel drags, GTK shell, transient seats, global shortcuts, cursor shapes, tablets, pointer warp, virtual pointers, DRM leases, foreign-toplevel requests, timelines, dma-buf import, frame export, output configuration, and workspaces. Use `otr/tests/fixture.otr` as the checklist. Zoolander implements the same names in `otr/comp.otr` as aliases to its policy modules.
+
+## 4. Initialize and listen
+
+Create the loop, the library, and the server, then listen:
+
+```otr
+event_loop := try EventLoop.init(alloc)
+runtime := Library.init(alloc) catch |err| {
+    event_loop.deinit()
+    return err
+}
+var ctx = Self{ runtime: runtime, server: Server.init(alloc), event_loop: event_loop, state: .{} }
+Server.listen(&mut ctx, .{ runtime_dir: testing.runtime_dir() }) catch |err| {
+    ctx.deinit()
+    return err
+}
+```
+
+`server.Options` has these fields:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `socket` | `.auto` | Tries `wayland-0` through `wayland-31` |
+| `runtime_dir` | `null` | Socket directory. When null, `XDG_RUNTIME_DIR` is read from `env`. |
+| `env` | `null` | The environment to read |
+| `accept_retry_ms` | 1000 | Retry delay after an accept failure |
+
+Export `root.server.listener.?.name()` as `WAYLAND_DISPLAY` to child processes. Zoolander listens before it starts the backend, so an early client only queues until the loop runs.
+
+## 5. Register globals
+
+Register only the globals your compositor supports. Zoolander's `comp_lifecycle.initialize` does it in this order.
+
+### Core and seat
+
+```otr
+try H.Server.register_fixes(root)
+// ... collect the renderer's SHM formats into `formats`
+{
+    var native = root.core_host()
+    try setup.register(@type_of(native), &mut native, formats.items(), .{ syncobj: explicit_sync, gpu_wait: gpu_wait })
+}
+{
+    var native = root.seat_host()
+    seat_id = try seat.register(
+        @type_of(native),
+        &mut native,
+        .{ name: "seat0", capabilities: .{ pointer: true, keyboard: true, touch: true } },
+    )
+}
+```
+
+`setup.register` publishes `wl_compositor`, `wl_subcompositor`, and `wl_shm`, plus the syncobj manager when `syncobj` is true. The format list must include ARGB8888 and XRGB8888. `core_host` and `seat_host` are Zoolander helpers that return `NativeHost.init_system(root)`.
+
+### Shells and policy hooks
+
+Shell options carry policy hooks. The shell modules keep the protocol role state, and your hook creates and configures windows. Each hook receives `policy.Args`, whose `event` names what happened:
+
+```otr
+var native = H.NativeHost.init_system(root)
+Methods := host_methods.Methods(H.NativeHost)
+xdg := try Methods.register_xdg_shell(&mut native, .{
+    toplevel: policy.Hook(H).of(u8, Calls.top, 0), popup: policy.Hook(H).of(u8, Calls.popup, 0), wm_capabilities: 14,
+})
+```
+
+A layer-shell hook from the same file shows the event shape:
+
+```otr
+pub fn layer(ctx: &mut H, _: u8, args: policy.Args) void {
+    switch args.event {
+        .layer |value| => switch value.event {
+            .new_surface => layer_shell_hooks.on_new_surface(ctx, value.id),
+            .map => layer_shell_hooks.on_map(ctx, value.id),
+            .unmap => layer_shell_hooks.on_unmap(ctx, value.id),
+            .destroyed => layer_shell_hooks.destroyed(ctx, value.id),
+            .geometry_changed => layer_shell_hooks.on_geometry_changed(ctx, value.id),
+            .keyboard_focus_changed => layer_shell_hooks.on_keyboard_focus_changed(ctx, value.id),
+        },
+        .default_output => {
+            if output_layout.active_output(ctx) |output| { args.reply.output = (ctx.app.outputs.get(output) orelse return).output }
+        },
+        else => @panic("invalid layer policy event"),
+    }
+}
+```
+
+`register_layer_shell`, `register_session_lock`, and `register_xwayland_shell` follow the same pattern. The layer-shell and session-lock globals filter clients through their `authorize` hooks. The Xwayland shell global always filters through the host's Xwayland authorization.
+
+### Extension globals
+
+Each extension module declares its globals as descriptors listed in `ext/globals.otr`. You choose which to publish. For each one:
+
+1. Call `ext.globals.init` so its compositor surface hook is installed.
+2. Add the global with `Server.Directory.add_global`, binding through `ext.globals.bind`.
+3. Pass a filter through `ext.globals.filter`, which keeps `deny_by_default` globals hidden unless you supply one.
+
+The fixture's helper does all three:
+
+```otr
+pub fn add_filtered_ext(ctx: &mut Self, comptime name: []static u8, filter: ?registry.Filter(Self)) !u32 {
+    Call := struct {
+        pub fn bind(root: &mut Self, _: void, id: identity.ResourceId) types.DispatchError!void {
+            var host = Host.make_host(root, id)
+            try ext_globals.bind(&mut host, id, name)
+        }
+    }
+    {
+        var host = Host.init_system(ctx)
+        _ = try ext_globals.init(&mut host, name)
+    }
+    gid := try Server.Directory.add_global(
+        ctx,
+        .{
+            iface: @field(Server.Protocols, name).key,
+            bind: registry.Bind(Self).of(void, Call.bind, {}),
+            filter: ext_globals.filter(Self, name, filter),
+        },
+    )
+    return ctx.server.registry.globals.get(gid).?.info.name
+}
+```
+
+For privileged globals, Zoolander passes a filter that hides them from security-context clients:
+
+```otr
+fn privileged_visible(root: &mut Self, _: void, client: identity.ClientId) bool {
+    var host = Host.init(root, client)
+    return security_ctx.visible(&mut host, client)
+}
+```
+
+Register `wp_security_context_manager_v1` before the privileged globals, because their filters consult it. Call `ext.globals.deinit_all` once the last client is gone.
+
+### dma-buf
+
+When the renderer reports dma-buf formats, publish `zwp_linux_dmabuf_v1` with `dmabuf.dmabuf.register(Host, &host, formats, device)`. Publish `wl_drm` with `dmabuf.wl_drm.register(Host, &host, render_node)` when an implicit-modifier format and a render node exist. Zoolander does this in `otr/globals_drm.otr`.
+
+## 6. Start a backend
+
+A backend lives in the root's `backend_state` pools. `backend.access.Access(Root)` provides the accessors that backends call on the root, such as `headless_backend_mut` and `publish_drm_output`. Zoolander re-exports them as root declarations in `otr/comp.otr`. Zooland's `otr/tests/backend_root.otr` is the smallest root that does this.
+
+Create the backend, install its sinks, then start it:
+
+```otr
+id := try Headless.create(root, options, root.renderer())
+root.headless_backend_mut(id).?.sinks = .{ output_add: on_add, output_remove: on_remove, input: on_input, present: on_present }
+try Root.backend(id).start(&mut root)
+```
+
+Zoolander's sinks route each event into its own modules:
+
+```otr
+return .{
+    output_add: Calls.added,
+    output_remove: Calls.removed,
+    output_changed: Calls.changed,
+    input: Calls.event,
+    repaint_window: Calls.window,
+    present: Calls.present,
+    keymap: Calls.keymap,
+}
+```
+
+When an output appears, create its protocol output and `wl_output` global with `core.output.create(Host, &host, info)`. Zoolander does this in `otr/output_mgmt_lifecycle.otr`. See [Backends and rendering](/developers/zooland/backends-and-rendering) for backend and renderer selection.
+
+## 7. Route input
+
+Backend input arrives as `InputEvent` values in the `input` sink. Your compositor decides focus and hit-testing, then delivers to clients through the seat modules:
+
+| Module | Functions |
+| --- | --- |
+| `seat/pointer.otr` | `enter`, `motion`, `button`, `axis` |
+| `seat/keyboard.otr` | `enter`, `leave`, `key`, `set_modifiers`, `reset`, `set_repeat` |
+| `seat/touch.otr` | `down`, `motion`, `up`, `frame`, `cancel`, `shape`, `orientation` |
+
+Each takes a host and a seat ID. Functions that send an event with a serial return that serial, or `null` when nothing was sent.
+
+<Note>
+When an input method holds a keyboard grab, apply compositor key bindings and interactive cancel keys first. Forward an unconsumed physical key through `ext.input_method.feed_key` afterwards. That lets your bindings, and an Escape that cancels a move or resize, take precedence over input-method input.
+</Note>
+
+## 8. Serve capture
+
+Screencopy and image-copy capture share one `capture.Hooks` value. Install it with the host's `configure_capture`:
+
+```otr
+H.Domains.ExtensionControls.configure_capture(&mut host, hooks)
+```
+
+For each output frame:
+
+1. `Hooks.schedule` asks you to repaint the output when a client queues a frame.
+2. Before drawing the cursor, check `ext.screencopy.has_pending(host, output, false)` and call `capture_pending(host, output, false)`.
+3. After drawing the cursor, do the same with `true`.
+4. On a successful page flip, call `ext.screencopy.presented(host, output, time_ns)`. On a failed frame, call `fail_pending(host, output)`.
+
+`Hooks.copy` receives the output, a rectangle in transformed output pixels, an include-cursor flag, the format, a destination slice, and the stride. Toplevel capture calls `prepare_toplevel` before destination SHM access, then `copy_toplevel`. wlr-export-dmabuf takes the scanout image through the root's `export_frame`.
+
+Pointer-cursor capture sessions are currently reported as stopped. Output capture with or without the composited cursor works.
+
+## 9. Run the loop
+
+Block in the loop:
+
+```otr
+try EventLoop.run(root)
+```
+
+Or drive it from your own host with `EventLoop.tick(root, timeout_ms)`. Zoolander uses `run_after_turn`, which runs a callback after each turn:
+
+```otr
+try H.EventLoop.run_after_turn(root, workspace_lifetime.Collector(H).collect)
+```
+
+Call `root.event_loop.quit()` to leave `run`.
+
+## 10. Shut down
+
+Stop external sources and retire buffer consumers before the server shuts down. The fixture shows the minimum:
+
+```otr
+pub fn deinit(ctx: Self) void {
+    var root = ctx
+    Server.shutdown(&mut root)
+    // Deferred work, such as an output's pending flush, still reaches the stores.
+    EventLoop.shutdown(&mut root) catch @panic("fixture torn down inside a tick")
+    runtime, srv, event_loop, state := root
+    if comptime @is_resource(Hooks.State) { state.deinit() } else { _ = state }
+    runtime.deinit()
+    srv.deinit()
+    event_loop.deinit()
+}
+```
+
+With a backend, retire every output with `OutputDev.retire` and finish GPU submissions before `Server.shutdown`. Zoolander's `comp_lifecycle.shutdown` and `backend_bootstrap.retire_consumers` show the complete order.
+
+## Configuration
+
+Zooland has no configuration system. Zoolander's Lua configuration, its config host in `otr/config_host.otr`, and its control socket are Zoolander code. The config host is a short-lived struct that Zoolander builds for each protected Lua call. It forwards actions such as `focus_direction`, `activate_workspace`, and `config_changed` to Zoolander's window and layout modules.
+
+If you build your own compositor, choose your own configuration format and apply it to the hooks above. See [Zoolander configuration](/zoolander/configuring/overview) for the user view of Zoolander's.

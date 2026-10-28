@@ -70,7 +70,19 @@ template_kcolorscheme_enabled = true
 template_papirus_colors_enabled = true
 ```
 
-Shipped templates cover terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), `bottom`, btop, KDE color schemes, Papirus folder colors, and more. Toggle them in the **Theme Gen** tab in otter-settings.
+Shipped templates cover terminals, GTK, Hyprland (`~/.config/hypr/otter-theme.lua`), Zoolander (`~/.config/zoolander/otter-theme.lua`), `bottom`, btop, KDE color schemes, Papirus folder colors, and more. Toggle them in the **Theme Gen** tab in otter-settings.
+
+### Zoolander borders
+
+Set `template_zoolander_enabled = true` to write `~/.config/zoolander/otter-theme.lua`. It defaults to `false`, like the other compositor templates. The file makes one `zl.set_window_style` call: active borders use the primary color and inactive borders use the surface color. It writes both ends of each border gradient, so a gradient set earlier in `init.lua` does not survive a theme change.
+
+Theme Gen does not edit your Zoolander config. Load the file from `~/.config/zoolander/init.lua` yourself:
+
+```lua
+require("otter-theme")
+```
+
+Zoolander reloads when a top-level `.lua` file in its config directory changes. See [Configuring Zoolander](/zoolander/configuring/overview).
 
 ### KDE color schemes
 

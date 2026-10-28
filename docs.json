@@ -118,6 +118,49 @@
         ]
       },
       {
+        "tab": "Zoolander",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": [
+              "zoolander/overview",
+              "zoolander/installation"
+            ]
+          },
+          {
+            "group": "Configuring",
+            "pages": [
+              "zoolander/configuring/overview",
+              "zoolander/configuring/variables",
+              "zoolander/configuring/animations",
+              "zoolander/configuring/binds",
+              "zoolander/configuring/dispatchers",
+              "zoolander/configuring/monitors",
+              "zoolander/configuring/workspaces",
+              "zoolander/configuring/layouts",
+              "zoolander/configuring/window-rules",
+              "zoolander/configuring/hooks-and-events",
+              "zoolander/configuring/environment-variables",
+              "zoolander/configuring/example-config",
+              "zoolander/configuring/lua-api"
+            ]
+          },
+          {
+            "group": "IPC",
+            "pages": [
+              "zoolander/ipc/zoolanderctl"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "zoolander/protocols",
+              "zoolander/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Developer Guide",
         "groups": [
           {
@@ -136,6 +179,17 @@
               "developers/lua/ui-scripts",
               "developers/lua/bindings",
               "developers/lua/runtime"
+            ]
+          },
+          {
+            "group": "Zooland compositor library",
+            "pages": [
+              "developers/zooland/overview",
+              "developers/zooland/architecture",
+              "developers/zooland/protocols-and-codegen",
+              "developers/zooland/backends-and-rendering",
+              "developers/zooland/building-a-compositor",
+              "developers/zooland/testing"
             ]
           },
           {

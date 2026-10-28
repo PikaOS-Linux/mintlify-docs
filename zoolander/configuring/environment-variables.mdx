@@ -1,0 +1,114 @@
+---
+title: "Environment variables"
+sidebarTitle: "Environment variables"
+description: "Every environment variable Zoolander and Zooland read, the variables Zoolander sets for the clients it starts, and how zl.set_env works."
+---
+
+Zoolander reads a few environment variables at startup, and sets others for the programs it starts. You can add or replace variables for those programs with `zl.set_env`.
+
+## Setting variables for clients
+
+`zl.set_env(name, value)` sets a variable for every client Zoolander starts afterwards. That covers `zl.exec_command`, `--spawn` and Xwayland. It does not change Zoolander's own environment or the shell you started it from.
+
+```lua
+zl.set_env("XDG_CURRENT_DESKTOP", "Zoolander")
+zl.set_env("MOZ_ENABLE_WAYLAND", "1")
+zl.set_env("XCURSOR_THEME", "Bibata-Modern-Classic")
+zl.set_env("XCURSOR_SIZE", "24")
+```
+
+| Rule | Limit |
+| --- | --- |
+| Name length | 1 to 127 bytes |
+| Name characters | No `=` and no NUL |
+| Value | No NUL. `name=value` must fit in 511 bytes. |
+| Entries | At most 32 per config |
+| Repeated name | Replaces the earlier value |
+
+The call returns `true` on success. It returns `false` for invalid input or when all 32 entries are used.
+
+Setting a variable to an empty string sets it to empty. It does not unset it. Entries belong to the config, so a reload starts from an empty table. Remove a `zl.set_env` line and save, and clients started after the reload no longer get that entry.
+
+`XCURSOR_THEME`, `XCURSOR_SIZE` and `XCURSOR_PATH` set with `zl.set_env` also change the cursor that Zoolander itself draws. They take precedence over the same variables in Zoolander's environment.
+
+## Variables Zoolander sets for clients
+
+Clients start with the environment Zoolander was started with, not with changes Zoolander makes to itself while it runs. Zoolander then applies these changes:
+
+| Name | Description | Type | Value |
+| --- | --- | --- | --- |
+| `WAYLAND_DISPLAY` | Zoolander's own Wayland socket. | string | `wayland-N`, the first free name in `$XDG_RUNTIME_DIR` |
+| `DISPLAY` | The X display for Xwayland. | string | `:N`. Only set when Xwayland is available and enabled. |
+| `XAUTHORITY` | Xauthority file for that display. | path | `$XDG_RUNTIME_DIR/zoolander-xauth-<pid>`. Only set with `DISPLAY`. |
+| `DESKTOP_STARTUP_ID` | X11 startup notification ID, so an X11 app opens on the workspace you launched it from. | string | Only set while the X display is up. |
+| `HYPRLAND_INSTANCE_SIGNATURE`, `HYPRLAND_CMD`, `NIRI_SOCKET`, `SWAYSOCK`, `I3SOCK` | Removed, so clients do not talk to another compositor by accident. | | unset |
+
+`zl.set_env` entries replace inherited variables of the same name. You can use them to restore one of the removed variables. Do not set `WAYLAND_DISPLAY`, `DISPLAY`, `XAUTHORITY` or `DESKTOP_STARTUP_ID` with `zl.set_env`, because Zoolander adds its own values for those.
+
+A child's environment holds at most 255 entries. If the inherited environment is larger, Zoolander drops the extra inherited entries and keeps your `zl.set_env` entries.
+
+Zoolander does not set `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE` or `XDG_SESSION_DESKTOP`. Set them with `zl.set_env`, or export them before you start Zoolander. The display manager may set `XDG_CURRENT_DESKTOP` from the session file's `DesktopNames=Zoolander`.
+
+## Session and paths
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `XDG_RUNTIME_DIR` | Directory for the Wayland socket, the control socket and the Xauthority file. Zoolander cannot start without it. | path | none |
+| `WAYLAND_DISPLAY` | When set and you pass no backend flag, Zoolander runs nested inside that compositor. | string | unset |
+| `XDG_CONFIG_HOME` | Base for `zoolander/init.lua`, the Otter theme (`otter-shell/theme.conf`) and the GTK and KDE settings used for icon themes. The config path uses it only when it is absolute. | path | `$HOME/.config` |
+| `HOME` | Fallback for the config, state, cache, icon and theme paths. | path | |
+| `XDG_STATE_HOME` | Base for `zoolander/sessions`, where xdg-session-management state is kept. Must be absolute. | path | `$HOME/.local/state` |
+| `XDG_CACHE_HOME` | Base for the Vulkan pipeline cache, `zooland/vk-pipelines-*.bin`. | path | `$HOME/.cache` |
+| `XDG_SEAT` | Seat name for libinput devices on the DRM backend. | string | `seat0` |
+
+If neither `XDG_STATE_HOME` nor `HOME` is absolute, Zoolander does not advertise `xdg_session_manager_v1`.
+
+## Keyboard
+
+Zoolander builds the keymap from `zl.set_keyboard`. For each XKB name the config leaves out, it falls back to the environment, then to `/etc/default/keyboard`.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `XKB_DEFAULT_RULES` | XKB rules. | string | libxkbcommon default |
+| `XKB_DEFAULT_MODEL` | Keyboard model. | string | `XKBMODEL` in `/etc/default/keyboard` |
+| `XKB_DEFAULT_LAYOUT` | Keyboard layout. | string | `XKBLAYOUT` in `/etc/default/keyboard`, then `us` |
+| `XKB_DEFAULT_VARIANT` | Layout variant. Used only when no earlier source named the layout. | string | `XKBVARIANT` in `/etc/default/keyboard` |
+| `XKB_DEFAULT_OPTIONS` | XKB options. | string | `XKBOPTIONS` in `/etc/default/keyboard` |
+
+## Cursors and icons
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `XCURSOR_THEME` | Cursor theme for the cursor Zoolander draws. Zoolander tries this theme, then `default`, then `Adwaita`. | string | unset |
+| `XCURSOR_SIZE` | Cursor size in logical pixels. Multiplied by the output scale. | integer | `24` |
+| `XCURSOR_PATH` | Colon-separated directories searched before the XDG icon directories. | path list | unset |
+| `XDG_DATA_HOME` | Icon and cursor search root, `$XDG_DATA_HOME/icons`. | path | `$HOME/.local/share` |
+| `XDG_DATA_DIRS` | Icon and cursor search roots, `icons` under each entry. | path list | `/usr/local/share:/usr/share` |
+| `ZL_ICON_THEME` | Icon theme for named window icons. Overrides the Otter, GTK and KDE settings. | string | unset |
+
+Zoolander also searches `~/.icons`. For window icons without `ZL_ICON_THEME`, it uses the Otter preferred icon theme, then GTK 4, GTK 3 or KDE settings, and finally `hicolor`.
+
+## Vulkan and rendering
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `ZOOLAND_VK_VALIDATION` | `1` loads the Khronos validation layer, if it is installed. | `1` | off |
+| `ZOOLAND_VK_TIMING` | `1` logs GPU time and frame counters once a second. | `1` | off |
+| `ZOOLAND_VK_ALLOW_UNMATCHED` | `1` lets the renderer use any Vulkan device, not only the one that drives the display. Zoolander logs a warning when it is set. | `1` | off |
+
+While the Vulkan renderer starts, Zoolander limits the Vulkan loader to the display's driver and turns off implicit layers. It does this by setting `VK_LOADER_DRIVERS_SELECT` and `VK_LOADER_LAYERS_DISABLE=~implicit~` for itself, and unsets them afterwards. If you already set `VK_DRIVER_FILES`, `VK_ICD_FILENAMES`, `VK_ADD_DRIVER_FILES`, `VK_LOADER_DRIVERS_DISABLE` or `VK_LOADER_DRIVERS_SELECT`, it leaves the driver choice alone. If you set `VK_LOADER_LAYERS_DISABLE`, it leaves the layers alone.
+
+On NVIDIA, it also sets `__EGL_VENDOR_LIBRARY_FILENAMES` to NVIDIA's EGL vendor file while the driver starts, unless you set `__EGL_VENDOR_LIBRARY_FILENAMES` or `__EGL_VENDOR_LIBRARY_DIRS` yourself. Clients never see these temporary values.
+
+### Debug variables
+
+These change how the Vulkan renderer draws. They exist for measuring and debugging. Do not set them for daily use.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `ZOOLAND_VK_DEBUG_FULL_DAMAGE` | `1` redraws the whole output every frame instead of only damaged areas. | `1` | off |
+| `ZOOLAND_VK_DEBUG_SOLID_TEXTURES` | `1` draws grey rectangles in place of window textures. | `1` | off |
+| `ZOOLAND_VK_DEBUG_NONUNIFORM_TEXTURES` | `1` turns off the uniform texture sampling path. | `1` | off |
+| `ZOOLAND_VK_DEBUG_NO_HOST_TEXTURES` | `1` turns off host-memory textures. | `1` | off |
+| `ZOOLAND_VK_DEBUG_NO_FOREIGN` | `1` breaks buffer ownership rules. For measuring only. | `1` | off |
+| `ZOOLAND_VK_DEBUG_COPY` | Copy method for mapped memory: `stream`, `libc` or `mem`. | string | `stream` |

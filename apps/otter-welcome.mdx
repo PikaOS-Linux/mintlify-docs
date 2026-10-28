@@ -25,8 +25,10 @@ Pages support scrolling, <kbd>Tab</kbd>/<kbd>Shift+Tab</kbd>, <kbd>Enter</kbd>/<
 
 ## Switch desktop shell
 
-On Hyprland, Niri, and Mango sessions, **Switch desktop shell** opens a native profile picker. Welcome first reviews and installs the selected concrete profile. **Use selected shell** then applies it to your account with `pika-shell-apply`. Log out and back in to start the selected shell.
+On Zoolander, Hyprland, Niri, and Mango sessions, **Switch desktop shell** opens a native profile picker. Welcome first reviews and installs the selected concrete profile. **Use selected shell** then applies it to your account with `pika-shell-apply`. Log out and back in to start the selected shell.
+
+On Zoolander, the shell fragment lives at `~/.config/zoolander/shell/exec.lua`. Zoolander only reloads its top-level config files on save, so Welcome runs `zoolanderctl reload` after applying the profile. If that reload fails, the new fragment loads at your next login.
 
 <Warning>Package changes are system-wide. Applying a shell profile replaces existing shell startup and binding fragments only after confirmation. Review the changes before proceeding.</Warning>
 
-Shell switching needs `pika-shell-profile-common` version 0.1.12 or later and the selected Otter, Noctalia, or Dank profile package. These are PikaOS profile packages; Otter Shell itself does not ship a compositor. Shell-specific documentation and tips appear only in the supported sessions.
+Shell switching needs `pika-shell-profile-common` version 0.1.12 or later and the selected Otter, Noctalia, or Dank profile package. These are PikaOS profile packages; Otter Shell itself does not ship a compositor. Shell-specific documentation and tips appear only in the supported sessions. The **Cosmic Store** add-on tile appears on Zoolander, Hyprland, and Niri.

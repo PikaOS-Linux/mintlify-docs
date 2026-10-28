@@ -1,0 +1,224 @@
+---
+title: "Backends and rendering"
+sidebarTitle: "Backends and rendering"
+description: "The Zooland backend and renderer contracts, the DRM/KMS, nested, and headless backends, and how a renderer gets selected."
+---
+
+Zooland separates output hardware from drawing. A backend owns outputs, input, and presentation. A renderer owns textures, render targets, and passes. Your compositor connects them: it draws into a backend's target with a renderer, then asks the backend to present.
+
+Zooland ships three backends (headless, nested, DRM/KMS) and two renderers (software and Vulkan).
+
+## Backend contract
+
+`backend.api.BackendVTable` has exactly three operations:
+
+| Operation | Behavior |
+| --- | --- |
+| `start` | Starts the backend. Initial outputs are announced during start. |
+| `commit_frame` | Presents the newest image in an output's target. Commits coalesce while one present is pending. Exactly one `present` follows each presented frame. |
+| `test_configuration` | Validates a complete multi-output proposal of `ConfigEntry` values without applying it |
+
+Install `Sinks` before you call `start`. The backend calls them:
+
+| Sink | Fires when |
+| --- | --- |
+| `output_add`, `output_remove`, `output_changed` | An output appears, disappears, or changes |
+| `input` | An `InputEvent` arrives: pointer, keyboard, touch, tablet, gesture, or switch |
+| `repaint_window` | The repaint margin before the predicted next vblank, as a `CLOCK_MONOTONIC` deadline |
+| `present` | A frame reached the screen |
+| `keymap` | The backend has a keymap to compile into xkb state |
+
+The default repaint margin is 7 ms (`api.default_repaint_margin_ns`).
+
+### Output devices
+
+Each `OutputDev` exposes:
+
+- `info`: name, size, physical size, refresh, modes, and adaptive-sync, async-flip, content-type, and HDR capabilities
+- `target` and the optional `export_target` for dma-buf export
+- `frame_pending`: true while an in-flight presentation owns the target
+- `retire`: proves that every backend read and in-flight scanout has finished
+- `set_mode`, `set_custom_mode`, `powered`, `set_powered`, `set_adaptive_sync`
+- cursor-plane operations: `has_cursor_plane`, `set_cursor_image`, `move_cursor`
+- `schedule_repaint_window` and `scanout_formats`
+
+`set_mode` and `set_custom_mode` call `retire` first and fail without proof that earlier output resources are no longer in flight. An output without adaptive sync accepts only the disabled state.
+
+### Frames and presentation
+
+A `Frame` carries the damage, an optional adaptive-sync and content-type request, the output color state (SDR or HDR metadata), a tearing flag, and an optional `DirectScanout` naming a client dma-buf.
+
+A `Present` reports the kernel sequence, the extended 64-bit MSC, a monotonic timestamp, the refresh interval, and whether the flip tore. Buffer locks and scanout ownership stay live until the backend proves retirement or reports completion.
+
+## Headless backend
+
+`backend.headless` renders into memory. Use it for deterministic tests and for running a compositor with no display.
+
+```otr
+outputs := [2]headless.OutputOptions{
+    .{ name: "HEADLESS-1", width: 64, height: 32, refresh_mhz: 60_000 },
+    .{ name: "HEADLESS-2", width: 16, height: 16, refresh_mhz: 90_000 },
+}
+```
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `OutputOptions.name` | `"HEADLESS-1"` | Output name |
+| `OutputOptions.width`, `height` | 1280, 720 | Mode size |
+| `OutputOptions.refresh_mhz` | 60000 | Refresh in millihertz |
+| `OutputOptions.extra_modes` | none | Additional modes |
+| `OutputOptions.double_buffered` | `false` | Alternates two images like a KMS swapchain, so partial damage must cover two frames |
+| `OutputOptions.cursor_plane` | 0 | Cursor plane size; 0 means none |
+| `Options.auto_vblank` | `true` | When false, presents happen only on `fire_vblank` |
+
+`Headless.inject(host, backend, event)` delivers an `InputEvent` through the input sink. `Headless.fire_vblank(host, backend, index)` completes a pending frame on one output. `create_output` and `remove_output` add and remove outputs at runtime. See [Testing](/developers/zooland/testing).
+
+## Nested backend
+
+`backend.nested` runs your compositor as a window inside another Wayland compositor. It connects through Zooland's own wire codec, so it needs no libwayland either.
+
+| Option | Default |
+| --- | --- |
+| `title` | `"zooland (nested)"` |
+| `app_id` | `"zooland"` |
+| `name` | `"NESTED-1"` |
+| `width`, `height` | 1280, 720 |
+| `socket_path` | `null`, which uses the parent's `WAYLAND_DISPLAY` |
+
+It binds the parent's `wl_compositor`, `wl_shm`, `xdg_wm_base`, and, when present, `wl_seat` and `wl_output`. Frames go to the parent as `wl_shm` buffers, so the nested backend renders in software. It has no vblank of its own: `repaint_window` fires when the parent's frame callback arrives, with the current time as the deadline. Input from the parent's seat arrives through the `input` sink.
+
+## DRM/KMS backend
+
+`backend.drm` drives real displays. It needs a controlled session and links libdrm, libgbm, libinput, libudev, and libseat.
+
+```otr
+selected := try drm.Drm(H).create(root, .{ device_path: device, gpu: true }, software)
+try drm.Drm(H).start(root, selected)
+```
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `device_path` | `"/dev/dri/card0"` | The KMS device |
+| `repaint_margin_ns` | 7 ms | Repaint window lead time |
+| `gpu` | `false` | Create a Vulkan renderer on the KMS device |
+
+The backend opens the seat and its devices through libseat, watches hotplug through udev, and reads input through libinput.
+
+### Atomic modesetting
+
+All updates use atomic commits:
+
+- Page flips use `DRM_MODE_ATOMIC_NONBLOCK` with a page-flip event.
+- `test_configuration` runs an atomic `TEST_ONLY` commit with `ALLOW_MODESET`.
+- Direct scanout of a client dma-buf is tested with `TEST_ONLY` before use. The backend caches results per buffer.
+- `FB_DAMAGE_CLIPS` passes frame damage to the driver for partial scanout updates.
+- Custom modes use VESA CVT timings with normal blanking, rounded as libxcvt 0.1.3 does.
+
+### Formats and modifiers
+
+Scanout images are allocated with libgbm from the modifiers that the plane and the Vulkan driver share, then imported into Vulkan. With no modifier in common, frames are copied into dumb buffers.
+
+Modifiers compare as whole values. NVIDIA encodings are never normalized.
+
+For client buffers with the implicit layout, the backend resolves the real modifier on amdgpu and i915 by adding a framebuffer and reading it back with `GETFB2`. Elsewhere, including NVIDIA, such a framebuffer reads as linear whatever the buffer holds, so the backend does not guess.
+
+### Adaptive sync and tearing
+
+A frame that requests adaptive sync sets the CRTC's `VRR_ENABLED` property. The request fails on a connector without VRR support.
+
+A tearing frame sets `DRM_MODE_PAGE_FLIP_ASYNC` when the driver reports `DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP`. An async flip may change only `FB_ID`, so tearing frames skip damage clips. If the kernel rejects an async flip during a layout transition, the backend retries it as a normal flip and keeps the requested buffer.
+
+### HDR and color
+
+When a frame asks for HDR, the backend sets the connector's `Colorspace` to its HDR value, writes an `HDR_OUTPUT_METADATA` blob, and raises `max bpc` to 10. The output must be HDR-capable and support 10 bits per channel. The backend may rebuild the output's GPU target at the matching depth. Leaving HDR restores the defaults.
+
+The backend also parses EDID colorimetry, sets the connector `content type`, and drives `GAMMA_LUT` for gamma control.
+
+### Explicit sync, cursors, and leases
+
+- A direct-scanout frame with an acquire fence sets the plane's `IN_FENCE_FD`. Without that property, the frame is rejected with `DirectScanoutRejected`.
+- Cursor planes accept CPU pixels. If the plane or size is refused, the compositor falls back to drawing the cursor itself.
+- The backend serves DRM leases. It reports lease connectors added, withdrawn, and revoked through its lease sink.
+
+## Renderer contract
+
+`render.api.RendererVTable` has twelve operations, two capability flags, and an optional guarded-SHM entry:
+
+```text
+import_shm     update_shm     destroy_texture  import_dmabuf
+read_pixels    formats        begin_pass       wait_fence
+create_target  destroy_target clear_target     read_target
+samples_after_end  fences_dmabuf_reads  guarded_shm
+```
+
+- Imports take plain `ShmSource` and `DmabufSource` descriptors. Their `from_buffer` functions adapt a core buffer.
+- An SHM descriptor is valid only inside the pool access window. An SHM source with a fault guard is accepted only through `guarded_shm`.
+- dma-buf fds stay owned by the core buffer. The importer may not keep or close them.
+- `update_shm` may arrive mid-pass. Draws already made keep the old texels.
+- `read_pixels` and `read_target` serve bounded CPU consumers such as cursor uploads and capture. They return top-down native-endian `0xAARRGGBB` rows.
+- `create_target` makes renderer-owned targets, which back window capture.
+- `samples_after_end` says whether the GPU may still read a pass's textures after `Pass.end`.
+- `fences_dmabuf_reads` says whether the renderer attaches its read fence to the client dma-bufs it samples.
+
+`begin_pass(target, damage)` accepts overlapping damage rectangles. The renderer clips and de-overlaps them, and may widen coverage to a bounding box. A `Pass` records solid rectangles, gradients, rounded borders, shadows, textures, blur, `occlude`, and `end`, in submission order.
+
+`occlude` names target rectangles that later draws cover opaquely. Until the next call, draws skip them. A texture draw's `opaque_box` marks the part of its destination that is opaque, which draws without blending at full alpha. Both renderers derive culled and unblended areas from `render/pass_clip.otr`.
+
+### Software renderer
+
+The software renderer (`render/swrender*.otr`) is the pixel reference. It samples nearest for both 1:1 and scaled draws, and blurs with separable box passes. `Library.init` creates one, and every backend can use it.
+
+### Vulkan renderer
+
+`render/vk_renderer.otr` owns one Vulkan 1.3 device. `render/vk_record.otr` is the only path to the queue.
+
+- Each frame is one submission: copies and layout transitions first, then the pass's instanced draws.
+- Textures are sampled through one bindless descriptor array.
+- Pipelines are built on first use and cached on disk under `zooland/` in a cache directory the compositor supplies. Zoolander passes `$XDG_CACHE_HOME`, or `~/.cache`.
+- A timeline semaphore decides when images, memory, and bindless slots are freed.
+- SHM damage is copied through a staging ring before `update_shm` returns. On an integrated or CPU device, a texture may live in host-visible memory instead.
+- After ten seconds without a pass, the staging ring, blur scratch images, and host-written textures are released.
+- 1:1 draws sample nearest and scaled draws filter linearly. Blur uses dual Kawase, so it is not pixel-identical to the software renderer.
+
+On NVIDIA's proprietary driver, the driver selection is `*nvidia*`, and the EGL vendor library is pinned to `10_nvidia.json` unless the environment chooses one. Without `VK_EXT_queue_family_foreign`, the renderer uses `VK_QUEUE_FAMILY_EXTERNAL`. Without sync_file export, the CPU waits for each frame before the commit.
+
+## Renderer selection
+
+The renderer follows the backend:
+
+1. `Library.init` always creates a software renderer.
+2. Headless and nested backends take the software renderer you pass to `create`.
+3. The DRM backend with `gpu: true` creates the Vulkan renderer on the device whose DRM node is the KMS device. It never falls back to another GPU.
+4. While creating the instance, the DRM backend pins the Vulkan loader to that device's driver through `VK_LOADER_DRIVERS_SELECT`, unless the environment already selects drivers. It disables implicit layers through `VK_LOADER_LAYERS_DISABLE`.
+5. Without a usable Vulkan device, the DRM backend renders in software into dumb buffers.
+
+Zoolander reads the chosen renderer back after `start` and switches its root to it:
+
+```otr
+var gpu_renderer: ?@type_of(root.app.renderer_id) = null
+{
+    device_state := access.Access(H).drm_backend(root, selected) orelse return error.BackendFailed
+    if device_state.gpu_device != null { gpu_renderer = device_state.gpu_device.?.renderer }
+}
+if gpu_renderer |id| { root.app.renderer_id = id }
+```
+
+Zoolander picks its backend in `otr/backend_bootstrap.otr`. It uses DRM when asked to or when `WAYLAND_DISPLAY` is unset, nested when `WAYLAND_DISPLAY` is set, and headless on request or when DRM setup fails without an explicit DRM request. See [Zoolander environment variables](/zoolander/configuring/environment-variables) for the user-facing switches.
+
+## Vulkan environment variables
+
+| Variable | Effect |
+| --- | --- |
+| `ZOOLAND_VK_VALIDATION=1` | Loads the Khronos validation layer |
+| `ZOOLAND_VK_TIMING=1` | Logs GPU time per part of a submit and per-frame counters once a second |
+
+These switches in `render/vk_timing.otr` are for measurement only:
+
+| Variable | Effect |
+| --- | --- |
+| `ZOOLAND_VK_DEBUG_NO_FOREIGN=1` | Never acquires or releases dma-buf images. This breaks the ownership rules. |
+| `ZOOLAND_VK_DEBUG_FULL_DAMAGE=1` | Every pass redraws its whole target |
+| `ZOOLAND_VK_DEBUG_NO_HOST_TEXTURES=1` | Keeps SHM textures in device memory, filled by staging copies |
+| `ZOOLAND_VK_DEBUG_SOLID_TEXTURES=1` | Draws every texture as an opaque grey fill |
+| `ZOOLAND_VK_DEBUG_NONUNIFORM_TEXTURES=1` | Batches quads of different textures into one draw |
+| `ZOOLAND_VK_ALLOW_UNMATCHED=1` | Test VMs only: renders on any Vulkan device, such as lavapipe |

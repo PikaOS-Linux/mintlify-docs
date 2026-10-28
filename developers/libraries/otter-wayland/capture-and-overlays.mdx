@@ -10,11 +10,19 @@ Capture lives in flat leaf modules such as `capture_output`, `capture_session`, 
 
 Capture sources depend on compositor-advertised protocols. Keep source selection, buffer lifetime, and completion/failure events explicit.
 
+### Workspace capture
+
+`Connection` binds `hyprland_workspace_image_capture_source_manager_v1` when the compositor advertises it, as Zoolander and Hyprland do. `Capturer.capture_workspace_raw(conn, io, workspace, include_cursor)` captures a whole `ext.WorkspaceHandleV1` as its output shows it, wallpaper and panels included, even while another workspace is visible. It returns `error.NoCaptureManager` when the protocol is missing.
+
 ## Shared selectors
 
 `selection_overlay` is the shared region/point selection implementation. `capture_overlay` manages its Wayland surface. Apps use the supplied presets for screenshots, product shots, recording, or point selection instead of maintaining separate selectors.
 
 The overlay composites pixels directly; it is not a Surface Description node tree. Editor integration uses the `selection_overlay.Editor` interface, not a raw callback/context pair.
+
+## Popup blur
+
+`layer_popup.LayerPopup.set_background_blur_regions(compositor, regions)` stages rounded, surface-local `background_effect.RoundedRegion` panels for the next draw commit. Pass painted panel bounds, not a cascading menu's reserved size. Empty regions clear explicit blur. Single-panel clients can call `set_background_blur` for the whole rounded surface.
 
 ## Outputs and scale
 

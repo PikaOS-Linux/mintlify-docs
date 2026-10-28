@@ -1,0 +1,352 @@
+---
+title: "Dispatchers"
+sidebarTitle: "Dispatchers"
+description: "The zl action functions you call from binds and event handlers: run commands, close, float, pin and move windows, switch workspaces and monitors, and quit."
+---
+
+Dispatchers are the `zl` functions that act on the running compositor. You usually call them from a [bind](/zoolander/configuring/binds) callback:
+
+```lua
+zl.bind(zl.MOD_LOGO, "q", function() zl.close_window() end)
+```
+
+Most dispatchers return `true` when they did something and `false` when there was nothing to act on, such as no focused window. They raise a Lua error only when an argument has the wrong type.
+
+## Where you can call them
+
+Zoolander runs your config once before the compositor starts. Dispatchers do nothing during that first run. They return `false` and print one warning:
+
+```text
+zoolander: zl.exec_command does nothing before compositor startup; use a startup handler or binding
+```
+
+Call them from a bind, or from a `startup` handler to run something once at login:
+
+```lua
+zl.on("startup", function()
+    zl.exec_command("otter-bar")
+end)
+```
+
+<Warning>
+A reload runs your config with the compositor attached. A dispatcher at the top level of the file runs on every reload that reaches it, even if a later line makes the reload fail. Keep side effects in binds and handlers. See [Hooks and events](/zoolander/configuring/hooks-and-events).
+</Warning>
+
+## The focused window
+
+Window dispatchers act on the focused window:
+
+- `close_window` and `toggle_fullscreen` act on the window that has keyboard focus.
+- The others use the window with keyboard focus. If no window has it, they use the focused window on the active monitor.
+
+## Dispatcher reference
+
+| Function | Arguments | Description |
+| --- | --- | --- |
+| [`zl.exec_command`](#exec_command) | `command` | Runs a shell command. |
+| [`zl.close_window`](#close_window) | none | Asks the focused window to close. |
+| [`zl.toggle_floating`](#toggle_floating) | none | Floats or tiles the focused window. |
+| [`zl.toggle_fullscreen`](#toggle_fullscreen) | none | Makes the focused window fullscreen, or restores it. |
+| [`zl.toggle_pin`](#toggle_pin) | none | Pins the focused window so it shows on every workspace of its monitor. |
+| [`zl.toggle_overview`](#toggle_overview) | none | Opens or closes the workspace overview. |
+| [`zl.focus_direction`](#focus_direction) | `direction` | Moves focus to the neighbouring window. |
+| [`zl.move_window_direction`](#move_window_direction) | `direction` | Moves the focused window within the layout, or to the next monitor. |
+| [`zl.focus_monitor`](#focus_monitor) | `direction` | Moves focus and the pointer to the neighbouring monitor. |
+| [`zl.move_floating`](#move_floating) | `dx, dy` | Moves the focused floating window. |
+| [`zl.resize_floating`](#resize_floating) | `dw, dh` | Resizes the focused floating window. |
+| [`zl.resize_window`](#resize_window) | `dw, dh` | Resizes the focused window, tiled or floating. |
+| [`zl.begin_move`](#begin_move) | none | Starts a pointer drag that moves the focused window. |
+| [`zl.begin_resize`](#begin_resize) | none | Starts a pointer drag that resizes the focused window. |
+| [`zl.workspace`](#workspace) | `name` | Switches to a workspace, creating it if needed. |
+| [`zl.move_window_workspace`](#move_window_workspace) | `name [, follow [, address]]` | Moves a window to a workspace. |
+| [`zl.toggle_special_workspace`](#toggle_special_workspace) | `name` | Shows or hides a special workspace. |
+| [`zl.workspace_on_monitor`](#workspace_on_monitor) | `monitor, workspace` | Shows a workspace on a named monitor. |
+| [`zl.quit`](#quit) | none | Exits Zoolander. |
+
+`direction` is always one of the strings `"left"`, `"right"`, `"up"` or `"down"`.
+
+## Running commands
+
+### exec_command
+
+```lua
+zl.exec_command(command) -> boolean
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `command` | Shell command, 1 to 4095 bytes. | string | required |
+
+Runs `/bin/sh -c command`, so pipes, `&&` and `~` work. The child gets the compositor's environment plus any variables you set with `zl.set_env`. When Xwayland is available, it also gets `DISPLAY`.
+
+Returns `true` when the process started. It does not wait for the command or report its exit status. Returns `false` for an empty command, a command over 4095 bytes, or a failed spawn. Zoolander logs the spawn error.
+
+```lua
+zl.bind(zl.MOD_LOGO, zl.KEY_RETURN, function() zl.exec_command("otter-term") end)
+zl.bind(zl.MOD_LOGO, zl.KEY_ESCAPE, function()
+    zl.exec_command('zoolanderctl reload && notify-send "Config reloaded"')
+end)
+```
+
+## Window state
+
+### close_window
+
+```lua
+zl.close_window() -> boolean
+```
+
+Asks the window with keyboard focus to close. Wayland windows get an `xdg_toplevel` close event. X11 windows get a close request through Xwayland. The application can still ask to save first, or ignore the request. Returns `false` when no window has keyboard focus.
+
+### toggle_floating
+
+```lua
+zl.toggle_floating() -> boolean
+```
+
+Floats a tiled window, or tiles a floating one. A newly floated window takes the size it last floated at. If it never floated, it takes the size its client opened with. When you tile a floating window, Zoolander remembers its current size for next time. Returns `false` when there is no focused window.
+
+### toggle_fullscreen
+
+```lua
+zl.toggle_fullscreen() -> boolean
+```
+
+Makes the window with keyboard focus fullscreen, or takes it out of fullscreen. Returns `false` when no window has keyboard focus.
+
+### toggle_pin
+
+```lua
+zl.toggle_pin() -> boolean
+```
+
+Pins or unpins the focused window. A pinned window stays visible on its monitor whichever workspace is active. Pinning a tiled window floats it first, at the position and size it had in the tiling. Unpinning leaves it floating. Returns `false` when there is no focused window.
+
+### toggle_overview
+
+```lua
+zl.toggle_overview() -> boolean
+```
+
+Opens the built-in workspace overview, or closes it. Set its look with `zl.set_overview`. A vertical touchpad swipe can also drive it. See [`set_workspace_gesture`](/zoolander/configuring/workspaces#set_workspace_gesture).
+
+## Focus and movement
+
+### focus_direction
+
+```lua
+zl.focus_direction(direction) -> boolean
+```
+
+Focuses the nearest window in `direction` on the same monitor. In the scrolling layout, the view scrolls to show the new window. In a spatial layout, the layout handles the move. See [Layouts](/zoolander/configuring/layouts). Returns `false` when no window lies in that direction. This dispatcher does not cross monitors. Use `focus_monitor` for that.
+
+### move_window_direction
+
+```lua
+zl.move_window_direction(direction) -> boolean
+```
+
+Moves the focused window one step in `direction` within the layout. If nothing on the monitor lies that way, but another monitor does, the window moves to that monitor. In a spatial layout, the layout handles the move. Returns `false` when the window cannot move.
+
+### focus_monitor
+
+```lua
+zl.focus_monitor(direction) -> boolean
+```
+
+Finds the nearest monitor in `direction`, measured between monitor centres. It warps the pointer to the centre of that monitor and makes it the active monitor. If the monitor has a focused window, that window gets keyboard focus. If it has none, the previous window loses keyboard focus. Returns `false` when no monitor lies in that direction.
+
+```lua
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, zl.KEY_UP, function() zl.focus_monitor("left") end)
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, zl.KEY_DOWN, function() zl.focus_monitor("right") end)
+```
+
+### move_floating
+
+```lua
+zl.move_floating(dx, dy) -> boolean
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `dx` | Horizontal move in logical pixels. Negative moves left. | integer | required |
+| `dy` | Vertical move in logical pixels. Negative moves up. | integer | required |
+
+Moves the focused window if it floats. Zoolander clamps the result so the window stays inside its monitor. Returns `false` when the focused window is tiled or there is none.
+
+### resize_floating
+
+```lua
+zl.resize_floating(dw, dh) -> boolean
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `dw` | Width change in logical pixels. | integer | required |
+| `dh` | Height change in logical pixels. | integer | required |
+
+Grows or shrinks the focused floating window from its top-left corner. The size stays at least 1 pixel and does not pass the right or bottom edge of the monitor. Returns `false` when the focused window is tiled or there is none.
+
+### resize_window
+
+```lua
+zl.resize_window(dw, dh) -> boolean
+```
+
+Resizes the focused window, tiled or floating:
+
+- A floating window resizes as with `resize_floating`.
+- In dwindle, the split next to the window moves. In master/stack and scrolling, the layout ratio changes.
+- In a spatial layout, Zoolander turns the deltas into a direction and an amount. It uses `dw` when it is not zero, otherwise `dh`. The amount is capped at 32767.
+
+Returns `false` when nothing changed.
+
+```lua
+local hold = { repeating = true }
+zl.bind(zl.MOD_LOGO + zl.MOD_ALT, zl.KEY_RIGHT, function() zl.resize_window(40, 0) end, hold)
+zl.bind(zl.MOD_LOGO + zl.MOD_ALT, zl.KEY_LEFT, function() zl.resize_window(-40, 0) end, hold)
+```
+
+### begin_move
+
+```lua
+zl.begin_move() -> boolean
+```
+
+Starts an interactive move of the focused window. The window follows the pointer until you release the button. Press Escape to put it back. Bind it to a mouse button. The click focuses the window under the pointer first, so the drag moves the window you clicked.
+
+```lua
+zl.bind_mouse(zl.MOD_LOGO, 272, function() zl.begin_move() end)
+```
+
+Returns `true` when the drag started.
+
+### begin_resize
+
+```lua
+zl.begin_resize() -> boolean
+```
+
+Starts an interactive resize of the focused window. Floating windows resize from the bottom-right corner. If dwindle `smart_resizing` is on, tiled windows resize from the corner nearest the pointer. Otherwise they also resize from the bottom-right corner. Press Escape to cancel the drag.
+
+```lua
+zl.bind_mouse(zl.MOD_LOGO, 273, function() zl.begin_resize() end)
+```
+
+Returns `true` when the drag started.
+
+## Workspaces
+
+These are summaries. The [Workspaces](/zoolander/configuring/workspaces) page covers naming, special workspaces and per-monitor setups.
+
+### workspace
+
+```lua
+zl.workspace(name) -> boolean
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `name` | Workspace name, 1 to 127 bytes. | string | required |
+
+Switches the active monitor to the workspace called `name`. If the name is free, Zoolander creates the workspace on the active monitor. If another monitor already has that workspace, Zoolander switches that monitor to it instead. A name starting with `special` toggles a special workspace, as with `toggle_special_workspace`.
+
+### move_window_workspace
+
+```lua
+zl.move_window_workspace(name [, follow [, address]]) -> boolean
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `name` | Target workspace name, 1 to 127 bytes. Special workspace names are refused. | string | required |
+| `follow` | Switch to the target workspace after the move. | boolean | `false` |
+| `address` | A window's `address` from `zl.get_windows()`. | opaque value | focused window |
+
+Moves the window to the named workspace, creating it on the window's monitor if needed. Returns `false` when the window has closed, the name is invalid or special, or there is no focused window.
+
+```lua
+-- Move silently
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "2", function() zl.move_window_workspace("2") end)
+-- Move and follow
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, "2", function() zl.move_window_workspace("2", true) end)
+```
+
+### toggle_special_workspace
+
+```lua
+zl.toggle_special_workspace(name) -> boolean
+```
+
+Shows or hides a special (scratchpad) workspace on the active monitor. `""` means `special`. A bare name such as `"term"` means `special:term`. If the special workspace is open on another monitor, it moves to the active one.
+
+```lua
+zl.bind(zl.MOD_LOGO, "z", function() zl.toggle_special_workspace("") end)
+```
+
+### workspace_on_monitor
+
+```lua
+zl.workspace_on_monitor(monitor, workspace) -> boolean
+```
+
+Shows `workspace` on the monitor named `monitor`, such as `"DP-1"`. See [Workspaces](/zoolander/configuring/workspaces#workspace_on_monitor).
+
+## Session
+
+### quit
+
+```lua
+zl.quit()
+```
+
+Stops Zoolander and ends the session. It returns nothing. There is no confirmation, so bind it to a combination you will not press by accident.
+
+```lua
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT + zl.MOD_CTRL, "e", function() zl.quit() end)
+```
+
+## Layout actions
+
+Layout-specific actions, such as Canvas zoom, shelves and groups, go through one function, `zl.layout(action [, a [, b]])`. They are covered on [Layouts](/zoolander/configuring/layouts).
+
+## Queries for callbacks
+
+Callbacks often need to know what is on screen before they act. These functions return data and change nothing.
+
+| Function | Arguments | Description |
+| --- | --- | --- |
+| `zl.window_count()` | none | Number of windows. Returns `0` before startup. |
+| `zl.get_windows()` | none | One table per window. See below. |
+| `zl.monitor_count()`, `zl.monitor_info(index)` | see page | Monitor queries. See [Monitors](/zoolander/configuring/monitors#monitor-queries). |
+| `zl.workspace_info(name)` | `name` | Workspace query. See [Workspaces](/zoolander/configuring/workspaces#workspace_info). |
+
+`zl.get_windows()` returns a list of tables with these fields:
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `address` | Opaque handle for `zl.move_window_workspace`. Only valid in the config run that produced it. | opaque value |
+| `app_id` | Application ID, or the X11 class. | string |
+| `title` | Window title. | string |
+| `tag` | The xdg-toplevel-tag the client set, or `""`. | string |
+| `mapped` | Whether the window is mapped. | boolean |
+| `floating` | Whether the window floats. | boolean |
+| `fullscreen` | Whether the window is fullscreen. | boolean |
+| `pinned` | Whether the window is pinned. | boolean |
+| `workspace` | `{ name = string, special = boolean }`. | table |
+| `gtk_modal` | Whether a GTK client marked the window modal. | boolean |
+| `appmenu_service`, `appmenu_path` | KDE app menu D-Bus address, or `""`. | string |
+| `gtk_application_id`, `gtk_app_menu_path`, `gtk_menubar_path`, `gtk_window_object_path`, `gtk_application_object_path`, `gtk_unique_bus_name` | GTK shell D-Bus properties, or `""`. | string |
+| `gtk_a11y_bus_name`, `gtk_a11y_object_path` | GTK accessibility D-Bus address, or `""`. | string |
+
+This bind sends every Firefox window to workspace 3:
+
+```lua
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "f", function()
+    for _, w in ipairs(zl.get_windows()) do
+        if w.app_id == "firefox" then
+            zl.move_window_workspace("3", false, w.address)
+        end
+    end
+end)
+```

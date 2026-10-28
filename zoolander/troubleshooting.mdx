@@ -1,0 +1,206 @@
+---
+title: "Troubleshooting Zoolander"
+sidebarTitle: "Troubleshooting"
+description: "Read Zoolander's logs, turn on Vulkan diagnostics, fix GPU, seat and Xwayland problems, and get back to a working config."
+---
+
+## Logs
+
+Zoolander writes all its messages to standard error. It has no log file and no log level setting. Each line starts with a level and a scope:
+
+```text
+info(zoolander): DRM autodetect failed (...); falling back to headless
+warning(zoolander_hotreload): config reload failed, keeping previous state: init.lua:12: ...
+error(drm): modeset failed: ...
+```
+
+Lines from the Lua config start with `zoolander:` instead:
+
+```text
+zoolander: zl.set_blur: unknown field passes2
+zoolander: zl.exec_command does nothing before compositor startup; use a startup handler or binding
+zoolander: child 4242 exited with status 127 (exec may have failed)
+```
+
+Where the output goes depends on how you start Zoolander. A display manager sends it wherever it sends session output. To keep a copy, start Zoolander from a TTY and redirect it:
+
+```bash
+zoolander-session 2> ~/zoolander.log
+```
+
+## Check the running session
+
+`zoolanderctl status` shows the renderer and whether the config loaded:
+
+```bash
+$ zoolanderctl status
+OK reloads=1 fails=0 config_ok=true ssd=on renderer="vulkan on <GPU name> (<driver> <driver info>, /dev/dri/card1)"
+```
+
+| What you see | What it means |
+| --- | --- |
+| `renderer="vulkan on ..."` | DRM with the Vulkan renderer. |
+| `renderer="software (dumb buffers on ...: Vulkan unavailable: ...)"` | DRM without Vulkan. See [Vulkan falls back to software](#vulkan-falls-back-to-software). |
+| `renderer="software"` | The nested or headless backend. |
+| `config_ok=false` | The last config load failed. Run `zoolanderctl reload` to see the error. |
+
+See [zoolanderctl](/zoolander/ipc/zoolanderctl) for every command.
+
+## Debug variables
+
+Set these before you start Zoolander:
+
+| Variable | Effect |
+| --- | --- |
+| `ZOOLAND_VK_VALIDATION=1` | Loads the Khronos Vulkan validation layer, if it is installed. |
+| `ZOOLAND_VK_TIMING=1` | Logs GPU time and frame counters once a second. |
+| `ZOOLAND_VK_ALLOW_UNMATCHED=1` | Lets the renderer use any Vulkan device, not only the one that drives the display. |
+
+```bash
+ZOOLAND_VK_TIMING=1 zoolander-session 2> ~/zoolander.log
+```
+
+[Environment variables](/zoolander/configuring/environment-variables#debug-variables) lists the other renderer debug variables.
+
+## Black screen or no display
+
+If DRM fails and you passed no backend flag, Zoolander falls back to the headless backend. It keeps running, but nothing appears on screen. The log shows one of:
+
+```text
+info(zoolander): DRM autodetect failed (<error>); falling back to headless
+info(zoolander): DRM startup failed (<error>); falling back to headless
+```
+
+List the cards Zoolander can see and why it rejects any of them:
+
+```bash
+zoolander --drm-list
+```
+
+Then start on a specific card. An explicit `--drm` does not fall back, so the error stays visible:
+
+```bash
+zoolander-session --drm=/dev/dri/card1
+```
+
+Other causes:
+
+| Cause | What to do |
+| --- | --- |
+| The driver has no atomic modesetting. The log says `DRM_CLIENT_CAP_ATOMIC unsupported by this driver; the backend has no legacy KMS path`. | Use a driver with atomic KMS support. |
+| NVIDIA without kernel modesetting. | Load `nvidia-drm` with `modeset=1`. |
+| `WAYLAND_DISPLAY` is set on a TTY, so Zoolander tries to run nested. | Unset it, or pass `--drm`. |
+
+## Seat and device access
+
+On DRM, Zoolander opens the GPU and input devices through libseat, which works with systemd-logind or seatd. The `zoolander` package depends on `seatd`. If libseat cannot open a seat, Zoolander opens the devices directly, which needs read and write access to `/dev/dri` and `/dev/input`.
+
+If a device fails to open, the log shows:
+
+```text
+error(drm): opening "/dev/dri/card1" failed: <error>
+```
+
+Log in on a real TTY or through a display manager so you have an active seat. Do not start the DRM backend over SSH or from inside another desktop session.
+
+Input devices come from the seat named by `XDG_SEAT`, or `seat0` when it is unset.
+
+## Vulkan falls back to software
+
+Zoolander renders with Vulkan on the GPU that drives the display. It never renders on another GPU unless you set `ZOOLAND_VK_ALLOW_UNMATCHED=1`. When Vulkan is not usable, it draws in software into dumb buffers and logs:
+
+```text
+info(drm): scanout path: dumb buffer (CPU/swrender) — Vulkan unavailable (<error>)
+```
+
+The session works but uses more CPU. To get Vulkan:
+
+- Install a Vulkan 1.3 driver with dma-buf and DRM-modifier support for the display's GPU. On AMD and Intel, that is `mesa-vulkan-drivers`. On NVIDIA, use driver 515 or newer.
+- Check that you have not set `VK_DRIVER_FILES`, `VK_ICD_FILENAMES` or `VK_LOADER_DRIVERS_SELECT` to a driver for a different GPU. Zoolander respects those variables.
+- On a hybrid laptop, the display may be wired to the integrated GPU. Zoolander then renders there. Use `--drm-list` to see which card drives your panel.
+
+Even with Vulkan, if the display plane and the driver share no scanout modifier, Zoolander copies frames into dumb buffers. That works but costs CPU time.
+
+## Xwayland
+
+X11 apps need Xwayland. Zoolander looks for it at `/usr/local/libexec/zoolander/Xwayland`, then `/usr/bin/Xwayland`. The package depends on `xwayland`.
+
+The X display listens from startup. Xwayland itself starts when the first X11 client connects, and exits 10 seconds after the last one leaves.
+
+| Problem | Fix |
+| --- | --- |
+| Log shows `Xwayland startup failed: ...` | Install `xwayland`. Zoolander keeps running without X11 support. |
+| X11 apps started from Zoolander have no `DISPLAY` | Check that your config does not call `zl.set_xwayland({ enabled = false })`. |
+| X11 apps started by systemd or D-Bus have no `DISPLAY` | Export it from a `startup` handler: `dbus-update-activation-environment --systemd DISPLAY`. |
+
+## Portals and screen sharing
+
+`xdg-desktop-portal` uses `zoolander-portals.conf` only when its own environment has `XDG_CURRENT_DESKTOP=Zoolander`. Zoolander does not set that variable. Set it for clients and push it to the D-Bus environment:
+
+```lua
+zl.set_env("XDG_CURRENT_DESKTOP", "Zoolander")
+
+zl.on("startup", function()
+    zl.exec_command("dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP")
+end)
+```
+
+Then restart the portal service or log in again. See [Portals](/zoolander/installation#portals).
+
+## Control socket
+
+Zoolander does not start at all without `XDG_RUNTIME_DIR`, because it needs that directory for its Wayland socket.
+
+| Message or symptom | Cause |
+| --- | --- |
+| `control socket disabled: path too long` | The socket path exceeds the Unix socket limit of 107 bytes. Use a shorter `XDG_RUNTIME_DIR`. |
+| `zoolanderctl` fails from another terminal | That terminal's `WAYLAND_DISPLAY` points at a different compositor. Run `WAYLAND_DISPLAY=wayland-1 zoolanderctl status` with Zoolander's socket name. |
+| `XDG_RUNTIME_DIR is unset` from `zoolanderctl` | Run it from a logged-in session, or set the variable. |
+
+## The bell is silent
+
+Zoolander plays the bell through PipeWire with `libzoolander_bell.so`, loaded on the first ring. Without a running PipeWire server or without that library, it logs a warning and carries on. Also check that your config does not call `zl.set_bell_sound("none")`.
+
+## Clients connect to the wrong compositor
+
+Zoolander removes `HYPRLAND_INSTANCE_SIGNATURE`, `HYPRLAND_CMD`, `NIRI_SOCKET`, `SWAYSOCK` and `I3SOCK` from the environment of clients it starts. Tools that look for those variables fail inside Zoolander rather than control another compositor. Use `zoolanderctl` instead. To restore one on purpose, set it with `zl.set_env`.
+
+## Get back to a working config
+
+If `init.lua` fails at startup, Zoolander loads its emergency config. You get <kbd>Super</kbd> + <kbd>Return</kbd> for `otter-term`, <kbd>Super</kbd> + <kbd>D</kbd> for `otter-launcher`, and <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> for `otter-logout`. See [First launch](/zoolander/installation#first-launch).
+
+<Steps>
+  <Step title="See the error">
+    ```bash
+    zoolanderctl reload
+    ```
+
+    The reply names the file and line, for example `ERR init.lua:14: ...`.
+  </Step>
+  <Step title="Fix and save">
+    Edit the file and save it. Zoolander reloads on save. For a module in a subdirectory, run `zoolanderctl reload` again.
+  </Step>
+  <Step title="Confirm">
+    ```bash
+    zoolanderctl status
+    ```
+
+    `config_ok=true` means the config loaded.
+  </Step>
+</Steps>
+
+If a reload fails while Zoolander is running, your previous config stays active until you restart.
+
+To start with a known-good config without touching your own, pass another file:
+
+```bash
+zoolander-session --config=/path/to/known-good.lua
+```
+
+To start from nothing, move your config aside. On the next start, Zoolander runs the emergency config:
+
+```bash
+mv ~/.config/zoolander/init.lua ~/.config/zoolander/init.lua.broken
+```
+
+The config directory watch stops if you delete or replace the directory itself. The log says `config directory watch removed; hot reload stopped, use zoolanderctl reload`. Reload by hand until you restart Zoolander.

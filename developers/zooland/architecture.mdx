@@ -1,0 +1,204 @@
+---
+title: "Zooland architecture"
+sidebarTitle: "Architecture"
+description: "The event loop, object model, client and resource lifetimes, surface commits, damage, buffers, explicit sync, and the render flow."
+---
+
+Zooland splits work between the library and your compositor. The library owns wire decoding, protocol objects, client lifetimes, and the renderer and backend contracts. Your compositor supplies policy through a typed `Backing`, policy hooks, and the globals it chooses to register.
+
+## The root and the host
+
+Everything is generic over a root struct that your compositor owns. The root holds these fields:
+
+| Field | Type | Owns |
+| --- | --- | --- |
+| `server` | `server.Server(Root, "server", "event_loop")` | Listener, clients, resources, registry |
+| `event_loop` | `loop.loop.Loop(Root, "event_loop")` | epoll sources, timers, deferred calls |
+| `runtime` | `library.Library(Host)` | Core, seat and shell, extension, and renderer stores |
+| `backend_state` | `backend.owners.Pools(Root)` | Backend and output pools, when you use a backend |
+
+The string arguments name the root fields, so the server can find its loop without holding a pointer to it.
+
+`shared_host.Host(Root, Backing)` is the type that protocol handlers run with. It is a short-lived view over the root:
+
+- `Host.init(root, client)` makes a host for work on behalf of a client.
+- `Host.init_system(root)` makes a host for compositor-initiated work.
+- `Host.make_host(root, resource)` makes a host for the client that owns a resource.
+
+Persistent state stores generational IDs, never a host. The allocator you pass to `Library.init`, `Loop.init`, and `Server.init` owns their state.
+
+<Note>
+Pools may move their storage when they grow. Copy what you need out of a pool entry before you call a hook or grow a pool, then resolve the ID again.
+</Note>
+
+## Event loop
+
+`Loop` uses epoll, one timerfd with a timer heap, generational source and timer IDs, and a deferred-call queue.
+
+| Call | Behavior |
+| --- | --- |
+| `add(fd, interest, hook)` | Watches an fd. Returns a `SourceId`. |
+| `add_timer(deadline_ns, hook)` | Arms a timer at a monotonic deadline. Returns a `TimerId`. |
+| `cancel_timer(id)` | Cancels a timer. |
+| `defer_call(call)` | Queues a call. Fails with `OutOfMemory` or `Closed`. |
+| `valid(id)` | Checks that a source ID still names the same generation. |
+| `tick(root, timeout_ms)` | Runs one bounded iteration. |
+| `run(root)` | Blocks until `quit()`. |
+| `shutdown(root)` | Runs the deferred calls still queued, including calls appended while it runs. |
+
+Each tick runs source callbacks, due timers, deferred calls, the flush hook, and the reap hook, in that order. Deferred calls queued from a source or timer callback run in the same tick. Calls queued during the flush or reap hooks run on the next tick.
+
+One loop owns one server, because the server installs the loop's flush and reap hooks. On each tick the server reads and dispatches bounded client input, flushes clients, reaps dead clients, and resets its scratch arena.
+
+`loop/signal.otr` handles POSIX signals. Zooland has no generic signal bus.
+
+## Server and registry
+
+`Server.listen(root, options)` creates a nonblocking Unix socket and lock file. It uses `options.runtime_dir`, or reads `XDG_RUNTIME_DIR` from `options.env`. The default socket spec `.auto` tries `wayland-0` through `wayland-31`. `root.server.listener.?.name()` returns the name to export as `WAYLAND_DISPLAY`.
+
+If `accept` fails for a reason other than `WouldBlock`, the listener stops reading and retries after `accept_retry_ms` (1000 by default), or as soon as a dead client is reaped.
+
+`Server.add_client` adopts a connected fd and creates the implicit `wl_display@1`.
+
+`Server.Directory.add_global` stores a global and announces it to every registry binding that can see it. Each global has a bind hook and an optional filter that decides visibility per client. A version of `0` advertises the generated interface version. Any other version is capped at it.
+
+`remove_global` sends `global_remove` and starts a grace period:
+
+- With `wl_fixes`, each visible registry binding acknowledges the removal before the entry retires.
+- A late bind during the grace period creates an inert object instead of reaching module state.
+- `destroy_global` retires a global immediately.
+
+Global names are monotonic and never reused.
+
+## Object model
+
+Each resource holds a `resource.Dispatch(Root)`: a function plus an eight-byte plain datum.
+
+```text
+fn(&mut Root, datum, ResourceId, opcode: u16, body: []u8) DispatchError!void
+```
+
+`protocols/wire/dispatch.otr` runs each request:
+
+1. It checks the opcode bounds and the request's `since` version against the resource version.
+2. It decodes the body through the generated `decode_request_as`. Decoding resolves object arguments and pre-creates typed `new_id` resources.
+3. It calls your handler with a typed `Request` union.
+4. On any error it posts the protocol error and rolls back pre-created resources that are still unimplemented. Rollback runs no destroy hook.
+
+The handler owns the decoded request, file descriptors included, and must consume them on every path. A resource the handler implemented before a later error stays live until the client reap runs its normal destructor.
+
+Hook fanout uses lists of `HookId` records in the core store, one list per target: surface destroy, buffer destroy, buffer release, output, and the ordered compositor commit list. A record names its owner through `HookOwner` rather than holding a callback pointer. Iteration reads the next record before it runs the current one, so a hook can remove itself.
+
+## Client and resource lifetime
+
+A protocol error kills only the client that caused it. The server marks the client dead and reaps it at the end of the tick.
+
+Teardown walks a client's resources newest first. Dependent child objects disappear before the older manager objects they came from.
+
+`Server.destroy_resource` sends `wl_display.delete_id` for client-range IDs, runs the destroy hook, unlinks the resource, retires its map entry, and frees its pool slot. Client destructor requests use the same path. Generated destructor-event senders only queue the event. The caller then retires the resource through this normal path.
+
+### Shutdown order
+
+Shutdown must respect these dependencies:
+
+<Steps>
+  <Step title="Stop external callbacks">
+    Stop backend, input, and other external event sources.
+  </Step>
+  <Step title="Close dependent compositor objects">
+    Close compositor-owned objects that module teardown requires to be gone. Call `Server.destroy_client` early for any client whose teardown needs live backend handles.
+  </Step>
+  <Step title="Retire buffer consumers">
+    Retire the output, capture, backend, and renderer consumers that hold `Buffer` locks.
+  </Step>
+  <Step title="Shut down the server">
+    Call `Server.shutdown` while the library stores are still alive. It destroys the remaining clients, runs their destroy hooks, and closes the listener.
+  </Step>
+  <Step title="Shut down the loop and deinitialize">
+    Call `Loop.shutdown`, then deinitialize the server, loop, library, and backend state.
+  </Step>
+</Steps>
+
+`Server.deinit` panics if `Server.shutdown` has not run. Zoolander's `otr/composition.otr` and `otr/comp_lifecycle.otr` show the full order.
+
+## Surfaces and the commit pipeline
+
+The core store in `core/store.otr` owns surfaces, buffers, SHM pools, regions, subsurfaces, outputs, and frame callbacks. A surface has `pending`, `current`, and optional `cached` `SurfaceState` values. The state covers the buffer attachment, damage, regions, transform, scale, viewport state, and acquire-fence ownership.
+
+`core/surface_commit.otr` runs a commit in this order:
+
+1. Validation checks the pending state. For example, the buffer size must be divisible by the scale.
+2. The surface's role (toplevel, popup, layer surface, subsurface, and so on) runs its precommit check.
+3. `Backing.precommit` runs with an `explicit_sync` flag. Your compositor can return an error to fail the commit.
+4. If a barrier holds, pending state merges into `cached` and the commit stops. Synchronized subsurfaces, fifo, commit timing, explicit sync, and transactions all use barriers, so related state becomes current atomically.
+5. Pending state, or leftover cached state with pending merged in, becomes current.
+6. The ordered compositor commit list runs extension hooks for the `applied` phase.
+7. The role runs its postcommit step.
+8. `Backing.commit` lets your compositor react to the new current state.
+
+The role class of a surface is sticky. Destroying a role object releases the object but does not let the surface take a different role class. Subsurface and popup trees have a depth limit of 64. Subsurface state and stacking apply on the parent commit.
+
+Popup grabs in `shell/xdg_popup.otr` control popup-chain dismissal and keyboard focus. They do not install a pointer grab. A pointer grab from `seat/grab.otr` receives enter, motion, axis, and button events in place of the default path. Drag and drop installs one.
+
+## Damage
+
+Clients post damage in surface coordinates (`damage`) or buffer coordinates (`damage_buffer`). On apply, `accumulate_damage` converts both into one buffer-space region:
+
+- Surface damage is clipped to the surface size, scaled by the buffer scale or mapped through the viewport, then transformed by the inverse of the buffer transform.
+- Buffer damage is clipped to the buffer size.
+
+The result accumulates in the surface's `buffer_damage`. Your compositor maps it to output space when it plans a frame.
+
+## SHM buffers
+
+`core.setup.register` copies the advertised SHM format list. The list must include ARGB8888 and XRGB8888.
+
+- Each pool owns one mapping. It may grow but never shrink. Buffer bounds use checked arithmetic.
+- A mapping may move during resize. Resolve bytes when you access them, and never cache a pointer.
+- Pools map their fd through the std `linux.Guarded` mapping. Readers take a lease with `shm.begin_read` and end it with `finish_read`.
+- If the client truncated the file while it was mapped, the access reports a fault, the pool becomes defunct, and the access returns `PoolDefunct`. You can then post a protocol error.
+
+`buffer.lock` and `unlock` keep buffer storage alive across client destruction and frame submission. Once an SHM upload has copied the pixels into a texture, `release_storage_early` can send `wl_buffer.release` at once. The final unlock then stays quiet for that release cycle.
+
+## dma-buf and explicit sync
+
+The dma-buf manager validates the plane count, indices, dimensions, stride, offset, modifier consistency, and fd ownership. Plane fds move into a successful `Buffer`. Failed or abandoned params close every fd they still own exactly once.
+
+The manager builds one sealed feedback table from its format list. Every feedback object receives one full-state burst and its own duplicate of the table fd. Surface feedback becomes inert when its surface dies.
+
+`dmabuf.wl_drm` serves Mesa's `wl_drm` interface on top of the dma-buf manager. It names the render node, advertises formats that have an implicit-modifier entry, answers `authenticate` at once, and imports `create_prime_buffer` through the same hook as linux-dmabuf. Flink-name requests fail with a protocol error.
+
+A buffer with the implicit layout (`DRM_FORMAT_MOD_INVALID`) asks `Backing.resolve_dmabuf_modifier` for its real modifier before import. The DRM backend answers this on amdgpu and i915 by adding a framebuffer for the buffer and reading its modifier back with `GETFB2`.
+
+The syncobj manager attaches acquire and release timeline points to surface commits. Acquire fences move with `SurfaceState`, and the helpers in `core/acquire_fence.otr` consume or duplicate them. Your compositor waits through `Renderer.wait_fence`, which consumes the sync-file fd. It signals release points once the submitted frame no longer uses the buffer. The `Backing` timeline operations (`import_timeline`, `signal_timeline`, `arm_timeline_event`, `export_timeline`, `release_timeline`) connect the manager to your DRM device.
+
+## Render flow
+
+Zooland has no scene graph. Your compositor decides what to draw, in which order, and with which effects. The library gives you the renderer and backend contracts, and the surface state to draw from.
+
+A frame for one output follows this shape. Zoolander's `otr/repaint.otr` and `otr/scene_draw.otr` implement it.
+
+<Steps>
+  <Step title="Wait for the repaint window">
+    The backend's `repaint_window` sink fires the repaint margin before the predicted vblank. Skip the output while `OutputDev.frame_pending` is true, because an in-flight presentation owns the target.
+  </Step>
+  <Step title="Plan damage">
+    Combine surface `buffer_damage`, moved windows, and effects into output-space rectangles.
+  </Step>
+  <Step title="Record a pass">
+    Get the target with `OutputDev.target`, then call `Renderer.begin_pass(target, damage)`. Draw rectangles, gradients, borders, shadows, textures, and blur in submission order. Use `occlude` for areas that later draws cover opaquely.
+  </Step>
+  <Step title="Serve capture">
+    Before and after drawing the cursor, call `ext.screencopy.capture_pending` for any queued screencopy or image-copy frames.
+  </Step>
+  <Step title="End and commit">
+    Call `Pass.end`, then `Backend.commit_frame` with a `Frame` carrying the damage, adaptive-sync, content-type, tearing, and output-color state. A `Frame` may name a client dma-buf for direct scanout instead.
+  </Step>
+  <Step title="Handle presentation">
+    The `present` sink reports the sequence, MSC, timestamp, refresh interval, and whether the flip tore. Send presentation feedback and frame callbacks, call `ext.screencopy.presented`, and release buffer locks the frame held.
+  </Step>
+</Steps>
+
+When `Renderer.samples_after_end` is true, the GPU may still read a pass's textures after `Pass.end`. Keep buffer locks until presentation in that case.
+
+See [Backends and rendering](/developers/zooland/backends-and-rendering) for the contracts in detail.

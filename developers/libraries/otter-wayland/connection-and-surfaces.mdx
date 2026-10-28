@@ -8,7 +8,9 @@ description: "Owned otr Wayland connections, event pumping, layer shell, and XDG
 
 `connection.Connection.init(interest)` connects with a `GlobalInterest` selection. Optional advertised globals are owned fields on the connection. Check protocol availability before creating dependent resources.
 
-`fd`, `flush`, `dispatch`, `dispatch_pending`, and `roundtrip` integrate with your loop. Dispatch methods requiring time/I/O take `std.Io` explicitly. `dispatch_or` can wait for Wayland, one extra descriptor, or a deadline.
+`fd`, `flush`, `dispatch`, `dispatch_pending`, and `roundtrip` integrate with your loop. Dispatch methods requiring time/I/O take `std.Io` explicitly. `dispatch_or` can wait for Wayland, one extra descriptor, or a deadline. Include writable readiness in your poll while `write_pending()` is true. `flush` reports terminal failure but keeps blocked writes for the next writable wake.
+
+The transport is native and uses `std.socket_stream` and `std.socket_ancillary`. Outgoing descriptor arguments are borrowed and duplicated before they enter the queue. Received descriptors and child proxies are owned resources. `wl.Id` is a local immutable identity, not a wire object number or address. Queued events keep their object records through retirement and ID reuse.
 
 Consume `next_global()` records; the connection does not support callback registration.
 
@@ -33,6 +35,10 @@ A compositor is external to Otter Shell. Handle unavailable optional protocols r
 `capture_output.OutputList` stores output state. `output_scale` reads exact scale information from it. Keep exact factors distinct from integer ceiling scale.
 
 `foreign_toplevel`, `ext_workspace`, and `workspace_provider` expose window/workspace state. Compositor IPC helpers use explicit `ipc.Endpoints` and I/O, not environment singletons.
+
+`ext_workspace` fills in numbering and occupancy from Hyprland, niri, and Zoolander IPC. The `zoolander` module exposes `available(ep)`, true when `XDG_CURRENT_DESKTOP` is `Zoolander`, and `occupancy(ep, io, names)`. `occupancy` asks Zoolander's control socket, `$XDG_RUNTIME_DIR/zoolander-<display>.sock`, which of up to 32 named workspaces hold windows. It returns one bit per name and gives up after 50 ms. On failure, `ext_workspace` keeps its cached state.
+
+When a toplevel leaves one output, `foreign_toplevel` falls back to the last output it is still on. A window that briefly overlaps a second output during a move or workspace animation keeps a known output.
 
 ## Source reference
 

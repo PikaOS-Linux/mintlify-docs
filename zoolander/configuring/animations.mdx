@@ -1,0 +1,192 @@
+---
+title: "Animations"
+sidebarTitle: "Animations"
+description: "Turn Zoolander animations on, tune each animation leaf with durations, easing, Bezier curves and styles, and control layer surface animations."
+---
+
+Zoolander splits its animations into eight leaves. Each leaf has its own on/off switch, duration, curve and style. A global switch sits above them all. You set them from `~/.config/zoolander/init.lua`.
+
+<Note>
+Animations are off by default. The global switch starts as `false`, so nothing animates until you call `zl.set_animations_enabled(true)` or pass `enabled = true` to `zl.set_animations`.
+</Note>
+
+## Quick start
+
+```lua
+zl.set_animations_enabled(true)
+
+local decel = { x1 = 0.1, y1 = 1, x2 = 0, y2 = 1 }
+zl.set_animation_leaf("windows_in", { duration = 400, curve = decel, style = "slide" })
+zl.set_animation_leaf("windows_out", { duration = 400, curve = decel, style = "slide" })
+zl.set_animation_leaf("windows_move", { duration = 400, curve = decel })
+zl.set_animation_leaf("fade", { duration = 400, curve = decel })
+zl.set_animation_leaf("workspaces", { duration = 800, curve = decel })
+zl.set_animation_leaf("layers", { duration = 800, curve = decel, style = "slide" })
+```
+
+## Leaves
+
+| Leaf | What it animates | Uses `style` |
+| --- | --- | --- |
+| `windows_in` | A window opening: its first placement on screen. | yes |
+| `windows_out` | A window closing. | yes |
+| `windows_move` | A window changing position or size: retiling, moving, resizing. | no |
+| `fade` | Opacity fade-in when a window opens and fade-out when it closes. Runs beside `windows_in` and `windows_out`. It does not apply to workspace switches. | no |
+| `layers` | Layer shell surfaces such as bars, docks, notifications and launchers, when they open and close. | yes |
+| `workspaces` | Switching workspaces, and opening and closing the overview. | yes |
+| `camera` | Camera pans and reveals in spatial layouts. | no |
+| `layout` | Selection changes in spatial layouts: strips, panes, tabs, shelf cards. | no |
+
+`zl.set_reduced_motion(true)` skips the `camera` and `layout` leaves and leaves the others alone. See [Variables](/zoolander/configuring/variables#reduced-motion).
+
+### Default values
+
+These are the values after every config load, before your file runs.
+
+| Leaf | Enabled | Duration | Curve | Style | Percent |
+| --- | --- | --- | --- | --- | --- |
+| global switch | `false` | | | | |
+| `windows_in` | `false` | 180 ms | `ease_out_cubic` | `slide` | 20 |
+| `windows_out` | `false` | 180 ms | `ease_out_cubic` | `slide` | 20 |
+| `windows_move` | `true` | 180 ms | `ease_out_cubic` | `slide` | 20 |
+| `fade` | `false` | 180 ms | `ease_out_cubic` | `slide` | 20 |
+| `layers` | `false` | 180 ms | `ease_out_cubic` | `slide` | 20 |
+| `workspaces` | `true` | 180 ms | `ease_out_cubic` | `slide` | 20 |
+| `camera` | `true` | 170 ms | `ease_out_cubic` | `slide` | 20 |
+| `layout` | `true` | 180 ms | `ease_out_cubic` | `slide` | 20 |
+
+A leaf only runs when both the global switch and the leaf are on. Turning on only the global switch animates window moves, workspace switches and spatial layouts, but not opening, closing, fades or layer surfaces.
+
+## zl.set_animations_enabled
+
+`zl.set_animations_enabled(enabled)` flips the global switch. It does not touch any leaf.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled` | Turns all animations on or off. | bool | `false` |
+
+```lua
+zl.set_animations_enabled(true)
+```
+
+## zl.set_animations
+
+`zl.set_animations(table)` sets a common baseline. It sets the global switch, then replaces six leaves (`windows_in`, `windows_out`, `windows_move`, `fade`, `layers`, `workspaces`) with the same enabled flag, duration and easing. Their style goes back to `slide` and percent to 20. The `camera` and `layout` leaves and reduced motion keep their values.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled` | Value for the global switch and for all six leaves. | bool | the current global switch (`false` after a reload) |
+| `duration` | Duration of all six leaves, in milliseconds. Range `1..5000`. | int | the current `windows_move` duration (`180`) |
+| `easing` | Easing of all six leaves. | enum: `linear`, `ease_out_cubic`, `ease_in_out_cubic` | the current `windows_move` easing (`ease_out_cubic`) |
+
+```lua
+zl.set_animations({ enabled = true, duration = 250, easing = "ease_out_cubic" })
+```
+
+<Warning>
+Call `zl.set_animations` before any `zl.set_animation_leaf` call, since it overwrites six leaves. Two cases need care:
+
+- If you leave out `enabled` while the global switch is off, all six leaves end up disabled.
+- If `windows_move` already has a Bezier `curve` and you leave out `easing`, the call raises an error. Pass `easing` explicitly in that case.
+</Warning>
+
+## zl.set_animation_leaf
+
+`zl.set_animation_leaf(leaf, table)` sets one leaf. `leaf` is one of the names in [Leaves](#leaves).
+
+Unlike the other setters, this one does not merge with the current values. Each call sets `enabled`, `duration`, `style` and `percent` from the table or from the defaults below. Only the curve keeps its current value when you pass neither `curve` nor `easing`.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled` | Turns this leaf on or off. | bool | `true` |
+| `duration` | Duration in milliseconds. Range `1..5000`. | int | `180` |
+| `easing` | A named easing curve. Ignored when `curve` is also set. | enum: `linear`, `ease_out_cubic`, `ease_in_out_cubic` | the current curve |
+| `curve` | A cubic Bezier curve. Takes priority over `easing`. See [Bezier curves](#bezier-curves). | table | the current curve |
+| `style` | How the leaf moves the surface. See [Styles](#styles). Only read by leaves that use a style. | enum | `"slide"` |
+| `percent` | Start size for `popin`, as a percentage of the final size. Range `1..100`. Only read when `style` is also set. | int | `20` |
+
+```lua
+zl.set_animation_leaf("windows_in", {
+    duration = 300,
+    curve = { x1 = 0.05, y1 = 0.9, x2 = 0.1, y2 = 1 },
+    style = "popin",
+    percent = 80,
+})
+zl.set_animation_leaf("workspaces", { duration = 250, easing = "ease_in_out_cubic", style = "slide top" })
+zl.set_animation_leaf("fade", { enabled = false })
+```
+
+### Easing
+
+| Value | Shape |
+| --- | --- |
+| `linear` | Constant speed. |
+| `ease_out_cubic` | Starts fast and slows down at the end. |
+| `ease_in_out_cubic` | Starts slow, speeds up, then slows down. |
+
+### Bezier curves
+
+`curve` takes the two control points of a cubic Bezier from (0, 0) to (1, 1), the same form as CSS `cubic-bezier()`.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `x1` | First control point, time axis. Range `0..1`. | float | `0` |
+| `y1` | First control point, progress axis. Range `0..1`. | float | `0` |
+| `x2` | Second control point, time axis. Range `0..1`. | float | `1` |
+| `y2` | Second control point, progress axis. Range `0..1`. | float | `1` |
+
+All four points must be within `0..1`, so curves that overshoot, such as a `y1` above 1, are rejected. A point you leave out takes its default, so `curve = {}` is a linear curve.
+
+```lua
+-- Fast start, long settle.
+zl.set_animation_leaf("windows_move", { duration = 350, curve = { x1 = 0.1, y1 = 1, x2 = 0, y2 = 1 } })
+```
+
+### Styles
+
+`style` accepts these strings. The directional slides accept a space or an underscore: `"slide left"` and `"slide_left"` are the same.
+
+| Style | `windows_in` and `windows_out` | `layers` | `workspaces` |
+| --- | --- | --- | --- |
+| `slide` | Slides in from, or out to, the nearest edge of the usable area. | Slides from the edge the surface is anchored to. A bar anchored to the bottom slides up from the bottom. | Slides the old and new workspaces horizontally, side by side. |
+| `slide left` | Slides from, or to, one window width to the left. | Slides from the left. | Horizontal slide. |
+| `slide right` | One window width to the right. | Slides from the right. | Horizontal slide. |
+| `slide top` | One window height above. | Slides from the top. | Vertical slide. |
+| `slide bottom` | From, or to, the bottom edge of the usable area. | Slides from the bottom. | Vertical slide. |
+| `popin` | Grows from, or shrinks to, `percent` of the window size, centred. | Grows from `percent` of the surface size. | Horizontal slide. |
+| `fade` | No motion. Use the `fade` leaf for opacity. | Fades the surface in and out. | Cross-fades the two workspaces in place. |
+
+Workspace slides move towards the higher-numbered workspace. Going from workspace 2 to 3 moves the view one way, and going back moves it the other way. Only `fade` changes opacity during a workspace switch.
+
+The `windows_move`, `fade`, `camera` and `layout` leaves ignore `style`.
+
+## Layer animation rules
+
+Layer shell surfaces are identified by their namespace, such as `otter-notifications` or `otter-dock`. Two rule functions change how they animate. Both only matter while the global switch and the `layers` leaf are on.
+
+| Function | Description |
+| --- | --- |
+| `zl.add_layer_animation_rule(namespace, style)` | Gives matching surfaces their own style instead of the `layers` leaf style. `style` takes the same strings as [Styles](#styles). |
+| `zl.add_layer_no_animation_rule(namespace)` | Turns animation off for matching surfaces. |
+
+`namespace` is either an exact name or an anchored pattern `^(...)$`. Inside the pattern, `.*` is the only wildcard and `\` escapes the next character. Other regular expression syntax is rejected. Patterns are 1 to 127 bytes long.
+
+How rules combine:
+
+- A surface that matches any no-animation rule does not animate, whatever its style rule says.
+- When several style rules match, the one added last wins.
+- Layer blur, no-animation and style rules share one table of 32 entries. Rules with the same namespace string share an entry. A new namespace beyond 32 raises an error.
+
+```lua
+zl.set_animations_enabled(true)
+zl.set_animation_leaf("layers", { duration = 300, style = "slide" })
+
+zl.add_layer_animation_rule("^(otter-notifications)$", "slide right")
+zl.add_layer_animation_rule("^(otter-osd)$", "slide bottom")
+
+for _, namespace in ipairs({ "^(otter-launcher)$", "^(otter-wallpaper)$", "^(selection)$" }) do
+    zl.add_layer_no_animation_rule(namespace)
+end
+```
+
+For layer blur rules (`zl.add_layer_blur_rule`) and the per-window `no_animation` rule, see [Window rules](/zoolander/configuring/window-rules).
