@@ -174,6 +174,60 @@ zl.set_workspace_layout("6", "scrolling", 0.5, 1, "vertical")
 | `monocle` | Every tiled window fills the work area. |
 | `spiral` | Each window takes half of the space that is left, taking the left, top, right and bottom halves in turn. The last window fills what remains. || `floating` | Windows keep the position and size they have. A window that enters the layout gets a starting floating rectangle once. |
 
+## Tab groups
+
+In `master_stack`, `grid`, `monocle`, `spiral`, `dwindle` and `scrolling`, several windows can share one tile as tabs. Only the front tab takes the tile. The others wait hidden at the same size, so switching tabs never resizes anything.
+
+| Action | Effect |
+| --- | --- |
+| `group_join` | `a`: direction. Put the focused window in the tab group of its neighbour that way. Founds a group if the neighbour has none. A group holds at most 16 tabs. |
+| `group_remove` | Take the focused window out of its group. |
+| `tab`, `group_cycle` | `a`: `1` / `-1`. Step to the next or previous tab. |
+
+A group down to one window dissolves. Floating a window by hand or moving it to another workspace or output takes it out of its group.
+
+```lua
+local L, A = zl.MOD_LOGO, zl.MOD_ALT
+for _, dir in ipairs({ "left", "right", "up", "down" }) do
+    local key = ({ left = zl.KEY_LEFT, right = zl.KEY_RIGHT, up = zl.KEY_UP, down = zl.KEY_DOWN })[dir]
+    zl.bind(L + A, key, function() return zl.layout("group_join", dir) end)
+end
+zl.bind(L + A, string.byte("x"), function() return zl.layout("group_remove") end)
+zl.bind(L + A, string.byte("]"), function() return zl.layout("tab", 1) end)
+```
+
+### Tab bar
+
+`zl.set_tab_bar` draws a bar above every tile with one tab per window title. The bar is off by default. Groups work without it.
+
+`zl.set_tab_bar(true)` or `zl.set_tab_bar(false)` turns the bar on or off and keeps the other settings. A table turns it on, unless it sets `enabled = false`.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled` | Show the bar. | boolean | `true` when you pass a table |
+| `height` | Bar height in px, `8` to `96`. | integer | `30` |
+| `radius` | Corner radius in px, `0` to `48`. | integer | `8` |
+| `gap` | Space between the bar and its tile, and between tabs, `0` to `32`. | integer | `3` |
+| `padding_x` | Title inset inside a tab, `0` to `64`. | integer | `12` |
+| `font` | Font family, at most 127 bytes. | string | window title font |
+| `size` | Title font size, `6` to `64`. | integer | `13` |
+| `bg`, `fg` | Bar background and title colour, `#RRGGBB` or `#RRGGBBAA`. | string | theme palette |
+| `focus_bg`, `focus_fg` | Colours of the front tab. | string | theme palette |
+| `monocle_all` | In Monocle, show one bar listing every window of the workspace. | boolean | `true` |
+
+```lua
+zl.set_tab_bar({ height = 26, size = 12, focus_bg = "#3b82f6" })
+```
+
+With the bar on:
+
+- Click a tab to focus it.
+- Scroll over a bar to step through its tabs.
+- Drag a tab 8 px or more off its bar to take it out of its group.
+- Drop a dragged tile on another bar to join that group.
+
+No bar shows while a fullscreen window is visible, or on the special workspace.
+
 ## Spatial layouts
 
 The spatial layouts keep each window's real client size. How the window is shown is separate: it can be scaled (shelf cards, Accordion previews), clipped (lane bands) or hidden (background tabs).
@@ -268,15 +322,16 @@ A direction passed to an action that takes none raises an error such as `zl.layo
 | `zoom` | `a`: notches | Zoom a Canvas in (positive) or out (negative). `0` goes back to 1:1 around the focused window. Other layouts return `unavailable`. |
 | `group_new` | text: optional name | New lane (Lanes), pair (Pairs) or island (Canvas). In Workbench, detach the focused window into a new workbench. |
 | `group_add` | none | Add the focused window to the active group. |
-| `group_remove` | none | Remove the focused window from its group. In Workbench, detach it. |
-| `group_cycle` | `a`: `1` / `-1` | Next or previous group: lane, workbench, pair or island. |
+| `group_join` | `a`: direction | Tiled layouts: join the tab group of the neighbour that way. See [Tab groups](#tab-groups). |
+| `group_remove` | none | Remove the focused window from its group. In Workbench, detach it. In tiled layouts, leave its tab group. |
+| `group_cycle` | `a`: `1` / `-1` | Next or previous group: lane, workbench, pair or island. In tiled layouts, the next or previous tab. |
 | `group_rename` | text: new name | Rename the active group. |
 | `set_primary` | none | Make the focused window the workbench primary. |
 | `attach` | `a`: `left` (1), `right` (2) or `down` (3, bottom) | Attach the focused window as a workbench tool on that edge. |
 | `detach` | none | Detach the focused workbench tool. |
 | `swap` | none | Swap the two panes (Pairs). |
 | `orientation` | none | Toggle orientation in Accordion, Pairs and Lanes (rows or columns). Other layouts return `unavailable`. |
-| `tab` | `a`: `1` / `-1` | Next or previous tool tab on the focused workbench edge. |
+| `tab` | `a`: `1` / `-1` | Next or previous tool tab on the focused workbench edge. In tiled layouts, the next or previous tab of the focused group. |
 | `windows` | none | Toggle the window picker: every window on the workspace, searchable. |
 | `commands` | none | Toggle the command sheet, which lists every layout action with its keys. |
 
@@ -350,7 +405,7 @@ Returns a JSON string that describes the focused workspace, at most 96 KiB. It r
 | `active` | Active group IDs per group kind. |
 | `focus` | Address of the focused window, `0` for none. |
 | `hint` | Text of the current layout hint. |
-| `windows` | Windows on the workspace and pinned windows. Each has `a` (address), `geom`, `shown`, `world`, `placed`, `normal`, `place`, `side`, `group`, `role`, `order`, `scale`, `hidden`, `input`, `floating`, `minimized` and `title`. |
+| `windows` | Windows on the workspace and pinned windows. Each has `a` (address), `geom`, `shown`, `world`, `placed`, `normal`, `place`, `side`, `group`, `role`, `order`, `scale`, `hidden`, `input`, `floating`, `minimized`, `title` and `tab`. `tab` is `null`, or `{ group, order, front }` for a window in a tiled tab group. |
 | `truncated` | `true` when windows were left out to fit the limit. |
 
 ```sh

@@ -1,10 +1,10 @@
 ---
 title: "Binds"
 sidebarTitle: "Binds"
-description: "Bind keys, mouse buttons and scroll directions to Lua functions with zl.bind, zl.bind_mouse and zl.bind_axis, and forward keys to application global shortcuts."
+description: "Bind keys, mouse buttons, scroll directions and hot corners to Lua functions with zl.bind, zl.bind_mouse, zl.bind_axis and zl.bind_hot_corner, and forward keys to application global shortcuts."
 ---
 
-A bind connects a key, mouse button or scroll direction, plus a set of modifiers, to a Lua function. When you press the combination, Zoolander calls the function. You make binds in your config with `zl.bind`, `zl.bind_mouse` and `zl.bind_axis`. The functions you call from a bind are listed on [Dispatchers](/zoolander/configuring/dispatchers).
+A bind connects a key, mouse button, scroll direction or screen corner, plus a set of modifiers, to a Lua function. When you press the combination, Zoolander calls the function. You make binds in your config with `zl.bind`, `zl.bind_mouse`, `zl.bind_axis` and `zl.bind_hot_corner`. The functions you call from a bind are listed on [Dispatchers](/zoolander/configuring/dispatchers).
 
 ```lua
 zl.bind(zl.MOD_LOGO, zl.KEY_RETURN, function()
@@ -19,6 +19,7 @@ end)
 | `zl.bind` | `modifiers, key, callback [, options]` | Binds a keyboard key. Returns an integer bind ID. |
 | `zl.bind_mouse` | `modifiers, button, callback [, options]` | Binds a pointer button. Returns an integer bind ID. |
 | `zl.bind_axis` | `modifiers, axis, callback [, options]` | Binds one scroll direction. Returns an integer bind ID. |
+| `zl.bind_hot_corner` | `modifiers, corner, callback [, options]` | Binds a screen corner. Returns an integer bind ID. |
 | `zl.bind_global_shortcut` | `modifiers, key, app_id, id [, options]` | Sends a key to a shortcut that an application registered. Returns an integer bind ID. |
 | `zl.bindings` | none | Lists the binds your config made. |
 | `zl.global_shortcuts` | none | Lists the shortcuts that applications have registered. |
@@ -31,6 +32,7 @@ end)
 | `key` | A keysym number, such as `zl.KEY_RETURN` or `0x1008ff13`, or a one-character string from ASCII 32 to 126, such as `"q"`. | integer or string | required |
 | `button` | A Linux evdev button code, such as `272` for the left button. | integer | required |
 | `axis` | One of `zl.AXIS_LEFT`, `zl.AXIS_RIGHT`, `zl.AXIS_UP` or `zl.AXIS_DOWN`. | integer | required |
+| `corner` | One of `zl.CORNER_TOP_LEFT`, `zl.CORNER_TOP_RIGHT`, `zl.CORNER_BOTTOM_LEFT` or `zl.CORNER_BOTTOM_RIGHT`. | integer | required |
 | `callback` | Function to run. It gets no arguments and its return value is ignored. | function | required |
 | `options` | Options table. See [Bind options](#bind-options). | table | `nil` |
 
@@ -46,7 +48,7 @@ Pass options as the fourth argument.
 | `repeating` | Run the bind again while you hold the key, at the keyboard repeat rate. Keys only. | boolean | `false` |
 | `description` | Text that `zl.bindings()` reports, for key cheat sheets. At most 127 bytes. | string | `""` |
 
-`zl.bind_mouse` and `zl.bind_axis` read only `description`. Zoolander logs a warning for any other field, including `locked` and `repeating`, and still makes the bind.
+`zl.bind_mouse`, `zl.bind_axis` and `zl.bind_hot_corner` read only `description`. Zoolander logs a warning for any other field, including `locked` and `repeating`, and still makes the bind.
 
 ```lua
 zl.bind(0, 0x1008ff13, function()
@@ -227,6 +229,28 @@ zl.bind_axis(zl.MOD_LOGO, zl.AXIS_DOWN, function() zl.workspace("2") end)
 zl.bind_axis(zl.MOD_LOGO, zl.AXIS_UP, function() zl.workspace("1") end)
 ```
 
+## Hot corners
+
+`zl.bind_hot_corner` runs a function when you push the pointer into a corner of your screen. There are no hot corners by default.
+
+| Constant | Value | Corner |
+| --- | --- | --- |
+| `zl.CORNER_TOP_LEFT` | `0` | Top left |
+| `zl.CORNER_TOP_RIGHT` | `1` | Top right |
+| `zl.CORNER_BOTTOM_LEFT` | `2` | Bottom left |
+| `zl.CORNER_BOTTOM_RIGHT` | `3` | Bottom right |
+
+Any other value raises an error.
+
+```lua
+zl.bind_hot_corner(0, zl.CORNER_TOP_LEFT, function() zl.toggle_overview() end)
+zl.bind_hot_corner(zl.MOD_LOGO, zl.CORNER_BOTTOM_RIGHT, function() zl.exec_command("otter-term") end)
+```
+
+- The bind fires once when the pointer reaches the corner. It fires again only after the pointer has left the corner.
+- The corner is the last pixel of a monitor's corner. With several monitors, only outer corners count. A corner where another monitor continues past either edge never fires, so moving between monitors does not trigger it.
+- The modifiers must match exactly, as for keys. With `0`, the corner fires only while you hold no modifier.
+
 ## When binds run
 
 - If several binds match the same combination, all of them run, in the order you made them.
@@ -234,7 +258,7 @@ zl.bind_axis(zl.MOD_LOGO, zl.AXIS_UP, function() zl.workspace("1") end)
 - A consumed key press also consumes its release. The focused client never sees either.
 - Ctrl+Alt+F1 to F12 switch virtual terminals before Zoolander looks up binds.
 - While the window picker or the command sheet is open, it takes keys pressed without Super or Alt before binds see them.
-- When a client inhibits keyboard shortcuts, for example a virtual machine viewer, no key, mouse or scroll binds run. While the session is locked, binds with `locked = true` still run.
+- When a client inhibits keyboard shortcuts, for example a virtual machine viewer, no key, mouse, scroll or hot-corner binds run. Hot corners also never fire while the session is locked. While the session is locked, binds with `locked = true` still run.
 - If a callback raises an error, Zoolander logs it as `keybind handler: <message>` and keeps running.
 
 ## Global shortcuts
@@ -276,13 +300,13 @@ zoolanderctl eval "local o={} for _,s in ipairs(zl.global_shortcuts()) do o[#o+1
 
 | Field | Description | Type |
 | --- | --- | --- |
-| `kind` | `"key"`, `"mouse"` or `"axis"`. | string |
+| `kind` | `"key"`, `"mouse"`, `"axis"` or `"hot_corner"`. | string |
 | `modifiers` | The modifier mask the bind was made with. | integer |
 | `mods` | The modifiers as text, in the order `SUPER`, `CTRL`, `ALT`, `SHIFT`, joined by `+`. Empty when there are none. | string |
-| `key` | The XKB keysym name for keys, such as `Return`, `q` or `XF86AudioRaiseVolume`. `mouse:<code>` for buttons. `wheel_left`, `wheel_right`, `wheel_up` or `wheel_down` for scroll binds. | string |
+| `key` | The XKB keysym name for keys, such as `Return`, `q` or `XF86AudioRaiseVolume`. `mouse:<code>` for buttons. `wheel_left`, `wheel_right`, `wheel_up` or `wheel_down` for scroll binds. `top_left`, `top_right`, `bottom_left` or `bottom_right` for hot corners. | string |
 | `description` | The bind's description, or `""`. | string |
-| `locked` | The `locked` option. Always `false` for mouse and scroll binds. | boolean |
-| `repeating` | The `repeating` option. Always `false` for mouse and scroll binds. | boolean |
+| `locked` | The `locked` option. Always `false` for mouse, scroll and hot-corner binds. | boolean |
+| `repeating` | The `repeating` option. Always `false` for mouse, scroll and hot-corner binds. | boolean |
 
 ```lua
 local function cheat_sheet()

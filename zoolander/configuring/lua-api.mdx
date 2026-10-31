@@ -24,6 +24,7 @@ Global settings. See [Variables](/zoolander/configuring/variables).
 | `zl.set_ssd(enabled_or_options)` | Server-side decorations: title bars, borders, title font and buttons. |
 | `zl.set_blur(options)` | Blur behind translucent windows, popups and input method surfaces. |
 | `zl.set_dim(options)` | Dimming: `inactive` and `strength` for unfocused windows, plus the `special` and `around` strengths. |
+| `zl.set_tab_bar(enabled_or_options)` | Tab bar over tab groups in the tiled layouts. Off by default. See [Tab groups](/zoolander/configuring/layouts#tab-groups). |
 | `zl.set_overview(options)` | Overview axis (`vertical` or `horizontal`) and rail position (`bottom` or `top`). |
 | `zl.set_bell_sound(name) -> boolean` | Pick the sound the system bell plays, or silence it. |
 
@@ -47,6 +48,7 @@ See [Binds](/zoolander/configuring/binds).
 | `zl.bind(modifiers, key, callback [, options]) -> id` | Bind a key. Options: `locked`, `repeating`, `description`. |
 | `zl.bind_mouse(modifiers, button, callback [, options]) -> id` | Bind a pointer button. |
 | `zl.bind_axis(modifiers, axis, callback [, options]) -> id` | Bind a scroll direction (`zl.AXIS_*`). |
+| `zl.bind_hot_corner(modifiers, corner, callback [, options]) -> id` | Bind a screen corner (`zl.CORNER_*`). None by default. |
 | `zl.bind_global_shortcut(modifiers, key, app_id, id [, options]) -> id` | Bind a key to a global shortcut that an application registered. |
 | `zl.global_shortcuts() -> list` | List the global shortcuts applications have registered. |
 | `zl.bindings() -> list` | List the binds of the running config, with kind, modifiers, key name and description. |
@@ -152,6 +154,7 @@ The `zl` table also holds integer constants. Use them with the bind functions. S
 | --- | --- |
 | `zl.MOD_SHIFT`, `zl.MOD_CTRL`, `zl.MOD_ALT`, `zl.MOD_LOGO` | Modifier flags. Combine them with `+` or `bit.bor`. `MOD_LOGO` is the Super key. |
 | `zl.AXIS_LEFT`, `zl.AXIS_RIGHT`, `zl.AXIS_UP`, `zl.AXIS_DOWN` | Scroll directions for `zl.bind_axis`. |
+| `zl.CORNER_TOP_LEFT`, `zl.CORNER_TOP_RIGHT`, `zl.CORNER_BOTTOM_LEFT`, `zl.CORNER_BOTTOM_RIGHT` | Screen corners for `zl.bind_hot_corner`. |
 | `zl.KEY_BACKSPACE`, `zl.KEY_TAB`, `zl.KEY_RETURN`, `zl.KEY_ESCAPE`, `zl.KEY_SPACE` | XKB keysyms for common keys. |
 | `zl.KEY_LEFT`, `zl.KEY_UP`, `zl.KEY_RIGHT`, `zl.KEY_DOWN` | XKB keysyms for the arrow keys. |
 | `zl.KEY_F1` | XKB keysym for F1. |
