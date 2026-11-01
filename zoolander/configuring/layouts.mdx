@@ -22,7 +22,7 @@ zl.set_layout(name [, ratio [, master_count [, axis]]])
 | `name` | Layout name. See [Layout names](#layout-names). `master` is an alias for `master_stack`. | string | `master_stack` when the config never calls `zl.set_layout` |
 | `ratio` | A fraction in `(0, 1]`, or a whole number `2..999` read as thousandths (`600` is `0.6`). A ratio of `1` is stored as `0.999`. | number | `0.6` |
 | `master_count` | Number of master windows, `1..65535`. | integer | `1` |
-| `axis` | `horizontal` or `vertical`. | string | `horizontal` |
+| `axis` | `auto`, `horizontal` or `vertical`. See the `Uses axis` column of [Layout names](#layout-names). | string | `auto` |
 
 Each call sets all four values. An argument you leave out goes back to its default; it does not keep the value from an earlier call.
 
@@ -43,11 +43,11 @@ Invalid arguments raise a Lua error, for example `zl.set_layout: unknown layout 
 | `grid` | Classic | No | No | No |
 | `monocle` | Classic | No | No | No |
 | `spiral` | Classic | No | No | No |
-| `scrolling` | Classic | Column width (or row height) as a share of the output | No | `vertical` scrolls up and down instead of sideways |
+| `scrolling` | Classic | Column width (or row height) as a share of the output | No | `vertical` scrolls up and down instead of sideways. `auto` scrolls sideways. |
 | `floating` | Classic | No | No | No |
 | `canvas` | Spatial | No | No | No |
-| `lanes` | Spatial | No | No | `vertical` starts the lanes as columns |
-| `accordion` | Spatial | No | No | No |
+| `lanes` | Spatial | No | No | `vertical` starts the lanes as columns. `auto` starts them as rows. |
+| `accordion` | Spatial | No | No | `horizontal` puts the previews in trays on the left and right. `vertical` puts them above and below. `auto` picks by output width. |
 | `workbench` | Spatial | No | No | No |
 | `pairs` | Spatial | No | No | No |
 
@@ -75,6 +75,43 @@ zl.set_workspace_layout("3", "scrolling", 0.6, 1)
 zl.set_workspace_layout("4", "canvas")
 zl.set_workspace_layout("5", "lanes", 0.6, 1, "vertical")   -- lanes as columns
 ```
+
+### Example: Accordion orientation per monitor
+
+By default, Accordion puts the previews beside the expanded window on a wide output and above and below it on a narrow one. To choose per monitor, give each monitor its own workspace with an Accordion rule and an axis. Replace the output names with yours. The [`output_added`](/zoolander/configuring/hooks-and-events#events) handler moves each workspace onto its monitor when the monitor connects.
+
+```lua
+local monitors = {
+    { output = "DP-1", workspace = "1", axis = "horizontal" },
+    { output = "DP-2", workspace = "2", axis = "horizontal" },
+    { output = "HDMI-A-1", workspace = "3", axis = "vertical" },
+    { output = "HDMI-A-2", workspace = "4", axis = "vertical" },
+}
+
+for _, m in ipairs(monitors) do
+    zl.set_workspace_layout(m.workspace, "accordion", 0.6, 1, m.axis)
+end
+
+-- Workspaces can only be placed on outputs once the compositor is running.
+local function place(monitor)
+    for _, m in ipairs(monitors) do
+        if m.output == monitor.name then
+            zl.workspace_on_monitor(m.output, m.workspace)
+            zl.set_workspace_persistent(m.workspace, true, m.output)
+        end
+    end
+end
+
+local function place_all()
+    for i = 0, zl.monitor_count() - 1 do place(zl.monitor_info(i)) end
+end
+
+zl.on("startup", place_all)
+zl.on("config_reloaded", place_all)
+zl.on("output_added", place)
+```
+
+Toggling the orientation with `zl.layout("orientation")` overrides the rule's axis on that workspace.
 
 See [Workspaces](/zoolander/configuring/workspaces) for naming, persistence and special workspaces.
 

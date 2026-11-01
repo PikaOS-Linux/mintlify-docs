@@ -154,7 +154,7 @@ Gives the workspace called `name` its own layout instead of the global one from 
 | `layout` | `"dwindle"`, `"master"` (or `"master_stack"`), `"grid"`, `"monocle"`, `"spiral"`, `"scrolling"`, `"floating"`, `"canvas"`, `"lanes"`, `"accordion"`, `"workbench"` or `"pairs"`. | string | required |
 | `ratio` | A fraction in (0, 1], or whole thousandths from 2 to 999. | number | `0.6` |
 | `master_count` | Number of master windows, 1 to 65535. | integer | `1` |
-| `axis` | `"horizontal"` or `"vertical"`. | string | `"horizontal"` |
+| `axis` | `"auto"`, `"horizontal"` or `"vertical"`. For Accordion it sets which sides the preview trays go on. | string | `"auto"` |
 
 Calling it again for the same name replaces that workspace's rule. You can have up to 32 rules. An empty name, a name over 127 bytes or a 33rd rule raises an error. Layouts and their options are covered on [Layouts](/zoolander/configuring/layouts).
 
