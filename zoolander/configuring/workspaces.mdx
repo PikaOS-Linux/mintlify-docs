@@ -61,7 +61,7 @@ zl.move_window_workspace(name [, follow [, address]]) -> boolean
 | `follow` | Switch to the target after the move. | boolean | `false` |
 | `address` | A window `address` from `zl.get_windows()`. | opaque value | focused window |
 
-Zoolander looks for the target on the window's monitor first, then on exactly one other monitor. If the name is free, it creates the workspace on the window's monitor. If more than one other monitor has the name, the call returns `false`. Special workspace names return `false`. See [Dispatchers](/zoolander/configuring/dispatchers#move_window_workspace).
+Zoolander looks for the target on the window's monitor first, then on exactly one other monitor. If the name is free, it creates the workspace on the window's monitor. If more than one other monitor has the name, the call returns `false`. A `special` or `special:name` target moves the window onto that special workspace (see [Special workspaces](#special-workspaces)). See [Dispatchers](/zoolander/configuring/dispatchers#move_window_workspace).
 
 ### workspace_info
 
@@ -202,7 +202,24 @@ zl.bind(zl.MOD_LOGO, "t", function() zl.toggle_special_workspace("term") end)
 
 `zl.toggle_special_workspace(name)` shows the special workspace on the active monitor, or hides it if it is already showing there. If it is open on another monitor, it moves to the active monitor. Each special workspace exists once, not once per monitor. When a monitor disconnects, its special workspaces move to the first remaining monitor.
 
-`zl.workspace("special:term")` does the same as `zl.toggle_special_workspace("term")`. `zl.move_window_workspace` refuses special names.
+`zl.workspace("special:term")` does the same as `zl.toggle_special_workspace("term")`.
+
+### Moving windows on and off
+
+`zl.move_window_workspace` takes special names too. Give the full name, `"special"` or `"special:term"`: a bare `"term"` is a regular workspace. The window moves onto that special workspace, which Zoolander creates hidden if it does not exist yet. With `follow`, the special workspace opens and the window keeps focus.
+
+To take a window off a special workspace, move it to a regular workspace by name. The special workspace stays open.
+
+```lua
+-- Send the focused window to the scratchpad, silently or following it
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "z", function() zl.move_window_workspace("special") end)
+zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, "z", function() zl.move_window_workspace("special", true) end)
+-- Pop the focused window back onto the regular workspace shown under it
+zl.bind(zl.MOD_LOGO + zl.MOD_ALT, "z", function()
+    local monitor = zl.monitor_info(zl.active_monitor_index())
+    return zl.move_window_workspace(monitor.active_workspace.name, true)
+end)
+```
 
 Dim the windows behind an open special workspace with the `special` strength in `zl.set_dim`. See [Variables](/zoolander/configuring/variables).
 

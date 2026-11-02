@@ -259,17 +259,19 @@ zl.move_window_workspace(name [, follow [, address]]) -> boolean
 
 | Name | Description | Type | Default |
 | --- | --- | --- | --- |
-| `name` | Target workspace name, 1 to 127 bytes. Special workspace names are refused. | string | required |
+| `name` | Target workspace name, 1 to 127 bytes. `special` or `special:name` targets a special workspace. | string | required |
 | `follow` | Switch to the target workspace after the move. | boolean | `false` |
 | `address` | A window's `address` from `zl.get_windows()`. | opaque value | focused window |
 
-Moves the window to the named workspace, creating it on the window's monitor if needed. Returns `false` when the window has closed, the name is invalid or special, or there is no focused window.
+Moves the window to the named workspace, creating it on the window's monitor if needed. A special target is created hidden; with `follow` it opens. Moving a window from a special workspace to a regular name takes it off the scratchpad. Returns `false` when the window has closed, the name is invalid, or there is no focused window. See [Special workspaces](/zoolander/configuring/workspaces#moving-windows-on-and-off).
 
 ```lua
 -- Move silently
 zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "2", function() zl.move_window_workspace("2") end)
 -- Move and follow
 zl.bind(zl.MOD_LOGO + zl.MOD_CTRL, "2", function() zl.move_window_workspace("2", true) end)
+-- Send to the scratchpad
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "z", function() zl.move_window_workspace("special") end)
 ```
 
 ### toggle_special_workspace
