@@ -131,6 +131,7 @@
             "group": "Configuring",
             "pages": [
               "zoolander/configuring/overview",
+              "zoolander/configuring/settings-app",
               "zoolander/configuring/variables",
               "zoolander/configuring/animations",
               "zoolander/configuring/binds",

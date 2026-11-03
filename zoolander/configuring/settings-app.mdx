@@ -1,0 +1,172 @@
+---
+title: "Zoolander Settings"
+sidebarTitle: "Settings app"
+description: "zoolander-settings edits your Zoolander Lua config from a graphical app: displays, keyboard and shortcuts, pointer, look, animations, workspaces and layouts, rules and startup."
+---
+
+`zoolander-settings` is a graphical settings app for Zoolander. It edits the Lua files in `~/.config/zoolander/` in place and asks the compositor to check and reload them. Only the values you change are rewritten. Comments, formatting and the rest of your code stay as you wrote them.
+
+```bash
+pikman install zoolander-settings
+```
+
+Open **Zoolander Settings** from your app launcher, or run it from a terminal:
+
+```bash
+zoolander-settings [--zoolander PATH] [--config PATH/init.lua]
+```
+
+| Option | Description |
+| --- | --- |
+| `--zoolander PATH` | The `zoolander` binary to ask for the schema and to check the config with. Default `zoolander`. |
+| `--config PATH/init.lua` | Edit this config instead of `~/.config/zoolander/init.lua`. |
+
+Starting it again while it is open brings the open window to the front.
+
+## Where the settings come from
+
+The app has no built-in list of settings. It runs `zoolander --config-schema` for every setter and option: its label, description, type, range, unit and default. It then runs `zoolander --describe-config` to evaluate your config and learn each current value and the file and line that set it. So the controls always match the installed compositor.
+
+Each setting shows where its value comes from:
+
+| What you see | Meaning |
+| --- | --- |
+| An editable control | The config writes the value as a literal, such as `gaps_in = 3`. The app rewrites that literal. |
+| A locked control with **Set in file:line by code** | Code computes the value, for example from a variable or a function call. The **Open in editor** button opens that line. |
+| A **Default** badge | The config does not set it, so the default applies. Changing it inserts the value into your existing call for that setter, or adds a call when there is none. |
+
+Every changed value can be reset to its default, which removes it from the file again.
+
+A curve or other table that several calls share by name, such as `local fluent_decel = { ... }`, is edited where the `local` defines it, so every call that uses it changes. To change one animation only, choose **Use a separate curve for this animation**. That call then gets a literal of its own when you apply.
+
+Records the config does not have yet go after the last call of the same setter. The first output rule goes into `monitors.lua`, which the app creates and requires from `init.lua`.
+
+## Unsaved changes and Apply
+
+Edits wait in a working copy. A bar at the bottom shows **N unsaved changes** with **Revert** and **Apply**. <kbd>Ctrl</kbd> + <kbd>S</kbd> also applies.
+
+When you apply:
+
+1. The app copies your whole config directory, with your edits, to `$XDG_CACHE_HOME/zoolander-settings/` and has `zoolander --describe-config` evaluate it. If the compositor refuses it, nothing is written. The app shows the error with its file and line and an **Open in editor** button.
+2. It writes each changed file atomically, keeping its permissions and owner. A file it creates gets mode `0600`. The previous contents go to `$XDG_STATE_HOME/zoolander-settings/backups/`, which keeps the newest 20 backups.
+3. It asks the running compositor to reload, the same as `zoolanderctl reload`.
+
+If a file changed on disk since the app loaded it, Apply stops and offers **Reload from disk**, which drops your unsaved edits. Outside a Zoolander session the files are still saved, and the app says **Saved — compositor not reachable**.
+
+Display changes are applied on trial. A dialog asks **Keep these display settings?** and puts the previous settings back after 15 seconds, or when you choose **Revert**, close the window or the app is killed. If the app dies before you choose **Keep**, the next launch restores the previous settings, or asks again for the time that was left.
+
+## Finding your way
+
+The sidebar groups the pages under **System**, **Look** and **Behaviour**. Its search field (<kbd>Ctrl</kbd> + <kbd>F</kbd>) finds pages and single settings and jumps to them.
+
+Every slider has a number box beside it. Type a value, with or without its unit, and press <kbd>Enter</kbd>, step it with <kbd>Up</kbd> and <kbd>Down</kbd>, or pick a preset from its menu. A value outside the range is outlined in red with the range under it, and the app never writes it.
+
+| Key | Action |
+| --- | --- |
+| <kbd>Tab</kbd>, <kbd>Shift</kbd> + <kbd>Tab</kbd> | Move focus |
+| <kbd>Space</kbd>, <kbd>Enter</kbd> | Activate the focused control |
+| Arrow keys | Step sliders and segmented controls |
+| <kbd>Ctrl</kbd> + <kbd>F</kbd> | Search settings |
+| <kbd>Ctrl</kbd> + <kbd>S</kbd> | Apply |
+| <kbd>Esc</kbd> | Close a popup. With nothing open, offer to discard the unsaved changes. |
+
+The window works down to 360 × 320. Below 980 px wide the sidebar gets narrower, and below 700 px it becomes an overlay behind a ☰ button.
+
+## Pages
+
+| Section | Page | What it edits |
+| --- | --- | --- |
+| System | Displays | `zl.output_rule` per output and the `zl.set_presentation` defaults |
+| System | Keyboard & Shortcuts | `zl.set_keyboard`, key binds, mouse, scroll and hot-corner binds |
+| System | Mouse & Touchpad | `zl.set_pointer` and `zl.set_floating` |
+| Look | Windows & Borders | `zl.set_window_style` |
+| Look | Effects | `zl.set_blur` and `zl.set_dim` |
+| Look | Animations | `zl.set_animations_enabled`, `zl.set_animations` and every `zl.set_animation_leaf` |
+| Look | Decorations | `zl.set_ssd` |
+| Behaviour | Workspaces & Layouts | Layouts, layout options, workspace rules, the workspace swipe and the overview |
+| Behaviour | Window Rules | `zl.add_window_rule` and the layer rules |
+| Behaviour | Startup & Environment | Programs started with the session and `zl.set_env` |
+| Behaviour | Sound | `zl.set_bell_sound` |
+| Behaviour | XWayland | `zl.set_xwayland` |
+
+The option names, ranges and defaults behind each control are on [Variables](/zoolander/configuring/variables), [Animations](/zoolander/configuring/animations), [Layouts](/zoolander/configuring/layouts) and the other configuring pages.
+
+### Displays
+
+The **Arrangement** card draws the enabled outputs to scale at their logical size and position. Drag one to move it. It snaps to the edges of the others and stays next to them. Disabled outputs show as chips underneath. Pick an output to see its settings in these cards:
+
+| Card | Settings |
+| --- | --- |
+| Display | On or off, primary (where X11 apps and popups open), resolution grouped by aspect ratio, refresh rate, scale (with a custom slider) and orientation |
+| Colour & HDR | HDR mode, bit depth, SDR brightness and saturation with a preview, and under **Advanced HDR** the SDR white and black levels, the SDR transfer function and the display's own luminance values (**Use EDID** by default) |
+| Sync | Variable refresh rate |
+| All displays | The `zl.set_presentation` defaults that apply wherever an output sets nothing: tearing, immediate fullscreen, direct scanout, VRR, HDR, and under **Advanced** the SDR levels and partial repaints |
+
+A setting the output leaves unset shows what it inherits, such as **Inherits global (Auto)**, and the **Inherit** choice clears the output's own value. Choices the display does not support are disabled, for example HDR on a display without it. Real modes and capabilities come from the running compositor. Without it, the page shows your saved output rules only.
+
+### Keyboard & Shortcuts
+
+The **Keyboard** group edits `zl.set_keyboard`: layouts as chips with a searchable picker of the system's layouts and variants, XKB options by group, the keyboard model, key repeat rate and delay, Num Lock at startup, and a field to try typing.
+
+The shortcut list shows every key bind by category with its keys, a search field and category chips. Binds a loop creates, such as Super+1 to Super+5, appear as one row. Click a row to open its edit sheet:
+
+- The shortcut field captures the next combination you press. <kbd>Esc</kbd> cancels and <kbd>Backspace</kbd> clears it. A combination already in use offers to replace that bind.
+- **Action** runs a command through `/bin/sh`, or one of the compositor's actions picked from a grouped list, with a control for each of its arguments.
+- **Works on the lock screen** and **Repeat while held** set the `locked` and `repeating` options. **Description** sets the text that cheat sheets show.
+- **Delete** removes the bind.
+
+Mouse, scroll and hot-corner binds have groups of their own, with the modifiers as chips and the button, wheel direction or corner picked or captured. **Add shortcut** and the other Add buttons create binds in the same form as your config's existing ones. Code the app cannot rewrite shows as it is, with a link to its line.
+
+### Mouse & Touchpad
+
+Pointer speed and acceleration profile, left-handed buttons, focus follows mouse, and **Raise on hover** with its **Raise delay** for floating windows. See [Floating windows](/zoolander/configuring/variables#floating-windows).
+
+### Windows & Borders, Effects and Decorations
+
+**Windows & Borders** groups `zl.set_window_style` into gaps, borders (each gradient as one row of two colours and an angle), corners, opacity and shadow. **Effects** holds blur and dimming. **Decorations** groups `zl.set_ssd` into title bars, title text, bar and border colours, and buttons.
+
+### Animations
+
+The global switch heads the page, followed by the shared duration and easing of `zl.set_animations`. Each animation leaf is an expander with its on/off switch, a thumbnail of its curve and a summary. Open one to set its duration, style, `percent` and curve. A leaf the config never sets shows its built-in values:
+
+| Leaf | On | Duration | Style |
+| --- | --- | --- | --- |
+| `windows_in` | off | 180 ms | `slide` |
+| `windows_out` | off | 180 ms | `slide` |
+| `windows_move` | on | 180 ms | `slide` |
+| `fade` | off | 180 ms | `slide` |
+| `layers` | off | 180 ms | `slide` |
+| `workspaces` | on | 180 ms | `slide` |
+| `camera` | on | 170 ms | `slide` |
+| `layout` | on | 180 ms | `slide` |
+| `windows_minimize` | on | 250 ms | `minimize` |
+
+Every leaf starts with the `ease_out_cubic` curve and a `percent` of 20.
+
+The curve editor draws the Bézier curve on a grid. Drag its two handles or move them with the arrow keys, type a value as `cubic-bezier(x1, y1, x2, y2)`, or pick a preset: Linear, Ease, Ease in, Ease out, Ease in-out, Fluent decelerate or Overshoot. A box moving along a track previews the timing.
+
+### Workspaces & Layouts
+
+| Card | What it edits |
+| --- | --- |
+| Default layout | The `zl.set_layout` layout, picked from a picture of each built-in layout, with the ratio, master count and axis the chosen one reads, and reduced motion |
+| Layout options | The options of the layouts your workspaces use: Dwindle, spatial layouts, tab bars and Scrolling. A layout no workspace uses has no card here. |
+| Workspaces | One row per known workspace with its output, whether it is kept while empty, and its own layout. A chevron opens that layout's ratio, masters and axis. **Add workspace rule** adds a row. |
+| Workspace module | The options a module of your own takes, such as `split_workspaces.setup({ ... })`, when the config passes it a table |
+| Gestures & overview | **Workspace swipe** and **Swipe fingers**, and the overview's **Overview direction**, **Overview rail** and **Overview size** |
+
+**Axis** lists every axis the schema offers for the layout: Auto, Horizontal, Vertical and Perpendicular. See [Perpendicular axis](/zoolander/configuring/layouts#perpendicular-axis).
+
+Scrolling's **Column widths** (`width_presets`) is one text field. The app shows the list as percentages, such as `33.3%, 66.7%, 100%`. You can type percentages (`50%`), fractions (`1/3`) or plain numbers (`0.25`), separated by commas, semicolons or spaces, in any order. The app sorts them into rising order. A list it cannot write is refused with the message `Not saved: 1 to 8 rising values, each 0.1% to 100%`. That happens when an entry is not a number or is out of range, when two entries are equal, or when there are none or more than eight.
+
+### Window Rules
+
+Each window rule shows what it matches and its actions as chips. Rules written as literal `zl.add_window_rule` calls, or through a helper that takes the same arguments, open an edit sheet with the match, the pattern, a switch per action and the content type. **Add rule** creates one. The **Layer surfaces** card lists the layer rules per namespace: blur with its alpha threshold, no animation, and the animation style. See [Window rules](/zoolander/configuring/window-rules).
+
+### Startup & Environment
+
+**Autostart programs** lists the commands your `startup` handler runs, in order. You can edit, remove, reorder and add them when they are written as literals. **Environment variables** edits the `zl.set_env` calls. See [Environment variables](/zoolander/configuring/environment-variables).
+
+### Sound and XWayland
+
+**Sound** picks the bell sound. **XWayland** turns X11 support on or off and sets **Unscaled X11** (`force_zero_scaling`).

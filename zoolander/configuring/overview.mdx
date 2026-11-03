@@ -176,6 +176,8 @@ This example turns on blur.
   </Step>
 </Steps>
 
+To change settings without editing Lua, use [Zoolander Settings](/zoolander/configuring/settings-app). It edits the same files in place and keeps your comments and code.
+
 You can also try a value without saving it, using `eval`. The change lasts until the next reload:
 
 ```bash
@@ -186,6 +188,7 @@ zoolanderctl eval 'zl.set_blur({ enabled = false })'
 
 | Page | What it covers |
 | --- | --- |
+| [Settings app](/zoolander/configuring/settings-app) | `zoolander-settings`, the graphical editor for this config. |
 | [Variables](/zoolander/configuring/variables) | Every setter and its fields: keyboard, pointer, floating windows, presentation, overview, window style, decorations, blur, dimming, Xwayland. |
 | [Animations](/zoolander/configuring/animations) | Animation leaves, durations, curves and styles. |
 | [Binds](/zoolander/configuring/binds) | Key, mouse, scroll and global-shortcut bindings. |
