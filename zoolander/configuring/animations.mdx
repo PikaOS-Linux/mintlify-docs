@@ -4,7 +4,7 @@ sidebarTitle: "Animations"
 description: "Turn Zoolander animations on, tune each animation leaf with durations, easing, Bezier curves and styles, and control layer surface animations."
 ---
 
-Zoolander splits its animations into eight leaves. Each leaf has its own on/off switch, duration, curve and style. A global switch sits above them all. You set them from `~/.config/zoolander/init.lua`.
+Zoolander splits its animations into nine leaves. Each leaf has its own on/off switch, duration, curve and style. A global switch sits above them all. You set them from `~/.config/zoolander/init.lua`.
 
 <Note>
 Animations are off by default. The global switch starts as `false`, so nothing animates until you call `zl.set_animations_enabled(true)` or pass `enabled = true` to `zl.set_animations`.
@@ -36,8 +36,9 @@ zl.set_animation_leaf("layers", { duration = 800, curve = decel, style = "slide"
 | `workspaces` | Switching workspaces, and opening and closing the overview. | yes |
 | `camera` | Camera pans and reveals in spatial layouts. | no |
 | `layout` | Selection changes in spatial layouts: strips, panes, tabs, shelf cards. | no |
+| `windows_minimize` | A window minimizing and coming back, whether a taskbar, a bind or an activation asked. See [Minimize](#minimize). | yes |
 
-`zl.set_reduced_motion(true)` skips the `camera` and `layout` leaves and leaves the others alone. See [Variables](/zoolander/configuring/variables#reduced-motion).
+`zl.set_reduced_motion(true)` skips the `camera` and `layout` leaves and turns `windows_minimize` into a plain fade. It leaves the other leaves alone. See [Variables](/zoolander/configuring/variables#reduced-motion).
 
 ### Default values
 
@@ -54,8 +55,9 @@ These are the values after every config load, before your file runs.
 | `workspaces` | `true` | 180 ms | `ease_out_cubic` | `slide` | 20 |
 | `camera` | `true` | 170 ms | `ease_out_cubic` | `slide` | 20 |
 | `layout` | `true` | 180 ms | `ease_out_cubic` | `slide` | 20 |
+| `windows_minimize` | `true` | 250 ms | `ease_out_cubic` | `minimize` | 20 |
 
-A leaf only runs when both the global switch and the leaf are on. Turning on only the global switch animates window moves, workspace switches and spatial layouts, but not opening, closing, fades or layer surfaces.
+A leaf only runs when both the global switch and the leaf are on. Turning on only the global switch animates window moves, workspace switches, minimizing and spatial layouts, but not opening, closing, fades or layer surfaces.
 
 ## zl.set_animations_enabled
 
@@ -71,7 +73,7 @@ zl.set_animations_enabled(true)
 
 ## zl.set_animations
 
-`zl.set_animations(table)` sets a common baseline. It sets the global switch, then replaces six leaves (`windows_in`, `windows_out`, `windows_move`, `fade`, `layers`, `workspaces`) with the same enabled flag, duration and easing. Their style goes back to `slide` and percent to 20. The `camera` and `layout` leaves and reduced motion keep their values.
+`zl.set_animations(table)` sets a common baseline. It sets the global switch, then replaces six leaves (`windows_in`, `windows_out`, `windows_move`, `fade`, `layers`, `workspaces`) with the same enabled flag, duration and easing. Their style goes back to `slide` and percent to 20. The `camera`, `layout` and `windows_minimize` leaves and reduced motion keep their values.
 
 | Name | Description | Type | Default |
 | --- | --- | --- | --- |
@@ -102,7 +104,7 @@ Unlike the other setters, this one does not merge with the current values. Each 
 | `duration` | Duration in milliseconds. Range `1..5000`. | int | `180` |
 | `easing` | A named easing curve. Ignored when `curve` is also set. | enum: `linear`, `ease_out_cubic`, `ease_in_out_cubic` | the current curve |
 | `curve` | A cubic Bezier curve. Takes priority over `easing`. See [Bezier curves](#bezier-curves). | table | the current curve |
-| `style` | How the leaf moves the surface. See [Styles](#styles). Only read by leaves that use a style. | enum | `"slide"` |
+| `style` | How the leaf moves the surface. See [Styles](#styles). Only read by leaves that use a style. | enum | `"slide"`, or `"minimize"` for `windows_minimize` |
 | `percent` | Start size for `popin`, as a percentage of the final size. Range `1..100`. Only read when `style` is also set. | int | `20` |
 
 ```lua
@@ -131,11 +133,11 @@ zl.set_animation_leaf("fade", { enabled = false })
 | Name | Description | Type | Default |
 | --- | --- | --- | --- |
 | `x1` | First control point, time axis. Range `0..1`. | float | `0` |
-| `y1` | First control point, progress axis. Range `0..1`. | float | `0` |
+| `y1` | First control point, progress axis. Range `-1..2`. | float | `0` |
 | `x2` | Second control point, time axis. Range `0..1`. | float | `1` |
-| `y2` | Second control point, progress axis. Range `0..1`. | float | `1` |
+| `y2` | Second control point, progress axis. Range `-1..2`. | float | `1` |
 
-All four points must be within `0..1`, so curves that overshoot, such as a `y1` above 1, are rejected. A point you leave out takes its default, so `curve = {}` is a linear curve.
+Because `y1` and `y2` can leave `0..1`, a curve can overshoot its target and settle back, as in `{ x1 = 0.34, y1 = 1.56, x2 = 0.64, y2 = 1 }`. Positions and sizes follow the overshoot. Fades and other opacities stay between fully transparent and fully opaque. A point you leave out takes its default, so `curve = {}` is a linear curve.
 
 ```lua
 -- Fast start, long settle.
@@ -144,7 +146,7 @@ zl.set_animation_leaf("windows_move", { duration = 350, curve = { x1 = 0.1, y1 =
 
 ### Styles
 
-`style` accepts these strings. The directional slides accept a space or an underscore: `"slide left"` and `"slide_left"` are the same.
+`style` accepts these strings, plus `minimize` for the `windows_minimize` leaf. The directional slides accept a space or an underscore: `"slide left"` and `"slide_left"` are the same.
 
 | Style | `windows_in` and `windows_out` | `layers` | `workspaces` |
 | --- | --- | --- | --- |
@@ -159,6 +161,24 @@ zl.set_animation_leaf("windows_move", { duration = 350, curve = { x1 = 0.1, y1 =
 Workspace slides move towards the higher-numbered workspace. Going from workspace 2 to 3 moves the view one way, and going back moves it the other way. Only `fade` changes opacity during a workspace switch.
 
 The `windows_move`, `fade`, `camera` and `layout` leaves ignore `style`.
+
+### Minimize
+
+The `windows_minimize` leaf animates a window minimizing and being restored.
+
+| Style | Effect |
+| --- | --- |
+| `minimize` | The window shrinks into the rectangle a taskbar gave its entry through `zwlr_foreign_toplevel_handle_v1.set_rectangle`, keeping its shape and fading out. On restore it grows back out of that rectangle. Without a rectangle, it shrinks to `percent` of its size around its centre, like `popin`. |
+| `popin`, `fade` | As for other windows, fading as they go. |
+| `slide`, `slide left`, `slide right`, `slide top`, `slide bottom` | The window moves off the output in one piece. |
+
+The window leaves the layout and keyboard focus at once. Only the drawing animates. A restore that starts while the window is still shrinking turns round from where it is, and the same goes for a minimize during a restore.
+
+With reduced motion on, minimizing only fades. The global switch, a disabled leaf or a `no_animation` window rule make it instant.
+
+```lua
+zl.set_animation_leaf("windows_minimize", { duration = 300, easing = "ease_out_cubic", style = "minimize" })
+```
 
 ## Layer animation rules
 

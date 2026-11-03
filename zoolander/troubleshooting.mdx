@@ -133,6 +133,16 @@ The X display listens from startup. Xwayland itself starts when the first X11 cl
 | X11 apps started from Zoolander have no `DISPLAY` | Check that your config does not call `zl.set_xwayland({ enabled = false })`. |
 | X11 apps started by systemd or D-Bus have no `DISPLAY` | Export it from a `startup` handler: `dbus-update-activation-environment --systemd DISPLAY`. |
 
+## Login environment is missing
+
+The packaged `zoolander-session` wrapper loads `/etc/profile` with the POSIX `.` command before it starts Zoolander, so variables set there and in `/etc/profile.d/` reach the compositor and every client it starts. If a variable you expect is missing, set it in a file under `/etc/profile.d/`, or for clients only with [`zl.set_env`](/zoolander/configuring/environment-variables).
+
+A source install's session file runs `zoolander` directly, without the wrapper, so it does not load `/etc/profile`.
+
+## An app does not come to the front
+
+An app that activates its own window, for example on a new chat message, only marks the window urgent. Focus moves only when the window that had keyboard focus asked for the activation, as when you click a link. `zoolanderctl clients` shows `urgent: true` for such a window until you focus it. See [Window activation](/zoolander/protocols#window-activation).
+
 ## Portals and screen sharing
 
 `xdg-desktop-portal` uses `zoolander-portals.conf` only when its own environment has `XDG_CURRENT_DESKTOP=Zoolander`. Zoolander does not set that variable. Set it for clients and push it to the D-Bus environment:

@@ -53,7 +53,7 @@ Set `OTR` to use a compiler other than the `otr` on your `PATH`.
 
 Log out, pick **Zoolander** from the session list, and log in. The session file sets `DesktopNames=Zoolander`.
 
-The packaged session runs `zoolander-session`. That wrapper starts `/usr/bin/zoolander` with any arguments you pass. When Zoolander exits, it stops the `pika-zoolander-session.target` systemd user unit if that unit is active.
+The packaged session runs `zoolander-session`. That wrapper loads `/etc/profile` with the POSIX `.` command, then starts `/usr/bin/zoolander` with any arguments you pass. When Zoolander exits, it stops the `pika-zoolander-session.target` systemd user unit if that unit is active.
 
 ### From a TTY
 

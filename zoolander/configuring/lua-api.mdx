@@ -18,6 +18,7 @@ Global settings. See [Variables](/zoolander/configuring/variables).
 | --- | --- |
 | `zl.set_keyboard(options)` | Key repeat rate and delay, Num Lock, and the XKB rules, model, layout, variant and options. |
 | `zl.set_pointer(options)` | Left-handed mode, acceleration profile, sensitivity and focus-follows-mouse mode. |
+| `zl.set_floating(options)` | Raise floating windows the pointer rests on: `raise_on_hover` and `raise_delay`. |
 | `zl.set_presentation(options)` | Tearing, immediate fullscreen, direct scanout, partial damage, VRR, HDR and SDR brightness and saturation. |
 | `zl.set_xwayland(options)` | Turn Xwayland on or off and set `force_zero_scaling`. |
 | `zl.set_window_style(options)` | Gaps, borders and border gradients, rounding, opacity and shadows. |
@@ -25,7 +26,7 @@ Global settings. See [Variables](/zoolander/configuring/variables).
 | `zl.set_blur(options)` | Blur behind translucent windows, popups and input method surfaces. |
 | `zl.set_dim(options)` | Dimming: `inactive` and `strength` for unfocused windows, plus the `special` and `around` strengths. |
 | `zl.set_tab_bar(enabled_or_options)` | Tab bar over tab groups in the tiled layouts. Off by default. See [Tab groups](/zoolander/configuring/layouts#tab-groups). |
-| `zl.set_overview(options)` | Overview axis (`vertical` or `horizontal`) and rail position (`bottom` or `top`). |
+| `zl.set_overview(options)` | Overview axis (`vertical` or `horizontal`), rail position (`bottom` or `top`) and card `scale`. |
 | `zl.set_bell_sound(name) -> boolean` | Pick the sound the system bell plays, or silence it. |
 
 ## Animations
@@ -36,7 +37,7 @@ See [Animations](/zoolander/configuring/animations).
 | --- | --- |
 | `zl.set_animations(options)` | Common animation baseline: enabled, duration and easing for the classic leaves. |
 | `zl.set_animations_enabled(enabled)` | Turn all animations on or off. |
-| `zl.set_animation_leaf(leaf, options)` | Configure one animation leaf, such as `windows_in`, `workspaces`, `layers`, `camera` or `layout`. |
+| `zl.set_animation_leaf(leaf, options)` | Configure one animation leaf, such as `windows_in`, `workspaces`, `layers`, `camera`, `layout` or `windows_minimize`. |
 | `zl.set_reduced_motion(enabled)` | Make spatial camera and layout motion instant. Also covered in [Layouts](/zoolander/configuring/layouts#reduced-motion). |
 
 ## Binds
@@ -66,9 +67,13 @@ Actions you call from binds and handlers. Most return `true` when the action ran
 | `zl.toggle_fullscreen() -> boolean` | Toggle fullscreen for the focused window. |
 | `zl.toggle_pin() -> boolean` | Pin the focused window to all workspaces, or unpin it. |
 | `zl.toggle_overview() -> boolean` | Open or close the overview. |
+| `zl.toggle_split() -> boolean` | Flip the Dwindle split that holds the focused window. See [Layouts](/zoolander/configuring/layouts#flip-a-split). |
 | `zl.focus_direction(direction) -> boolean` | Move focus `left`, `right`, `up` or `down`. |
 | `zl.move_window_direction(direction) -> boolean` | Move the focused window in a direction, or to the monitor that way. |
 | `zl.focus_monitor(direction) -> boolean` | Focus the monitor in a direction. |
+| `zl.move_column(direction) -> boolean` | Swap the focused Scrolling column with its neighbour. See [Layouts](/zoolander/configuring/layouts#column-actions). |
+| `zl.move_column_to_monitor(output) -> boolean` | Move the focused column to the output in a direction or with a name. |
+| `zl.cycle_column_width([step]) -> boolean` | Step the focused Scrolling column to the `next` or `previous` width preset. |
 | `zl.move_floating(dx, dy) -> boolean` | Move the focused floating window by a pixel offset. |
 | `zl.resize_floating(dw, dh) -> boolean` | Resize the focused floating window by a pixel offset. |
 | `zl.resize_window(dw, dh) -> boolean` | Resize the focused window, floating or tiled. |
@@ -89,6 +94,7 @@ See [Layouts](/zoolander/configuring/layouts).
 | `zl.set_workspace_layout(workspace, name [, ratio [, master_count [, axis]]])` | Set the layout for one workspace. |
 | `zl.set_dwindle(options)` | Dwindle options: `preserve_split`, `smart_split`, `smart_resizing`, `force_split`, `split_width_multiplier`. |
 | `zl.set_spatial(options)` | Spatial layout options: fallback sizes, width cap, shelves, snapping, reveal margin, pan fingers. |
+| `zl.set_scrolling(options)` | Scrolling column `width_presets`. |
 | `zl.layout(action [, a [, b]]) -> result` | Run a layout action on the focused workspace. Returns `done`, `no_target` or `unavailable`. |
 | `zl.layout_context() -> table or nil` | The focused workspace's layout, switcher entry, placement and flags. |
 | `zl.layout_info() -> string` | JSON snapshot of the focused workspace's layout state. |

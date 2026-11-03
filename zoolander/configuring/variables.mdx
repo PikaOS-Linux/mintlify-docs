@@ -1,7 +1,7 @@
 ---
 title: "Variables"
 sidebarTitle: "Variables"
-description: "Every global Zoolander setting: input, presentation, Xwayland, overview, window style, decorations, blur, dim, bell, and output size."
+description: "Every global Zoolander setting: input, floating windows, presentation, Xwayland, overview, window style, decorations, blur, dim, bell, and output size."
 ---
 
 Zoolander reads its settings from Lua setter calls in `~/.config/zoolander/init.lua`. Each setter owns one group of options. This page lists every option of the global setters, with its type, range and default.
@@ -104,6 +104,29 @@ zl.set_workspace_gesture(true, 3)
 
 See [Workspaces](/zoolander/configuring/workspaces) and [Layouts](/zoolander/configuring/layouts) for details.
 
+## Floating windows
+
+`zl.set_floating(table)` sets how floating windows stack under the pointer.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `raise_on_hover` | Brings a floating window to the front of the floating windows once the pointer has rested on it for `raise_delay`. | bool | `false` |
+| `raise_delay` | Milliseconds the pointer must stay on a window before it rises. `0` raises at once. Range `0..2000`. | int | `100` |
+
+```lua
+zl.set_floating({ raise_on_hover = true, raise_delay = 150 })
+```
+
+The delay starts when the pointer enters a window, so crossing windows on the way somewhere else leaves their order alone.
+
+Raising only changes the stacking order. It never moves keyboard focus, whatever `follow_mouse` is set to, and tiled windows keep their order. Here, floating windows are the windows that you, a rule or the client floated, every window on the `floating` layout, and the windows on Canvas, Islands and Anchors, except anchored ones.
+
+Nothing rises while:
+
+- a mouse button is held, or a window is being moved, resized or dragged
+- a popup grab or an exclusive layer-shell keyboard grab is active
+- the screen is locked, the overview is open, or the window picker covers the windows
+
 ## Presentation
 
 `zl.set_presentation(table)` controls tearing, variable refresh rate, direct scanout, HDR and repaint behaviour.
@@ -112,7 +135,7 @@ See [Workspaces](/zoolander/configuring/workspaces) and [Layouts](/zoolander/con
 | --- | --- | --- | --- |
 | `allow_tearing` | Allows tearing page flips. A frame only tears when the output supports async page flips, a single window covers the output in fullscreen, and either `immediate_fullscreen` is on or the client asks to tear. | bool | `false` |
 | `immediate_fullscreen` | With `allow_tearing`, lets every fullscreen window tear, even one that did not ask to. | bool | `false` |
-| `vrr` | Variable refresh rate. See the list below. Also accepts `0..3`. | enum: `off` (0), `always` (1), `fullscreen` (2), `fullscreen_content` (3) | `"off"` |
+| `vrr` | Variable refresh rate. See the list below. Also accepts `0..3`. | enum: `off` (0), `always` (1), `fullscreen` (2), `fullscreen_game` (3) | `"off"` |
 | `direct_scanout` | Lets a fullscreen client buffer go straight to the display plane, skipping composition, when nothing else needs drawing. | bool | `true` |
 | `hdr` | HDR output mode on HDR-capable outputs. See the list below. | enum: `off`, `auto`, `always` | `"auto"` |
 | `sdr_brightness` | Brightness of SDR content while an output runs in HDR. Range `0.1..4`. | float | `1` |
@@ -124,7 +147,7 @@ See [Workspaces](/zoolander/configuring/workspaces) and [Layouts](/zoolander/con
 - `off`: never use adaptive sync.
 - `always`: use adaptive sync on every output that supports it.
 - `fullscreen`: use it while a fullscreen window covers the output.
-- `fullscreen_content`: use it while a fullscreen window covers the output and its content type is `video` or `game`.
+- `fullscreen_game`: use it while a fullscreen window covers the output and says through its content type that it is a game. Video stays at the fixed rate.
 
 `hdr` values:
 
@@ -162,12 +185,31 @@ zl.set_xwayland({ enabled = true, force_zero_scaling = true })
 | --- | --- | --- | --- |
 | `axis` | Direction the workspace cards are laid out in. | enum: `vertical`, `horizontal` | `"vertical"` |
 | `rail` | Edge of the screen that holds the rail of workspace thumbnails. | enum: `bottom`, `top` | `"bottom"` |
+| `scale` | Size of the workspace cards against their default share of the screen. Below `1`, more of the neighbouring workspaces shows. Range `0.2..1.25`. | float | `1` |
 
 ```lua
-zl.set_overview({ axis = "horizontal", rail = "top" })
+zl.set_overview({ axis = "horizontal", rail = "top", scale = 0.8 })
 ```
 
-The overview open and close transition uses the `workspaces` animation. See [Animations](/zoolander/configuring/animations).
+The overview open and close transition uses the `workspaces` animation. See [Animations](/zoolander/configuring/animations). Every card and rail thumbnail shows the output's wallpaper and other background and bottom layer surfaces behind its windows.
+
+### Scroll the overview
+
+The mouse wheel glides the workspace strip one card per notch. A high-resolution wheel moves it a fraction of a card per step, and the strip comes to rest on a card. On a touchpad, the strip follows your fingers and coasts to a card when you lift them. With the `workspaces` animation off, the strip jumps instead of gliding.
+
+### Move windows in the overview
+
+Drag a window in the overview to move it to another workspace. The window shrinks under the pointer, and Zoolander outlines the workspace it would land on, both in its card and on the rail. Inside that card it also outlines the slot the window takes:
+
+| Target layout | Slot |
+| --- | --- |
+| `dwindle` | The half of the tile under the pointer that the window splits off. |
+| `master_stack`, `grid`, `spiral`, `scrolling` | The place before or after the tile under the pointer. |
+| `floating`, or a floating window | The window's own rectangle at the pointer. |
+
+The window lands exactly where the outline shows.
+
+A window you are already moving with a `zl.begin_move()` bind carries into an overview opened during the drag, and you can drop it on a workspace there. A [hot corner](/zoolander/configuring/binds#hot-corners) bound with no modifiers fires during the drag, even while you still hold the move bind's modifier, so a corner that opens the overview works mid-drag.
 
 ## Window style
 
@@ -363,7 +405,7 @@ zl.set_dim({ inactive = true, strength = 0.1, special = 0.3, around = 0.02 })
 
 ## Reduced motion
 
-`zl.set_reduced_motion(bool)` makes spatial layout motion immediate. Camera pans, reveals and selection changes in spatial layouts (the `camera` and `layout` animations) skip their animation. Other animations still run.
+`zl.set_reduced_motion(bool)` makes spatial layout motion immediate. Camera pans, reveals and selection changes in spatial layouts (the `camera` and `layout` animations) skip their animation, and minimizing a window only fades. Other animations still run.
 
 | Name | Description | Type | Default |
 | --- | --- | --- | --- |

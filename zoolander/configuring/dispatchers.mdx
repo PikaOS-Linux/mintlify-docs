@@ -49,9 +49,13 @@ Window dispatchers act on the focused window:
 | [`zl.toggle_fullscreen`](#toggle_fullscreen) | none | Makes the focused window fullscreen, or restores it. |
 | [`zl.toggle_pin`](#toggle_pin) | none | Pins the focused window so it shows on every workspace of its monitor. |
 | [`zl.toggle_overview`](#toggle_overview) | none | Opens or closes the workspace overview. |
+| [`zl.toggle_split`](/zoolander/configuring/layouts#flip-a-split) | none | Flips the Dwindle split that holds the focused window. |
 | [`zl.focus_direction`](#focus_direction) | `direction` | Moves focus to the neighbouring window. |
 | [`zl.move_window_direction`](#move_window_direction) | `direction` | Moves the focused window within the layout, or to the next monitor. |
 | [`zl.focus_monitor`](#focus_monitor) | `direction` | Moves focus and the pointer to the neighbouring monitor. |
+| [`zl.move_column`](/zoolander/configuring/layouts#column-actions) | `direction` | Swaps the focused Scrolling column with its neighbour. |
+| [`zl.move_column_to_monitor`](/zoolander/configuring/layouts#column-actions) | `output` | Moves the focused column to another monitor, by direction or name. |
+| [`zl.cycle_column_width`](/zoolander/configuring/layouts#column-actions) | `[step]` | Steps the focused Scrolling column through the width presets. |
 | [`zl.move_floating`](#move_floating) | `dx, dy` | Moves the focused floating window. |
 | [`zl.resize_floating`](#resize_floating) | `dw, dh` | Resizes the focused floating window. |
 | [`zl.resize_window`](#resize_window) | `dw, dh` | Resizes the focused window, tiled or floating. |
@@ -215,6 +219,8 @@ zl.begin_move() -> boolean
 
 Starts an interactive move of the focused window. The window follows the pointer until you release the button. Press Escape to put it back. Bind it to a mouse button. The click focuses the window under the pointer first, so the drag moves the window you clicked.
 
+In Dwindle, Master, Grid, Spiral and Scrolling, a tiled window stays in the layout during the move. Dropping it swaps it with another tile or puts it beside one, and holding Alt floats it out instead. See [Drag tiled windows](/zoolander/configuring/layouts#drag-tiled-windows).
+
 ```lua
 zl.bind_mouse(zl.MOD_LOGO, 272, function() zl.begin_move() end)
 ```
@@ -227,7 +233,7 @@ Returns `true` when the drag started.
 zl.begin_resize() -> boolean
 ```
 
-Starts an interactive resize of the focused window. Floating windows resize from the bottom-right corner. If dwindle `smart_resizing` is on, tiled windows resize from the corner nearest the pointer. Otherwise they also resize from the bottom-right corner. Press Escape to cancel the drag.
+Starts an interactive resize of the focused window. Floating windows resize from the bottom-right corner. With dwindle `smart_resizing` on (the default), tiled windows resize from the corner nearest the pointer and move the divider on that side. With it off, they also resize from the bottom-right corner. In Scrolling, resizing a column that has its own width resizes only that column. Press Escape to cancel the drag.
 
 ```lua
 zl.bind_mouse(zl.MOD_LOGO, 273, function() zl.begin_resize() end)

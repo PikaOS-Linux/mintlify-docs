@@ -21,14 +21,14 @@ Privileged globals include data control, output management, virtual input, scree
 | `wl_compositor` | 7 | |
 | `wl_subcompositor` | 1 | |
 | `wl_shm` | 3 | ARGB8888 and XRGB8888 |
-| `wl_seat` | 11 | One seat |
+| `wl_seat` | 11 | One seat, plus any [remote desktop seats](#remote-desktop-seats). Its capabilities follow the input devices. See [Seat and pointer](#seat-and-pointer). |
 | `wl_output` | 4 | One per enabled output |
 | `wl_data_device_manager` | 4 | |
 | `wl_fixes` | 2 | |
-| `xdg_wm_base` | 7 | |
+| `xdg_wm_base` | 7 | Tiled windows hear which edges are constrained. `set_fullscreen` with an output moves the window to that output first. |
 | `zxdg_output_manager_v1` | 3 | |
 | `zxdg_decoration_manager_v1` | 2 | |
-| `org_kde_kwin_server_decoration_manager` | 1 | |
+| `org_kde_kwin_server_decoration_manager` | 1 | The default mode follows whether server-side decorations are on in `zl.set_ssd`, and changes live with the config. GTK3 apps decide on decorations from it. |
 | `zwlr_layer_shell_v1` | 5 | Privileged |
 | `ext_session_lock_manager_v1` | 1 | Privileged |
 | `xwayland_shell_v1` | 1 | Shown only to Zoolander's own Xwayland |
@@ -46,16 +46,16 @@ Privileged globals include data control, output management, virtual input, scree
 | `wp_tearing_control_manager_v1` | 1 | |
 | `wp_fifo_manager_v1` | 1 | |
 | `wp_commit_timing_manager_v1` | 1 | |
-| `wp_presentation` | 2 | |
-| `wp_color_manager_v1` | 3 | ICC and parametric descriptions |
+| `wp_presentation` | 2 | See [Presentation feedback](#presentation-feedback). |
+| `wp_color_manager_v1` | 3 | ICC and parametric descriptions. See [Colour management](#colour-management). |
 | `wp_color_representation_manager_v1` | 1 | Premultiplied and straight alpha. BT.601, BT.709 and BT.2020 in full and limited range only when the renderer imports YCbCr dma-bufs. |
-| `frog_color_management_factory_v1` | 1 | Mapped onto `wp_color_manager_v1`. The last request before a commit wins. |
+| `frog_color_management_factory_v1` | 1 | Mapped onto `wp_color_manager_v1`. The last request before a commit wins. `scrgb_linear` is treated like Windows scRGB. |
 
 ## Windows
 
 | Interface | Version | Notes |
 | --- | --- | --- |
-| `xdg_activation_v1` | 1 | |
+| `xdg_activation_v1` | 1 | See [Window activation](#window-activation). |
 | `xdg_wm_dialog_v1` | 1 | |
 | `xdg_system_bell_v1` | 1 | |
 | `xdg_toplevel_icon_manager_v1` | 1 | |
@@ -65,7 +65,7 @@ Privileged globals include data control, output management, virtual input, scree
 | `gtk_shell1` | 7 | |
 | `org_kde_kwin_appmenu_manager` | 1 | |
 | `ext_foreign_toplevel_list_v1` | 1 | Privileged |
-| `zwlr_foreign_toplevel_manager_v1` | 3 | Privileged |
+| `zwlr_foreign_toplevel_manager_v1` | 3 | Privileged. `set_rectangle` gives the [minimize animation](/zoolander/configuring/animations#minimize) its target. `set_fullscreen` with an output moves the window to that output first. |
 | `hyprland_toplevel_mapping_manager_v1` | 1 | Privileged |
 | `ext_workspace_manager_v1` | 1 | |
 | `xdg_toplevel_drag_manager_v1` | 1 | Tab tear-off. The dragged window follows the pointer. |
@@ -81,8 +81,8 @@ Privileged globals include data control, output management, virtual input, scree
 | `wp_cursor_shape_manager_v1` | 2 | |
 | `wp_pointer_warp_v1` | 1 | |
 | `zwp_input_timestamps_manager_v1` | 1 | Microsecond libinput time. Millisecond time for virtual devices. |
-| `zwp_tablet_manager_v2` | 2 | |
-| `zwp_text_input_manager_v3` | 2 | |
+| `zwp_tablet_manager_v2` | 2 | Totem tools are not announced, since tablet v2 has no tool type for them. |
+| `zwp_text_input_manager_v3` | 2 | See [Text input and input methods](#text-input-and-input-methods). |
 | `zwp_text_input_manager_v1` | 1 | |
 | `zwp_text_input_manager_v2` | 1 | |
 | `zwp_input_method_manager_v2` | 1 | Privileged |
@@ -91,7 +91,7 @@ Privileged globals include data control, output management, virtual input, scree
 | `zwp_keyboard_shortcuts_inhibit_manager_v1` | 1 | Privileged |
 | `zwp_virtual_keyboard_manager_v1` | 1 | Privileged |
 | `zwlr_virtual_pointer_manager_v1` | 2 | Privileged |
-| `ext_transient_seat_manager_v1` | 1 | Privileged. Every request is denied. Input, focus and the cursor follow the one seat. |
+| `ext_transient_seat_manager_v1` | 1 | Privileged. Each seat has its own pointer and software cursor and follows the main keyboard focus. See [Remote desktop seats](#remote-desktop-seats). |
 | `zwp_idle_inhibit_manager_v1` | 1 | |
 | `ext_idle_notifier_v1` | 2 | |
 | `hyprland_global_shortcuts_manager_v1` | 1 | Privileged. Sandboxed apps reach it through the GlobalShortcuts portal. |
@@ -107,7 +107,8 @@ Privileged globals include data control, output management, virtual input, scree
 | `ext_output_image_capture_source_manager_v1` | 1 | Privileged |
 | `ext_foreign_toplevel_image_capture_source_manager_v1` | 1 | Privileged. Registered only when window capture is available. |
 | `hyprland_workspace_image_capture_source_manager_v1` | 1 | Privileged. See [Workspace capture](#workspace-capture). |
-| `ext_image_copy_capture_manager_v1` | 1 | Privileged |
+| `ext_image_copy_capture_manager_v1` | 1 | Privileged. Supports cursor sessions. See [Cursor capture](#cursor-capture). |
+| `zoolander_image_copy_capture_size_manager_v1` | 1 | Privileged. Zoolander's own protocol, in `zooland/protocols/zoolander-image-copy-capture-size-v1.xml`. `set_max_size` fits a capture session's buffer inside a maximum size, keeping the aspect ratio and never scaling up. The renderer draws the source scaled down straight into the small buffer. For thumbnails and previews. |
 | `zwlr_output_manager_v1` | 4 | Privileged |
 | `zwlr_output_power_manager_v1` | 1 | Privileged |
 | `wp_security_context_manager_v1` | 1 | Privileged |
@@ -120,6 +121,69 @@ Privileged globals include data control, output management, virtual input, scree
 - `everything` adds the backdrop, layer surfaces and pinned windows.
 
 Frames follow that output's repaints, like output capture, and never include the cursor. A removed workspace gives transparent, empty frames.
+
+### Cursor capture
+
+Cursor sessions from `ext_image_copy_capture_manager_v1` follow the real cursor over output, window and workspace sources. A workspace source only shows the cursor while its output shows that workspace. The session reports when the cursor enters and leaves the source, and its position and hotspot in the buffer's pixels. The cursor image is copied at the source's scale, and a new copy waits for a new image, not for a repaint. A window or workspace moving under a still pointer updates the cursor position too.
+
+## Window activation
+
+Apps ask for focus through `xdg_activation_v1`. Zoolander moves focus only when the activation token was requested by the window that had keyboard focus when the token was made, or by one of its popups, and any input serial on the token is a recent press in that client. That is the case when you click a link in one app and another app opens it.
+
+Every other activation only marks the window urgent. A chat app that activates itself on every new message does not take focus away while you type elsewhere. The window stays urgent until it gets keyboard focus. [`zoolanderctl clients`](/zoolander/ipc/zoolanderctl#clients) shows the urgent flag.
+
+## Colour management
+
+`wp_color_manager_v1` advertises:
+
+| What | Values |
+| --- | --- |
+| Features | `icc_v2_v4`, `parametric`, `set_primaries`, `set_tf_power`, `set_luminances`, `set_mastering_display_primaries`, `extended_target_volume`, `windows_scrgb`, `windows_bt2100` |
+| Named primaries | `srgb`, `pal_m`, `pal`, `ntsc`, `generic_film`, `bt2020`, `cie1931_xyz`, `dci_p3`, `display_p3`, `adobe_rgb` |
+| Named transfer functions | `bt1886`, `gamma22`, `gamma28`, `st240`, `ext_linear`, `log_100`, `log_316`, `xvycc`, `st2084_pq`, `st428`, `hlg`, `compound_power_2_4` |
+| Render intents | `perceptual` |
+
+The deprecated `srgb` and `ext_srgb` transfer functions are not advertised, in favour of their replacements.
+
+How Zoolander treats descriptions:
+
+- Mastering display primaries and luminance go into the target volume, and from there into HDR metadata and the tone curve's peak. They never change the colour conversion itself, so a target volume larger than the primary volume is fine.
+- Content with `st2084_pq`, `hlg` or `ext_linear` counts as HDR content for `hdr = "auto"` in [`zl.set_presentation`](/zoolander/configuring/variables#presentation).
+- With `ext_linear`, 1.0 is the primary volume's maximum luminance. Values above it are kept, and its peak tone-maps like PQ.
+- Windows scRGB keeps 1.0 at 80 cd/m², with a 10000 cd/m² target. The frog protocol's `scrgb_linear` uses the same target.
+- `st240`, `log_100`, `log_316`, `xvycc` and `st428` decode with the exact inverse of the curves their standards define. `xvycc` keeps codes below 0 and above 1. For `st428`, code 1 is 52.37/48 of its 48 cd/m² white. Relative light from these curves maps to luminance through the same reference white as the other SDR curves.
+
+The preferred description a surface gets is the one of the output it shows on. When a surface moves to another output, or an output's description changes because HDR switched or its EDID or display settings changed, clients hear it. Outputs send `image_description_changed` followed by `wl_output.done`. Surface feedback objects and frog surfaces get `preferred_changed2`, or `preferred_changed` below version 2.
+
+## Presentation feedback
+
+`wp_presentation` feedback carries the `hw_clock` and `hw_completion` flags for flips the hardware timed, and `zero_copy` when the frame was scanned out directly from the client's buffer. While an output runs at a variable refresh rate, version 1 feedback reports a refresh of 0.
+
+## Seat and pointer
+
+On DRM, `wl_seat` advertises only the capabilities the connected input devices provide, and changes as devices come and go. A live virtual keyboard or pointer adds the keyboard or pointer capability. When the keyboard capability comes back after a replug or a VT switch, the focused window gets keyboard focus again. The headless and nested backends advertise every capability.
+
+A pointer position change you did not make, such as a surface moving under a still pointer or a `wp_pointer_warp` warp, reaches version 11 pointers as `wl_pointer.warp` and older ones as motion. Pointers bound below version 8 get `axis_discrete` steps from high-resolution wheels.
+
+Keyboard shortcut inhibitors hear `inactive` when their surface loses keyboard focus.
+
+## Remote desktop seats
+
+A remote desktop server can create a seat of its own through `ext_transient_seat_manager_v1`. Each transient seat is a separate `wl_seat` with pointer and keyboard capabilities:
+
+- Its keyboard follows the main seat's focus, so a virtual keyboard on it types where local typing would.
+- Its pointer keeps its own position. Virtual pointer input on that seat hit-tests and focuses on its own and does not move your cursor.
+- Zoolander draws a software cursor for it at its pointer: the client's cursor surface, a cursor-shape theme image, or the default arrow. Captures that include cursors show it.
+- A drag started on that seat shows its drag icon at that seat's pointer.
+
+Destroying the seat cancels its drag and popup grab, erases its cursor and removes the global.
+
+## Text input and input methods
+
+- `show_input_panel` and `hide_input_panel` show and hide the input method's on-screen keyboard panel while that text input is active. Version 1 and 2 text inputs hear `input_panel_state`. Candidate popups and overlay panels stay visible.
+- Version 2 text inputs hear `input_method_changed` when an input method arrives on or leaves the seat. When an input method activates, they are asked for 750 characters of surrounding text before the cursor and 250 after. That stays inside the 4000 bytes input method v2 allows, even at four UTF-8 bytes per character.
+- Version 3 text inputs get the language an input method v1 reports. Return from an input method v1, in a field with the submit action, becomes the submit action.
+- Preedit styling from an input method v1 reaches version 3 text inputs as `preedit_hint` events. Input method v2 has no styling, so its preedit text has no hints.
 
 ## Hardware
 

@@ -16,6 +16,7 @@ zoolanderctl COMMAND [ARGS...]
 zoolanderctl status
 zoolanderctl reload
 zoolanderctl workspace 3
+zoolanderctl clients-json
 zoolanderctl eval 'return zl.window_count()'
 ```
 
@@ -31,6 +32,12 @@ zoolanderctl eval 'return zl.window_count()'
 | `reload` | Reload the config now. | `OK reload ok`, or `ERR` and the error message |
 | `workspace NAME` | Whether a workspace has windows. | `OK occupied`, `OK empty` or `ERR unknown workspace` |
 | `eval LUA` | Run Lua in the live config runtime and return its first result. | `OK <result>` or `ERR <error>` |
+| `monitors` | Every output: monitor identity, layout, current mode and mode list, scanout, HDR and colour state. | `OK N outputs`, then a report |
+| `monitors-json` | The same as one line of JSON, including outputs that are turned off. | `OK json`, then one JSON line |
+| `clients` | Every window: identifier, app_id, title, pid, workspace, output, geometry and state. | `OK N clients`, then a report |
+| `clients-json` | The same as one line of JSON. | `OK json`, then one JSON line |
+| `layers` | Every layer-shell surface, by output and layer. | `OK N layers`, then a report |
+| `layers-json` | The same as one line of JSON. | `OK json`, then one JSON line |
 | `quit` | Stop the compositor. | `OK bye` |
 
 ### status
@@ -104,6 +111,84 @@ Errors come back as `ERR` with the Lua message. The chunk is named `eval`, so a 
 
 Changes made with `eval` last until the next reload replaces the runtime.
 
+### monitors
+
+`monitors` prints a block per output with its EDID make, model and serial, its position, size, scale and transform in the layout, the current mode and physical size, the scanout format, modifier, bit depth and max bpc, adaptive sync, async flip and content type, the HDR state, the EDID primaries, gamma and luminance, the renderer's colour transform, and every mode the connector lists.
+
+`monitors-json` gives the same state as one line of JSON (version 1). Outputs that are turned off appear with `"enabled": false`.
+
+### clients
+
+`clients` prints a block per window. Windows parked from unplugged outputs come last.
+
+```bash
+$ zoolanderctl clients
+OK 1 clients
+window <identifier> -> "Terminal"
+  app_id: "otter-term"
+  pid: 4242
+  kind: native
+  workspace: "1" on DP-1
+  at: 6,6 size: 1268x1428
+  floating: false fullscreen: false maximized: false minimized: false focused: true urgent: false pinned: false
+  tag: ""
+  group: none
+  tab group: none
+```
+
+`clients-json` prints one line holding an array with an object per window:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | The window's foreign-toplevel identifier, the one taskbars see, or `null`. |
+| `app_id`, `title`, `tag` | App ID, title and xdg-toplevel tag. Invalid UTF-8 from the client becomes U+FFFD. |
+| `pid` | Process ID of the client, or `null` when unknown. For an X11 window, it is the pid the X server reports for the window's client, or else the window's `_NET_WM_PID`. |
+| `xwayland` | `true` for X11 windows. |
+| `class`, `instance` | The X11 window's `WM_CLASS` class and instance. `null` for Wayland windows. |
+| `workspace`, `special` | Workspace name, and whether it is a special workspace. |
+| `output` | Output name, or `null`. |
+| `x`, `y`, `width`, `height` | Position in global layout coordinates, and size. |
+| `floating`, `fullscreen`, `maximized`, `minimized`, `focused`, `urgent`, `pinned` | Window state flags. `focused` means keyboard focus. |
+| `group` | The spatial group the window belongs to as `{ id, kind, name }`, or `null`. |
+| `tab_group` | The tiled tab group as `{ id, front }`, or `null`. |
+
+In the text form, an X11 window shows `kind: xwayland` and a `class:` and `instance:` line, and an unknown pid shows as `pid: unknown`.
+
+### layers
+
+`layers` lists every layer-shell surface under its output and then its layer (`background`, `bottom`, `top`, `overlay`). Surfaces on no output come last, under `(no output)`.
+
+```bash
+$ zoolanderctl layers
+OK 1 layers
+DP-1
+  top:
+    "otter-bar" pid 3110
+      at: 0,0 size: 2560x40
+      anchor: top left right
+      exclusive zone: 40 margin: top 0 right 0 bottom 0 left 0 keyboard: none
+```
+
+An unmapped surface has `(unmapped)` after its pid.
+
+`layers-json` prints one line holding an array with an object per surface, in the same order:
+
+| Field | Meaning |
+| --- | --- |
+| `namespace` | The namespace the client gave the surface. |
+| `output`, `layer` | Output name (or `null`) and layer. |
+| `pid` | Process ID of the client, or `null`. |
+| `x`, `y`, `width`, `height` | Position in global layout coordinates, and size. |
+| `anchor` | `{ top, bottom, left, right }` booleans. |
+| `exclusive_zone` | The exclusive zone the surface asked for. |
+| `margin` | `{ top, right, bottom, left }` in logical pixels. |
+| `keyboard_interactivity` | `none`, `exclusive` or `on_demand`. |
+| `mapped` | Whether the surface is mapped. |
+
+```bash
+zoolanderctl layers-json | jq -r '.[] | select(.layer == "top") | .namespace'
+```
+
 ### quit
 
 Replies `OK bye`, closes the connection and stops the compositor. Your session ends.
@@ -144,7 +229,7 @@ The socket speaks newline-delimited text:
 
 1. On connect, the server sends `ZLCTL 1`.
 2. You send one command per line. A trailing `\r` is ignored.
-3. The server sends one line per command, starting with `OK ` or `ERR `.
+3. The server sends one line per command, starting with `OK ` or `ERR `. `monitors`, `clients` and `layers` follow that line with a multi-line report, and their `-json` forms with one line of JSON.
 
 You can send several commands on one connection. The command word and its argument are separated by spaces or tabs. Everything after the command word is the argument, so `eval` receives the rest of the line unchanged.
 

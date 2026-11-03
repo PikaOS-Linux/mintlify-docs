@@ -22,7 +22,7 @@ zl.set_layout(name [, ratio [, master_count [, axis]]])
 | `name` | Layout name. See [Layout names](#layout-names). `master` is an alias for `master_stack`. | string | `master_stack` when the config never calls `zl.set_layout` |
 | `ratio` | A fraction in `(0, 1]`, or a whole number `2..999` read as thousandths (`600` is `0.6`). A ratio of `1` is stored as `0.999`. | number | `0.6` |
 | `master_count` | Number of master windows, `1..65535`. | integer | `1` |
-| `axis` | `auto`, `horizontal` or `vertical`. See the `Uses axis` column of [Layout names](#layout-names). | string | `auto` |
+| `axis` | `auto`, `horizontal`, `vertical` or `perpendicular`. See the `Uses axis` column of [Layout names](#layout-names) and [Perpendicular axis](#perpendicular-axis). | string | `auto` |
 
 Each call sets all four values. An argument you leave out goes back to its default; it does not keep the value from an earlier call.
 
@@ -34,6 +34,16 @@ zl.set_layout("scrolling", 0.5, 1, "vertical")
 
 Invalid arguments raise a Lua error, for example `zl.set_layout: unknown layout name` or `zl.set_layout: ratio must be a fraction in (0, 1] or whole thousandths 2..999`.
 
+### Perpendicular axis
+
+`perpendicular` runs the layout across the direction workspaces slide in, which the `workspaces` animation style sets. It is `vertical`, unless workspaces slide with `slide top` or `slide bottom`, in which case it is `horizontal`. Zoolander resolves it when the layout reaches a workspace. With the default sideways slide, a perpendicular Scrolling strip runs up and down:
+
+```lua
+zl.set_layout("scrolling", 0.5, 1, "perpendicular")
+```
+
+See [Styles](/zoolander/configuring/animations#styles) for the workspace slide directions.
+
 ### Layout names
 
 | Name | Family | Uses `ratio` | Uses `master_count` | Uses `axis` |
@@ -43,7 +53,7 @@ Invalid arguments raise a Lua error, for example `zl.set_layout: unknown layout 
 | `grid` | Classic | No | No | No |
 | `monocle` | Classic | No | No | No |
 | `spiral` | Classic | No | No | No |
-| `scrolling` | Classic | Column width (or row height) as a share of the output | No | `vertical` scrolls up and down instead of sideways. `auto` scrolls sideways. |
+| `scrolling` | Classic | Width (or height, on a vertical strip) of a column that has no width of its own, as a share of the output | No | `vertical` scrolls up and down instead of sideways. `auto` scrolls sideways. |
 | `floating` | Classic | No | No | No |
 | `canvas` | Spatial | No | No | No |
 | `lanes` | Spatial | No | No | `vertical` starts the lanes as columns. `auto` starts them as rows. |
@@ -163,15 +173,23 @@ zl.set_dwindle({
 
 | Name | Description | Type | Default |
 | --- | --- | --- | --- |
-| `preserve_split` | When `true`, each split keeps its direction when the geometry changes. When `false`, the direction is chosen again from the split's current shape every time the workspace is arranged. | bool | `false` |
-| `smart_split` | Choose both the split direction and the side for a new window from where the pointer is in the target window. It takes precedence over `force_split` and `split_width_multiplier` for that window. | bool | `false` |
-| `smart_resizing` | Start a pointer resize of a tiled window from the corner nearest the pointer. When `false`, a tiled resize always starts from the bottom-right corner. | bool | `false` |
+| `preserve_split` | When `true`, each split keeps its direction when the geometry changes. When `false`, Zoolander picks the direction again from the split's current shape every time it arranges the workspace. Splits that `smart_split` placed or `zl.toggle_split` flipped keep their direction either way. | bool | `false` |
+| `smart_split` | Choose both the split direction and the side for a new window from where the pointer is in the target window. It takes precedence over `force_split` and `split_width_multiplier` for that window, and the direction it picked stays when the layout changes shape. | bool | `false` |
+| `smart_resizing` | A pointer resize of a tiled window drags the corner nearest the pointer and moves the divider on that side. Pulling a window's left edge to the left widens it. When `false`, a tiled resize always drags the bottom-right corner. | bool | `true` |
 | `force_split` | Which side the new window takes. `0` follows the pointer (the half of the target it is in), `1` always puts the new window left or top, `2` always right or bottom. | int `0..2` | `0` |
 | `split_width_multiplier` | Multiplies the target's width before comparing it with its height. Values above `1` favour side-by-side splits. | float `0.1..4` | `1.0` |
 
 Fields you leave out keep their current value. Unknown fields log a warning and the rest of the table still applies.
 
 <Note>The `zl.set_dwindle` options apply only to `dwindle`. `spiral` uses a fixed cascade and has no options.</Note>
+
+### Flip a split
+
+`zl.toggle_split()` flips the split that holds the focused window between side by side and stacked. The flipped direction stays when the layout changes shape, even with `preserve_split = false`. It returns `false` outside Dwindle, or when the window is alone on its workspace.
+
+```lua
+zl.bind(zl.MOD_LOGO, string.byte("j"), function() return zl.toggle_split() end)
+```
 
 ## Master
 
@@ -191,16 +209,61 @@ zl.set_workspace_layout("2", "master", 0.5, 2)
 
 ## Scrolling
 
-`scrolling` places windows in a strip of equal columns that is wider than the screen. The view scrolls to keep the focused window visible.
+`scrolling` puts each window in a column of its own on a strip that runs past the edge of the screen. A tab group shares one column. The view scrolls to keep the focused window visible.
 
 | Name | Description | Type | Default |
 | --- | --- | --- | --- |
-| `ratio` | Width of each column as a share of the output (row height when vertical). | number | `0.6` |
-| `axis` | `horizontal` scrolls sideways. `vertical` stacks rows and scrolls up and down. | string | `horizontal` |
+| `ratio` | Width of a column that has no width of its own, as a share of the output (its height on a vertical strip). New columns open at this width. | number | `0.6` |
+| `axis` | `horizontal` scrolls sideways. `vertical` stacks the columns as rows and scrolls up and down. `perpendicular` picks one from the workspace slide direction. See [Perpendicular axis](#perpendicular-axis). | string | `horizontal` |
 
 ```lua
 zl.set_workspace_layout("3", "scrolling", 0.5)
 zl.set_workspace_layout("6", "scrolling", 0.5, 1, "vertical")
+```
+
+### Column widths
+
+Each column can have a width of its own. `zl.cycle_column_width` gives the focused column the next or previous width from a list of presets, and wraps round at either end. A column without a width of its own follows `ratio`. A pointer resize of a column that has its own width resizes only that column.
+
+Set the presets with `zl.set_scrolling`:
+
+```lua
+zl.set_scrolling({ width_presets = { 1/3, 1/2, 2/3, 1 } })
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `width_presets` | Widths `zl.cycle_column_width` steps through, as shares of the screen in `(0, 1]`. List 1 to 8 values in ascending order. On a vertical strip they are heights. | list of numbers | `{ 1/3, 2/3, 1 }` |
+
+A list that is empty, too long, out of order or out of range raises `zl.set_scrolling: width_presets must be 1..8 ascending fractions in (0, 1]`.
+
+### Column actions
+
+| Function | Description |
+| --- | --- |
+| `zl.cycle_column_width([step])` | Step the focused column's width (its height on a vertical strip) to the `"next"` (default) or `"previous"` preset. |
+| `zl.move_column(direction)` | Swap the focused column with its neighbour along the strip. `left` or `up` moves it toward the start, `right` or `down` toward the end. Its width moves with it, and focus and the view follow it. |
+| `zl.move_column_to_monitor(output)` | Move the focused column to the output in direction `left`, `right`, `up` or `down`, or to the output with that name, such as `"DP-1"`. The column lands on that output's active workspace, right of the column focused there, and keeps focus. The view follows it. If that workspace is not Scrolling, the window moves there like any other window. |
+
+All three return `true` when they acted. `zl.cycle_column_width` and `zl.move_column` act only in Scrolling.
+
+The `layouts.lua` module in `config/ferreo` binds them like this:
+
+| Keys | Action |
+| --- | --- |
+| <kbd>Super</kbd> + <kbd>R</kbd> | Next column width |
+| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> | Previous column width |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + arrows | Move the column along the strip |
+| <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + arrows | Move the column to the output that way |
+
+```lua
+local L, S, A, C = zl.MOD_LOGO, zl.MOD_SHIFT, zl.MOD_ALT, zl.MOD_CTRL
+zl.bind(L, string.byte("r"), function() return zl.cycle_column_width("next") end)
+zl.bind(L + S, string.byte("r"), function() return zl.cycle_column_width("previous") end)
+for name, key in pairs({ left = zl.KEY_LEFT, right = zl.KEY_RIGHT, up = zl.KEY_UP, down = zl.KEY_DOWN }) do
+    zl.bind(L + A + S, key, function() return zl.move_column(name) end, { repeating = true })
+    zl.bind(L + C + A, key, function() return zl.move_column_to_monitor(name) end)
+end
 ```
 
 ## Other classic layouts
@@ -209,7 +272,21 @@ zl.set_workspace_layout("6", "scrolling", 0.5, 1, "vertical")
 | --- | --- |
 | `grid` | Equal cells. The number of columns is the smallest whole number whose square covers the window count. |
 | `monocle` | Every tiled window fills the work area. |
-| `spiral` | Each window takes half of the space that is left, taking the left, top, right and bottom halves in turn. The last window fills what remains. || `floating` | Windows keep the position and size they have. A window that enters the layout gets a starting floating rectangle once. |
+| `spiral` | Each window takes half of the space that is left, taking the left, top, right and bottom halves in turn. The last window fills what remains. |
+| `floating` | Windows keep the position and size they have. A window that enters the layout gets a starting floating rectangle once. |
+
+## Drag tiled windows
+
+In `dwindle`, `master_stack`, `grid`, `spiral` and `scrolling`, a pointer move keeps a tiled window in the layout. This covers a `zl.begin_move()` bind, such as <kbd>Super</kbd> + left drag, and a title bar drag. The window follows the pointer, drawn see-through, while the rest of the layout stays put. A highlight in the accent colour shows where the window will land:
+
+- Over the middle of another tile, the whole tile lights up. Drop there and the two windows trade places.
+- Nearer an edge of a tile, the half on that side lights up. Drop there and the window goes in beside that tile, on that side. In Dwindle, the side follows the pointer.
+- In Scrolling, a bar between two columns shows where the window goes in.
+- Over another monitor, the window joins that monitor's layout the same way.
+
+Hold <kbd>Alt</kbd> during the drag to float the window out of the tiling instead. Press <kbd>Esc</kbd> to put everything back.
+
+Floating windows, `monocle`, `floating` and the spatial layouts keep their own pointer moves. To drop a window on another workspace, see [Move windows in the overview](/zoolander/configuring/variables#move-windows-in-the-overview).
 
 ## Tab groups
 

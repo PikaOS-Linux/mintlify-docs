@@ -108,7 +108,7 @@ There are three ways to give a key:
 Zoolander matches the key's unshifted keysym in the active layout, not the character the key types. Bind letters in lowercase. `"Q"` never fires, because the Q key's unshifted keysym is `q`. For Super+Shift+1, bind `zl.MOD_LOGO + zl.MOD_SHIFT` with `"1"`, not `"!"`.
 </Warning>
 
-Because the lookup uses the active layout, a letter bind such as `"q"` only matches while a layout that has `q` on that key is active.
+When no bind matches the key's keysym in the active layout, Zoolander tries again with the keysym the same key has in the first layout of your keymap. So with `layout = "us,ru"` and the Russian layout active, <kbd>Super</kbd> + <kbd>Q</kbd> still fires a `"q"` bind. A key that matches neither reaches the focused client as usual. Put the layout you write binds in first.
 
 ### Key constants
 
@@ -249,7 +249,7 @@ zl.bind_hot_corner(zl.MOD_LOGO, zl.CORNER_BOTTOM_RIGHT, function() zl.exec_comma
 
 - The bind fires once when the pointer reaches the corner. It fires again only after the pointer has left the corner.
 - The corner is the last pixel of a monitor's corner. With several monitors, only outer corners count. A corner where another monitor continues past either edge never fires, so moving between monitors does not trigger it.
-- The modifiers must match exactly, as for keys. With `0`, the corner fires only while you hold no modifier.
+- The modifiers must match exactly, as for keys. With `0`, the corner fires only while you hold no modifier. The exception is a window move started by a `zl.begin_move()` bind: during the drag, a corner bound with `0` fires even while you still hold the move bind's modifier. A corner that opens the overview then lets you drop the window on a workspace there.
 
 ## When binds run
 
