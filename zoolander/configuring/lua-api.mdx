@@ -19,7 +19,8 @@ Global settings. See [Variables](/zoolander/configuring/variables).
 | `zl.set_keyboard(options)` | Key repeat rate and delay, Num Lock, and the XKB rules, model, layout, variant and options. |
 | `zl.set_pointer(options)` | Left-handed mode, acceleration profile, sensitivity and focus-follows-mouse mode. |
 | `zl.set_floating(options)` | Raise floating windows the pointer rests on: `raise_on_hover` and `raise_delay`. |
-| `zl.set_presentation(options)` | Tearing, immediate fullscreen, direct scanout, partial damage, VRR, HDR and SDR brightness and saturation. |
+| `zl.set_presentation(options [, output])` | Tearing, immediate fullscreen, direct scanout, partial damage, VRR, HDR and SDR brightness and saturation. With `output` (a connector name or `"focused"`), changes one monitor's VRR, HDR, bit depth, SDR and luminance settings at runtime. See [Change presentation at runtime](/zoolander/configuring/monitors#change-presentation-at-runtime). |
+| `zl.presentation([output]) -> table` | The presentation in force, globally or for one monitor. |
 | `zl.set_xwayland(options)` | Turn Xwayland on or off and set `force_zero_scaling`. |
 | `zl.set_window_style(options)` | Gaps, borders and border gradients, rounding, opacity and shadows. |
 | `zl.set_ssd(enabled_or_options)` | Server-side decorations: title bars, borders, title font and buttons. |

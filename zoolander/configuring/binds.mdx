@@ -396,6 +396,17 @@ zl.bind(0, 0x1008ff16, function() zl.exec_command("playerctl previous") end, loc
 zl.bind(0, 0x1008ff17, function() zl.exec_command("playerctl next") end, locked)
 ```
 
+### Toggle HDR on the focused monitor
+
+```lua
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "h", function()
+    local p = zl.presentation("focused")
+    zl.set_presentation({ hdr = p.hdr == "off" and "always" or "off" }, "focused")
+end, { description = "Toggle HDR on this monitor" })
+```
+
+The change lasts until the config reloads. See [Change presentation at runtime](/zoolander/configuring/monitors#change-presentation-at-runtime).
+
 ### Zoom a Canvas with the wheel
 
 ```lua

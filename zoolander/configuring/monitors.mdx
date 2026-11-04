@@ -152,6 +152,46 @@ Without `bitdepth`, the output scans out 8 bits per channel in SDR and 10 while 
 
 A depth the output cannot use logs a warning on each reload, and the driver's depth applies instead. Removing the setting hands the depth back to the driver on the next reload.
 
+### Change presentation at runtime
+
+`zl.set_presentation` takes an output as its second argument, so a binding can change one monitor while Zoolander runs:
+
+```lua
+zl.set_presentation(options [, output]) -> nothing
+zl.presentation([output]) -> table
+```
+
+| Name | Description | Type |
+| --- | --- | --- |
+| `options` | The presentation fields from [Presentation per output](#presentation-per-output), with the same values. | table |
+| `output` | A connector name such as `DP-1`, or `"focused"` for the monitor with focus when the call runs. | string |
+
+With an `output`, the fields apply to that monitor alone, over its `zl.output_rule` and the global values. A field the call leaves out keeps what the monitor has now, and a later call for the same monitor changes only the fields it gives. The change takes effect at once. HDR turns on or off on the next frame, with any modeset the display needs, and VRR, the SDR mapping and the luminance targets change with it.
+
+A value set this way lasts until the config reloads. The reload gives every monitor back the presentation its config gives it. Zoolander keeps the value by connector name, so a monitor that is unplugged and plugged back in keeps it. `zoolanderctl monitors-json` reports the values each monitor runs with, these included.
+
+`zl.presentation` returns the presentation in force: the global one without `output`, or what that monitor runs with. The table has `allow_tearing`, `immediate_fullscreen`, `direct_scanout` and `partial_damage` as booleans, `vrr`, `hdr` and `sdr_eotf` as names, and the `sdr_*` numbers. For a monitor, it also has `bitdepth`, `min_luminance`, `max_luminance` and `max_avg_luminance` when a rule or a call set them. Left out, the driver picks the depth and the EDID gives the luminances.
+
+```lua
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "h", function()
+    local p = zl.presentation("focused")
+    zl.set_presentation({ hdr = p.hdr == "off" and "always" or "off" }, "focused")
+end, { description = "Toggle HDR on this monitor" })
+```
+
+| Error | Cause |
+| --- | --- |
+| `allow_tearing applies to every output; leave the output out` | A call with an `output` sets `allow_tearing`, `immediate_fullscreen`, `direct_scanout` or `partial_damage`. The message names the field. |
+| `bitdepth 8 cannot drive hdr = "always"` | The call would leave the monitor at `bitdepth = 8` with `hdr = "always"`. |
+| `no monitor has focus` | `output` is `"focused"` and no monitor has focus. |
+| `output must be a connector name or "focused"` | `output` is not a string. |
+| `output must be 1..127 bytes` | `output` is empty or too long. |
+| `too many outputs have their own presentation` | More monitors have runtime values than Zoolander can hold. |
+
+Each message starts with `zl.set_presentation: `. `zl.presentation` raises the three `output` errors, starting with `zl.presentation: `. Out-of-range values raise the same errors as in `zl.output_rule`.
+
+Without an `output`, `zl.set_presentation` sets the global presentation. That form does not read `bitdepth`, `min_luminance`, `max_luminance` or `max_avg_luminance`. It logs them as unknown fields and does not raise.
+
 ### What output rules do not set
 
 `zl.output_rule` has no option for mirroring. To change an output while Zoolander runs without editing the config, use a client of the wlr-output-management protocol, such as `wlr-randr` or `kanshi`.
