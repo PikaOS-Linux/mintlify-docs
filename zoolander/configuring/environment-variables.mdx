@@ -41,13 +41,37 @@ Clients start with the environment Zoolander was started with, not with changes 
 | `DISPLAY` | The X display for Xwayland. | string | `:N`. Only set when Xwayland is available and enabled. |
 | `XAUTHORITY` | Xauthority file for that display. | path | `$XDG_RUNTIME_DIR/zoolander-xauth-<pid>`. Only set with `DISPLAY`. |
 | `DESKTOP_STARTUP_ID` | X11 startup notification ID, so an X11 app opens on the workspace you launched it from. | string | Only set while the X display is up. |
+| `ZOOLANDER_WSI` | Lets the Vulkan loader enable Zoolander's Vulkan layer. See [Vulkan layer](#vulkan-layer). | `1` | `1` |
 | `HYPRLAND_INSTANCE_SIGNATURE`, `HYPRLAND_CMD`, `NIRI_SOCKET`, `SWAYSOCK`, `I3SOCK` | Removed, so clients do not talk to another compositor by accident. | | unset |
 
-`zl.set_env` entries replace inherited variables of the same name. You can use them to restore one of the removed variables. Do not set `WAYLAND_DISPLAY`, `DISPLAY`, `XAUTHORITY` or `DESKTOP_STARTUP_ID` with `zl.set_env`, because Zoolander adds its own values for those.
+`zl.set_env` entries replace inherited variables of the same name. You can use them to restore one of the removed variables. Do not set `WAYLAND_DISPLAY`, `DISPLAY`, `XAUTHORITY`, `DESKTOP_STARTUP_ID` or `ZOOLANDER_WSI` with `zl.set_env`, because Zoolander adds its own values for those.
 
 A child's environment holds at most 255 entries. If the inherited environment is larger, Zoolander drops the extra inherited entries and keeps your `zl.set_env` entries.
 
 Zoolander does not set `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE` or `XDG_SESSION_DESKTOP`. Set them with `zl.set_env`, or export them before you start Zoolander. The display manager may set `XDG_CURRENT_DESKTOP` from the session file's `DesktopNames=Zoolander`.
+
+### Vulkan layer
+
+The `zoolander` package installs an implicit Vulkan layer, `VK_LAYER_ZOOLANDER_wsi`. It gives X11 games under Xwayland HDR on windows that a [`force_game_hdr`](/zoolander/configuring/window-rules#force-hdr-for-a-game) rule matches, and does nothing for other windows. The Vulkan loader enables it only where `ZOOLANDER_WSI=1` is set, which Zoolander gives every program it starts. Programs started outside the session never load it.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `ZOOLANDER_WSI` | Set to `1` by Zoolander for every child. The loader enables the layer only with this value. | `1` | `1` |
+| `ZOOLANDER_WSI_DISABLE` | Set to any value, keeps the loader from loading the layer. | any | unset |
+
+To keep the layer out of one game, add this to its launch options:
+
+```text
+ZOOLANDER_WSI_DISABLE=1 %command%
+```
+
+To keep it out of everything, set the variable for every client in your config, or disable the layer through the Vulkan loader:
+
+```lua
+zl.set_env("ZOOLANDER_WSI_DISABLE", "1")
+-- or
+zl.set_env("VK_LOADER_LAYERS_DISABLE", "VK_LAYER_ZOOLANDER_wsi")
+```
 
 ## Session and paths
 

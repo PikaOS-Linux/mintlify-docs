@@ -139,8 +139,22 @@ Limitations:
 
 - The output still shows SDR. PQ keeps its absolute brightness, with 100 nits as SDR white. Everything brighter than 75 nits is rolled off into the last quarter of the range, so games that put paper white at 200 nits or more look flat. Set the game's paper white or brightness to about 100 nits.
 - Native Wayland Vulkan games on Mesa already get the HDR10 swapchain formats on any output. The rule changes what toolkits that read the preferred description decide, such as SDL3.
-- Proton games need HDR turned on in their launch options, because Wine takes its environment once at start. Use `DXVK_HDR=1 %command%`, or `PROTON_ENABLE_HDR=1 %command%`.
-- X11 games through Xwayland get no HDR formats from Mesa's X11 swapchain. Zoolander's Vulkan layer gives them HDR for windows this rule matches.
+- Proton games still need `DXVK_HDR=1 %command%` in their Steam launch options, or `PROTON_ENABLE_HDR=1` with GE-Proton. DXVK offers HDR to the game from that variable alone, and its Windows side reads the environment Wine copied when the process started. Zoolander's Vulkan layer sets `DXVK_HDR=1` for a matched game, but only native DXVK builds and Proton's own X11 display code see it.
+- The Vulkan layer is built for 64-bit programs only, so 32-bit games stay on plain X11 without HDR.
+
+#### X11 and Proton games
+
+X11 games under Xwayland, which includes Proton games, get no HDR formats from Mesa's X11 swapchain. Zoolander's Vulkan layer, `VK_LAYER_ZOOLANDER_wsi`, gives them HDR, but only on windows a `force_game_hdr` rule matches. An output in HDR mode alone does not change how an X11 game presents. For a matched window:
+
+- The window's X11 Vulkan surface offers Mesa's Wayland formats, HDR10 (PQ, BT.2020) among them.
+- Its swapchain presents through a Wayland surface over the X11 window, in the same place, with input left to the X11 window.
+- The game's colour space and HDR metadata reach Zoolander as they would from a Wayland game.
+
+If the rule starts or stops matching while the game runs, the layer asks the game for a new swapchain.
+
+Before the game has a window, the layer checks the rule against the app ID the window will most likely get: Proton's `steam_app_<SteamGameId or SteamAppId>`, else the executable's name. Write the rule against `app_id`, as in the example above, so this check matches.
+
+The layer loads into Vulkan programs Zoolander starts. To keep it out of a game, see [Vulkan layer](/zoolander/configuring/environment-variables#vulkan-layer).
 
 ## How rules combine
 

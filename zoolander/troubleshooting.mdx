@@ -167,6 +167,10 @@ An SDR game on an HDR output needs converting to PQ. Where the display plane has
 
 The hardware cursor and a converting plane only mix on AMD RX 9000 series GPUs, whose display engine blends the cursor before the colour pipeline. There, a game with a visible cursor keeps direct scanout. On other GPUs, a cursor over a converted frame makes it composite with the reason `cursor`.
 
+## A video player or game disconnects with "invalid luminance range"
+
+Zoolander 0.1.27 and earlier disconnected Vulkan clients that pass HDR metadata with a `max_cll` or `max_fall` outside the mastering range, or `0` for unknown. The client failed with `invalid luminance range`. mpv's `gpu-next` hit this even with SDR video. Zoolander 0.1.28 accepts those values, so update the `zoolander` package.
+
 ## Xwayland
 
 X11 apps need Xwayland. Zoolander looks for it at `/usr/local/libexec/zoolander/Xwayland`, then `/usr/bin/Xwayland`. The package depends on `xwayland`.

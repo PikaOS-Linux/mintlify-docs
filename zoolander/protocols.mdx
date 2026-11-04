@@ -50,6 +50,7 @@ Privileged globals include data control, output management, virtual input, scree
 | `wp_color_manager_v1` | 3 | ICC and parametric descriptions. See [Colour management](#colour-management). |
 | `wp_color_representation_manager_v1` | 1 | Premultiplied and straight alpha. BT.601, BT.709 and BT.2020 in full and limited range only when the renderer imports YCbCr dma-bufs. |
 | `frog_color_management_factory_v1` | 1 | Mapped onto `wp_color_manager_v1`. The last request before a commit wins. `scrgb_linear` is treated like Windows scRGB. |
+| `zoolander_xwayland_bypass_manager_v1` | 1 | Zoolander's own protocol for its Vulkan layer. See [Xwayland bypass](#xwayland-bypass). |
 
 ## Windows
 
@@ -154,6 +155,21 @@ How Zoolander treats descriptions:
 - `st240`, `log_100`, `log_316`, `xvycc` and `st428` decode with the exact inverse of the curves their standards define. `xvycc` keeps codes below 0 and above 1. For `st428`, code 1 is 52.37/48 of its 48 cd/m² white. Relative light from these curves maps to luminance through the same reference white as the other SDR curves.
 
 The preferred description a surface gets is the one of the output it shows on. When a surface moves to another output, or an output's description changes because HDR switched or its EDID or display settings changed, clients hear it. Outputs send `image_description_changed` followed by `wl_output.done`. Surface feedback objects and frog surfaces get `preferred_changed2`, or `preferred_changed` below version 2.
+
+A window that a [`force_game_hdr`](/zoolander/configuring/window-rules#force-hdr-for-a-game) rule matches, on an output that shows SDR, gets the description the output would have in HDR mode instead: PQ with BT.2020 primaries. Zoolander converts its PQ back to SDR. When the rule starts or stops matching, clients hear `preferred_changed`, so a Wine Vulkan subsurface hears it as well as the toplevel.
+
+## Xwayland bypass
+
+`zoolander_xwayland_bypass_v1` is a private Zoolander protocol. Its definition is `protocols/zoolander-xwayland-bypass-v1.xml` in [Zooland](/developers/zooland/overview). It lets an X11 client present a window's content through a `wl_surface` of its own, which can carry a `wp_color_manager_v1` description and HDR metadata where X11 cannot. Zoolander's Vulkan layer, `VK_LAYER_ZOOLANDER_wsi`, is its client. It follows gamescope's `gamescope_xwayland` protocol. Regular clients must not use it.
+
+| Request or event | What it does |
+| --- | --- |
+| `get_window(id, x11_window)` | Follows a top-level window of Zoolander's Xwayland. The window object sends `mode` at once and on every change. |
+| `mode` | `hdr` while a `force_game_hdr` rule matches the window, `x11` otherwise. An output in HDR mode alone keeps `x11`. |
+| `set_content(id, surface, x, y)` | Makes `surface` a subsurface of the X11 window's own surface at `x`, `y`, above it. It follows the window's position, stacking, workspace, visibility and outputs, and is composited with its own image description. Input still goes to the X11 window wherever the surface's input region is empty. |
+| `get_app(id, app_id, title)` | Answers once with the `mode` that the window rules alone would give a window with that app ID and title, before the app has windows. |
+
+Only the process that owns the X11 window gets `hdr`, so no client can cover another's window. Zoolander checks the window's XRes client pid, else its `_NET_WM_PID`, against the Wayland client's pid. An unknown, unmanaged or override-redirect window stays `x11`. In `x11` mode, the subsurface from `set_content` is inert. `set_content` with a surface that has another role is a `bad_surface` error, and a second `set_content` on one window object is `content_exists`.
 
 ## Presentation feedback
 
