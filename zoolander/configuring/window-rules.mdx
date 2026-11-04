@@ -95,8 +95,8 @@ Inside the anchored form:
 | --- | --- | --- | --- |
 | `float` | Open the window floating. It opens at the size its client chose, kept inside the work area and within the window's own minimum and maximum size. | bool | `false` |
 | `fullscreen` | Make the window fullscreen. | bool | `false` |
-| `workspace` | Open the window on this workspace. The name is 1 to 127 bytes and cannot be a special workspace (`special` or `special:name`). | string | none |
-| `follow` | With `workspace`, also switch to that workspace when the window moves there. Needs `workspace`. | bool | `false` |
+| `workspace` | Open the window on this workspace. The name is 1 to 127 bytes. `special` or `special:name` opens it on that special workspace, which Zoolander creates hidden if needed. | string | none |
+| `follow` | With `workspace`, also switch to that workspace when the window moves there. For a special workspace, `follow` shows it at once. Without `follow`, it stays hidden until `zl.toggle_special_workspace` shows it. Needs `workspace`. | bool | `false` |
 | `dim_around` | Dim everything behind the window. The strength is the `around` value of `zl.set_dim`. | bool | `false` |
 | `no_animation` | Turn off open, close and move animations for the window. | bool | `false` |
 | `idle_inhibit` | Keep the session from going idle while the window exists. | bool | `false` |
@@ -184,7 +184,7 @@ Rules follow the window's current state. If a title change means a `float` rule 
 | `rounding must be 0..128` | `rounding` out of range or not a number. |
 | `shadow/decorate/follow/confine_cursor/force_game_hdr must be boolean` | One of those is not a boolean. |
 | `workspace must be a string` / `workspace must be 1..127 bytes` | Bad `workspace` value. |
-| `workspace cannot be a scratchpad` | `workspace` names a special workspace. |
+| `workspace cannot hold a NUL byte` | The `workspace` name contains a NUL byte. |
 | `follow needs a workspace` | `follow = true` without `workspace`. |
 | `the rule sets nothing` | No action set. |
 | `the rule table is full` | More than 32 rules. |
@@ -213,6 +213,7 @@ zl.add_window_rule("app_id", "mpv", { content = "video", idle_inhibit = true })
 -- Send apps to workspaces
 zl.add_window_rule("app_id", "^(.*iscord.*)$", { workspace = "5" })   -- Discord and discord
 zl.add_window_rule("app_id", "thunderbird", { workspace = "4", follow = true })
+zl.add_window_rule("app_id", "^(org.gnome.Calculator)$", { workspace = "special:calc" })   -- hidden until toggled
 
 -- Overlays without animation, borders or shadow
 zl.add_window_rule("title", "^(gsr ui)$", { no_animation = true })
