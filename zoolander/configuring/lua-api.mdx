@@ -127,7 +127,7 @@ See [Monitors](/zoolander/configuring/monitors).
 
 | Function | Description |
 | --- | --- |
-| `zl.output_rule(options)` | Mode, position, scale and transform for a named output. |
+| `zl.output_rule(options)` | Mode, position, scale, transform, `enabled`, `primary` and per-output presentation (VRR, HDR, bit depth, SDR mapping, luminance overrides) for a named output. |
 | `zl.set_output_size(width, height) -> boolean` | Change the size of the primary output when the backend allows it. |
 | `zl.monitor_count() -> integer` | Number of monitors. |
 | `zl.monitor_info(index) -> table or nil` | `{ id, name, mirror, active_workspace = { name } }` for a zero-based monitor index. |
