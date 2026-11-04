@@ -32,7 +32,8 @@ zl.add_window_rule("title", "^(Picture-in-Picture)$", { float = true, border_siz
 ```lua
 zl.add_window_rule(match, pattern,
     float, dim_around, no_animation, idle_inhibit, fullscreen,
-    content, border_size, rounding, shadow, decorate, workspace, follow)
+    content, border_size, rounding, shadow, decorate, workspace, follow,
+    confine_cursor, force_game_hdr)
 ```
 
 Pass `nil` to skip an argument. Both forms check values the same way. The table form is easier to read, so the examples on this page use it.
@@ -104,16 +105,48 @@ Inside the anchored form:
 | `rounding` | Corner radius in pixels for this window, `0..128`. | int | the global `rounding` |
 | `shadow` | Turn the window's shadow on or off, overriding `shadow.enabled`. | bool | the global setting |
 | `decorate` | Allow (`true`) or refuse (`false`) server-side decorations for this window. Decorations still need `zl.set_ssd` to be on. | bool | the window's own choice |
+| `confine_cursor` | Keep the pointer inside the window while it has keyboard focus. See [Confine the cursor](#confine-the-cursor). | bool | `false` |
+| `force_game_hdr` | Tell the window its output is in HDR mode while the output shows SDR. See [Force HDR for a game](#force-hdr-for-a-game). | bool | `false` |
 
 A rule must set at least one action. A rule with none raises `zl.add_window_rule: the rule sets nothing`. Unknown keys in the actions table log a warning (`zl.add_window_rule: unknown field ...`) and the rest of the rule still applies.
 
 For the global values these actions override, see [Variables](/zoolander/configuring/variables). For `vrr`, see `zl.set_presentation` on the same page.
 
+### Confine the cursor
+
+`confine_cursor` keeps the pointer inside the window's visible content while the window has keyboard focus. Use it for games that let the cursor drift onto another monitor, often windowed, borderless or X11 games that never confine the pointer themselves.
+
+- Relative and absolute motion, pointer warps and output changes all stay inside the window.
+- When the window gets focus again, the pointer moves back inside it.
+- The rule lets go while another window has focus, and while the overview, the command sheet, the layout picker, or a move or resize is active.
+- A pointer lock or confinement that the app asks for through `zwp_pointer_constraints_v1` takes precedence while it is active.
+
+```lua
+zl.add_window_rule("app_id", "^(steam_app_.*)$", { confine_cursor = true })
+```
+
+### Force HDR for a game
+
+`force_game_hdr` tells a matching window that its output is in HDR mode while the output shows SDR, either because the display cannot do HDR or because its `hdr` setting is `off`. It works like gamescope's `--hdr-debug-force-support`, for one window at a time. Games then take their HDR path, and Zoolander converts their PQ back to the SDR the output shows. On an output that is in HDR mode, the rule changes nothing.
+
+```lua
+zl.add_window_rule("app_id", "^(steam_app_.*)$", { force_game_hdr = true })
+```
+
+The window's preferred colour description, through `wp_color_manager_v1` and `frog_color_management_v1`, becomes the one the output would have in HDR mode: PQ with BT.2020 primaries, the output's EDID primaries as the target when it has them, and a target peak from the output's `max_luminance` setting, else the EDID's HDR peak, else 1000 nits.
+
+Limitations:
+
+- The output still shows SDR. PQ keeps its absolute brightness, with 100 nits as SDR white. Everything brighter than 75 nits is rolled off into the last quarter of the range, so games that put paper white at 200 nits or more look flat. Set the game's paper white or brightness to about 100 nits.
+- Native Wayland Vulkan games on Mesa already get the HDR10 swapchain formats on any output. The rule changes what toolkits that read the preferred description decide, such as SDL3.
+- Proton games need HDR turned on in their launch options, because Wine takes its environment once at start. Use `DXVK_HDR=1 %command%`, or `PROTON_ENABLE_HDR=1 %command%`.
+- X11 games through Xwayland get no HDR formats from Mesa's X11 swapchain. Zoolander's Vulkan layer gives them HDR for windows this rule matches.
+
 ## How rules combine
 
 Zoolander tests every rule, in the order you added them, against the window's current app ID, title and tag. Every matching rule contributes:
 
-- Boolean actions (`float`, `fullscreen`, `dim_around`, `no_animation`, `idle_inhibit`) add up. If any matching rule sets one, it is on.
+- Boolean actions (`float`, `fullscreen`, `dim_around`, `no_animation`, `idle_inhibit`, `confine_cursor`, `force_game_hdr`) add up. If any matching rule sets one, it is on.
 - Value actions (`content`, `border_size`, `rounding`, `shadow`, `decorate`) take the value from the last matching rule that sets them.
 - `workspace` and `follow` come together from the last matching rule that sets `workspace`.
 
@@ -149,7 +182,7 @@ Rules follow the window's current state. If a title change means a `float` rule 
 | `content must be none, photo, video, or game` | Unknown content type. |
 | `border size must be 0..64` | `border_size` out of range or not a number. |
 | `rounding must be 0..128` | `rounding` out of range or not a number. |
-| `shadow/decorate/follow overrides must be boolean` | One of those is not a boolean. |
+| `shadow/decorate/follow/confine_cursor/force_game_hdr must be boolean` | One of those is not a boolean. |
 | `workspace must be a string` / `workspace must be 1..127 bytes` | Bad `workspace` value. |
 | `workspace cannot be a scratchpad` | `workspace` names a special workspace. |
 | `follow needs a workspace` | `follow = true` without `workspace`. |
