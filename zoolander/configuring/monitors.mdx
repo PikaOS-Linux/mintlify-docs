@@ -1,7 +1,7 @@
 ---
 title: "Monitors"
 sidebarTitle: "Monitors"
-description: "Set each output's mode, position, scale and rotation with zl.output_rule, query monitors from Lua, and handle hotplug."
+description: "Set each output's mode, position, scale, rotation and presentation with zl.output_rule, query monitors from Lua, and handle hotplug."
 ---
 
 Zoolander calls a connected display an output, or a monitor in the Lua API. You configure outputs with `zl.output_rule` and read their state with the monitor query functions.
@@ -47,22 +47,28 @@ Displays that mark themselves as non-desktop, such as VR headsets, are not lit a
 zl.output_rule(options)
 ```
 
-Adds a rule for one output. You can have up to 16 rules, one per output name. A second rule for the same name, or a 17th rule, raises the error `zl.output_rule: duplicate or too many rules`.
+Adds a rule for one output. You can have up to 16 rules, one per output name. A second rule for the same name, a second rule with `primary = true`, or a 17th rule raises the error `zl.output_rule: duplicate, a second primary, or too many rules`.
+
+Only `output` is required. A field you leave out keeps what the output has now: its current mode, position, scale and transform, and for the presentation fields the global value from `zl.set_presentation`.
 
 | Name | Description | Type | Default |
 | --- | --- | --- | --- |
 | `output` | Output name, 1 to 127 bytes. | string | required |
-| `width` | Mode width in pixels, 1 to 16384. | integer | required |
-| `height` | Mode height in pixels, 1 to 16384. | integer | required |
-| `refresh` | Refresh rate in Hz, 1 to 1000. Fractions such as `59.94` are allowed. | number | required |
-| `x` | Horizontal position in the global layout, in logical pixels. -100000 to 100000. | number | `0` |
-| `y` | Vertical position in the global layout, in logical pixels. -100000 to 100000. | number | `0` |
-| `scale` | Scale factor, 0.01 to 8. Fractional values such as `1.5` work. | number | `1` |
-| `transform` | Rotation and flip. See [Transforms](#transforms). | string | `"normal"` |
+| `width` | Mode width in pixels, 1 to 16384. | integer | the current mode |
+| `height` | Mode height in pixels, 1 to 16384. | integer | the current mode |
+| `refresh` | Refresh rate in Hz, 1 to 1000. Fractions such as `59.94` are allowed. | number | the current mode |
+| `x` | Horizontal position in the global layout, in logical pixels. -100000 to 100000. | number | the current position |
+| `y` | Vertical position in the global layout, in logical pixels. -100000 to 100000. | number | the current position |
+| `scale` | Scale factor, 0.01 to 8. Fractional values such as `1.5` work. | number | the current scale |
+| `transform` | Rotation and flip. See [Transforms](#transforms). | string | the current transform |
+| `enabled` | `false` turns the output off. See [Turn an output off](#turn-an-output-off). | boolean | `true` |
+| `primary` | Makes this the primary output. See [Primary output](#primary-output). | boolean | `false` |
 
-`width`, `height` and `refresh` are all required, even if you only want to change the scale. Zoolander rounds `x` and `y` to whole pixels and stores `refresh` in millihertz.
+Set `width`, `height` and `refresh` together or not at all, and `x` and `y` together or not at all. Otherwise the call raises `zl.output_rule: width, height and refresh go together` or `zl.output_rule: x and y go together`. Zoolander rounds `x` and `y` to whole pixels and stores `refresh` in millihertz.
 
-An unknown field logs `zoolander: zl.output_rule: unknown field <name>` and the rule still applies. The one exception is `bitdepth`, which raises an error, because native 10-bit scanout is not available yet.
+The rule also takes per-output presentation settings. See [Presentation per output](#presentation-per-output).
+
+A value out of range raises an error. It is never clamped. An unknown field logs `zoolander: zl.output_rule: unknown field <name>` and the rule still applies.
 
 ### Mode selection
 
@@ -101,20 +107,58 @@ zl.output_rule({
 })
 ```
 
-### What output rules do not set
+### Turn an output off
 
-`zl.output_rule` has no options for turning an output off, mirroring, variable refresh rate or HDR.
-
-- VRR, HDR, SDR brightness and SDR saturation are global settings in `zl.set_presentation`. They apply to every output. See [Variables](/zoolander/configuring/variables).
-- To turn an output off or change it while Zoolander runs, use a client of the wlr-output-management protocol, such as `wlr-randr` or `kanshi`.
+`enabled = false` turns the output off. When a reload drops that rule, or the rule no longer sets `enabled = false`, the output comes back on at its last placement. An output that a client turned off through wlr-output-management stays off.
 
 ```lua
-zl.set_presentation({ vrr = "fullscreen", hdr = "auto" })
+zl.output_rule({ output = "HDMI-A-1", enabled = false })
 ```
+
+### Primary output
+
+`primary = true` makes the output the primary one. X11 windows and popups that do not pick an output open on it, and `zoolanderctl monitors` lists it first. Without such a rule, the first output that connected is primary. Only one rule may set it. A rule with `enabled = false` cannot, and raises `zl.output_rule: a disabled output cannot be primary`.
+
+### Presentation per output
+
+These fields override the global [`zl.set_presentation`](/zoolander/configuring/variables) value for this output. A field you leave out uses the global value.
+
+| Name | Description | Type |
+| --- | --- | --- |
+| `vrr` | `off`, `always`, `fullscreen`, `fullscreen_game`, or `0` to `3`. | string or integer |
+| `hdr` | `off`, `auto` or `always`. | string |
+| `bitdepth` | `8` or `10`. See [Bit depth](#bit-depth). | integer |
+| `sdr_brightness` | 0.1 to 4. | number |
+| `sdr_saturation` | 0 to 2. | number |
+| `sdr_min_luminance` | 0 to 10 nits. | number |
+| `sdr_max_luminance` | 40 to 1000 nits. | number |
+| `sdr_eotf` | `srgb`, `gamma22` or `gamma24`. | string |
+| `min_luminance` | 0 to 10 nits. Replaces the EDID value. | number |
+| `max_luminance` | 80 to 10000 nits. Replaces the EDID value. | number |
+| `max_avg_luminance` | 50 to 10000 nits. Replaces the EDID value. | number |
+
+`min_luminance`, `max_luminance` and `max_avg_luminance` become the target luminances that clients see. `max_luminance` is also the tone-mapping peak. The HDR metadata sent to the display uses `min_luminance` and `max_luminance` for the mastering range, `max_luminance` for MaxCLL and `max_avg_luminance` for MaxFALL, both for Zoolander's own metadata and for a fullscreen client's. Left out, the EDID values apply. For the tone-mapping peak, an EDID maximum of exactly 100 nits counts as unknown, and the peak is then 1000 nits.
+
+```lua
+zl.output_rule({ output = "DP-1", hdr = "always", vrr = "fullscreen_game", max_luminance = 600 })
+```
+
+#### Bit depth
+
+Without `bitdepth`, the output scans out 8 bits per channel in SDR and 10 while HDR is on.
+
+- `10` also scans SDR out at 10 bits, on outputs that are not HDR-capable too, when the connector's `max bpc` reaches 10, the output renders on the GPU and a 10-bit buffer can be allocated.
+- `8` forces 8 bits, so HDR never turns on for that output. `bitdepth = 8` with `hdr = "always"` raises an error. On an output without a `max bpc` property, `8` is ignored.
+
+A depth the output cannot use logs a warning on each reload, and the driver's depth applies instead. Removing the setting hands the depth back to the driver on the next reload.
+
+### What output rules do not set
+
+`zl.output_rule` has no option for mirroring. To change an output while Zoolander runs without editing the config, use a client of the wlr-output-management protocol, such as `wlr-randr` or `kanshi`.
 
 ## When rules apply
 
-- At startup, and each time an output connects, Zoolander applies every rule whose output is present. A rule also turns its output on.
+- At startup, and each time an output connects, Zoolander applies every rule whose output is present. A rule turns its output on, unless it sets `enabled = false`.
 - When you reload the config, Zoolander compares the new rules with the ones it last applied. If any rule changed, it applies the whole set again. If none changed, it leaves outputs alone, so a reload does not undo a change you made with `wlr-randr`.
 - A rule for an output that is not connected waits until that output appears.
 
