@@ -111,7 +111,7 @@ The **Keyboard** group edits `zl.set_keyboard`: layouts as chips with a searchab
 The shortcut list shows every key bind by category with its keys, a search field and category chips. Binds a loop creates, such as Super+1 to Super+5, appear as one row. Click a row to open its edit sheet:
 
 - The shortcut field captures the next combination you press. <kbd>Esc</kbd> cancels and <kbd>Backspace</kbd> clears it. A combination already in use offers to replace that bind.
-- **Action** runs a command through `/bin/sh`, or one of the compositor's actions picked from a grouped list, with a control for each of its arguments.
+- **Action** runs a command through `/bin/sh`, or one of the compositor's actions picked from a grouped list, with a control for each of its arguments. The **Display** group has **Toggle HDR** (`zl.toggle_hdr`) and **Set HDR mode** (`zl.set_hdr`), each with an output that defaults to `focused`, and the **Media & Hardware** chip lists them. See [Toggle HDR](/zoolander/configuring/monitors#toggle-hdr).
 - **Works on the lock screen** and **Repeat while held** set the `locked` and `repeating` options. **Description** sets the text that cheat sheets show.
 - **Delete** removes the bind.
 
@@ -163,7 +163,13 @@ Scrolling's **Column widths** (`width_presets`) is one text field. The app shows
 
 ### Window Rules
 
-Each window rule shows what it matches and its actions as chips. Rules written as literal `zl.add_window_rule` calls, or through a helper that takes the same arguments, open an edit sheet with the match, the pattern, a switch per action and the content type. **Add rule** creates one. The **Layer surfaces** card lists the layer rules per namespace: blur with its alpha threshold, no animation, and the animation style. See [Window rules](/zoolander/configuring/window-rules).
+Each window rule shows what it matches and its actions as chips. Rules written as literal `zl.add_window_rule` calls, or through a helper that takes the same arguments, open an edit sheet with the match, the pattern, a switch per action and the content type.
+
+**Add rule** opens the same sheet with every action the schema offers. **Add** stays disabled, with the hint **A rule needs a pattern and at least one action**, until the rule has both. The app then writes the rule:
+
+1. Through your config's own `rule` helper, when it has one, as the [starter config](/zoolander/configuring/example-config#the-rule-helper) does.
+2. Otherwise, it copies the starter's helper into your config and calls it. The helper goes after your last window rule, or below the opening comment of `windows.lua`, or of `init.lua` when there is no `windows.lua`.
+3. As a table-form `zl.add_window_rule` call when neither works: no starter is installed, the app cannot read the starter's helper, your config already uses the name `rule`, or the helper does not take an action you set. The **Layer surfaces** card lists the layer rules per namespace: blur with its alpha threshold, no animation, and the animation style. See [Window rules](/zoolander/configuring/window-rules).
 
 ### Startup & Environment
 
