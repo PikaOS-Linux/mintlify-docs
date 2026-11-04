@@ -116,7 +116,7 @@ info(drm): scanout path: dumb buffer (CPU/swrender) — Vulkan unavailable (<err
 The session works but uses more CPU. To get Vulkan:
 
 - Install a Vulkan 1.3 driver with dma-buf and DRM-modifier support for the display's GPU. On AMD and Intel, that is `mesa-vulkan-drivers`. On NVIDIA, use driver 515 or newer.
-- Check that you have not set `VK_DRIVER_FILES`, `VK_ICD_FILENAMES` or `VK_LOADER_DRIVERS_SELECT` to a driver for a different GPU. Zoolander respects those variables.
+- Check that you have not set `VK_LOADER_DRIVERS_SELECT` to a driver for a different GPU. The packaged binary ignores `VK_DRIVER_FILES` and `VK_ICD_FILENAMES`; see [Variables that apps or Zoolander do not see](#variables-that-apps-or-zoolander-do-not-see).
 - On a hybrid laptop, the display may be wired to the integrated GPU. Zoolander then renders there. Use `--drm-list` to see which card drives your panel.
 
 Even with Vulkan, if the display plane and the driver share no scanout modifier, Zoolander copies frames into dumb buffers. That works but costs CPU time.
@@ -138,6 +138,18 @@ The X display listens from startup. Xwayland itself starts when the first X11 cl
 The packaged `zoolander-session` wrapper loads `/etc/profile` with the POSIX `.` command before it starts Zoolander, so variables set there and in `/etc/profile.d/` reach the compositor and every client it starts. If a variable you expect is missing, set it in a file under `/etc/profile.d/`, or for clients only with [`zl.set_env`](/zoolander/configuring/environment-variables).
 
 A source install's session file runs `zoolander` directly, without the wrapper, so it does not load `/etc/profile`.
+
+## Variables that apps or Zoolander do not see
+
+The `zoolander` package gives `/usr/bin/zoolander` the `cap_sys_nice` file capability, so its Vulkan queue can run at high priority and composite ahead of busy games. The log line `info(vk): graphics queue global priority:` shows the priority it got. `getcap /usr/bin/zoolander` shows the capability.
+
+A program with a file capability runs in secure mode, which has side effects:
+
+- glibc removes `LD_PRELOAD`, `LD_LIBRARY_PATH`, `TMPDIR`, `MALLOC_*` and a few similar variables from Zoolander's environment at startup. Apps that Zoolander starts never see them. Set them per app instead, for example in a game's launch options or a wrapper script.
+- The Vulkan loader ignores `VK_DRIVER_FILES`, `VK_ICD_FILENAMES`, `VK_LAYER_PATH` and layers under your home directory for the compositor itself. Apps are not affected.
+- You cannot attach `gdb` or `perf` to Zoolander as your own user. Use `sudo`.
+
+To run without the capability, remove it with `sudo setcap -r /usr/bin/zoolander`. The queue then runs at default priority. A package upgrade puts the capability back.
 
 ## An app does not come to the front
 
