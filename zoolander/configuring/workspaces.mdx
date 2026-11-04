@@ -156,6 +156,8 @@ Gives the workspace called `name` its own layout instead of the global one from 
 | `master_count` | Number of master windows, 1 to 65535. | integer | `1` |
 | `axis` | `"auto"`, `"horizontal"` or `"vertical"`. For Accordion it sets which sides the preview trays go on. | string | `"auto"` |
 
+A workspace with a rule keeps its layout when a config reload changes the global one. Every workspace without a rule, on every output, takes the new global layout and ratio, which replaces a layout you picked there at runtime. See [Global and per-workspace layouts](/zoolander/configuring/layouts#global-and-per-workspace-layouts).
+
 Calling it again for the same name replaces that workspace's rule. You can have up to 32 rules. An empty name, a name over 127 bytes or a 33rd rule raises an error. Layouts and their options are covered on [Layouts](/zoolander/configuring/layouts).
 
 ```lua

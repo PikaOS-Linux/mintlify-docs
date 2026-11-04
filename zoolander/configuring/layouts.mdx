@@ -65,7 +65,9 @@ See [Styles](/zoolander/configuring/animations#styles) for the workspace slide d
 
 Every workspace keeps its own layout. The global layout is what a new workspace starts with, unless a workspace rule names it.
 
-When you call `zl.set_layout` at runtime (from a binding or `zoolanderctl eval`), the focused workspace on the focused output also switches to the new layout. On a config load or reload that changes the global layout, the focused workspace adopts it only when no `zl.set_workspace_layout` rule covers that workspace. Other workspaces keep the layout they have, including one you picked with the layout switcher.
+When you call `zl.set_layout` at runtime (from a binding or `zoolanderctl eval`), the focused workspace on the focused output also switches to the new layout. Other workspaces keep the layout they have.
+
+A config load or reload that changes the global layout, ratio, master count or axis applies it to every regular workspace, on every output, that no `zl.set_workspace_layout` rule covers. A layout or ratio you picked at runtime on such a workspace, with the layout switcher or `zl.layout`, goes back to the new default. Workspaces with a rule keep the rule's layout, and a reload that leaves the global layout unchanged touches no workspace.
 
 ## Set a layout per workspace
 

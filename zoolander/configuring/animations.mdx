@@ -160,6 +160,14 @@ zl.set_animation_leaf("windows_move", { duration = 350, curve = { x1 = 0.1, y1 =
 
 Workspace slides move towards the higher-numbered workspace. Going from workspace 2 to 3 moves the view one way, and going back moves it the other way. Only `fade` changes opacity during a workspace switch.
 
+Use `slide top` or `slide bottom` on the `workspaces` leaf to switch workspaces vertically:
+
+```lua
+zl.set_animation_leaf("workspaces", { duration = 250, style = "slide_top" })
+```
+
+During a slide, each workspace is clipped to its own output. Windows parked past the output's edge, such as Scrolling columns out of view, stay hidden while the two workspaces move.
+
 The `windows_move`, `fade`, `camera` and `layout` leaves ignore `style`.
 
 ### Minimize
