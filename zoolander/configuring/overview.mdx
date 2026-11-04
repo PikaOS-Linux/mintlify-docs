@@ -18,6 +18,8 @@ Zoolander uses the first of these that applies:
 
 For the default locations, Zoolander creates the `zoolander` directory with mode `0700` if it is missing. The config file can be at most 1 MiB.
 
+When the default `init.lua` does not exist, Zoolander copies its starter config from `/usr/share/zoolander/config` into that directory and loads it. It never overwrites a file. See [Starter config](/zoolander/installation#starter-config) and the files in [Example config](/zoolander/configuring/example-config).
+
 See [Command-line flags](/zoolander/installation#command-line-flags) for the other startup options.
 
 ## Lua basics
@@ -133,7 +135,7 @@ What happens on an error depends on when it happens:
 | Situation | Result |
 | --- | --- |
 | Lua syntax or runtime error at startup | Zoolander logs `initial config load failed: ...; loading emergency config` and runs the built-in emergency config. |
-| `init.lua` missing at startup | Same as above. |
+| `init.lua` missing at startup | Zoolander copies the [starter config](/zoolander/installation#starter-config) and loads it. Without an installed starter, it runs the emergency config. |
 | Error during a reload | The previous config stays active. The error is logged and returned by `zoolanderctl reload`. |
 | Unknown field in an option table | Zoolander logs `zoolander: zl.set_blur: unknown field <name>` and keeps loading. |
 | Invalid argument value | The call raises a Lua error, which fails the load. |

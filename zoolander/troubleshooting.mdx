@@ -269,10 +269,12 @@ To start with a known-good config without touching your own, pass another file:
 zoolander-session --config=/path/to/known-good.lua
 ```
 
-To start from nothing, move your config aside. On the next start, Zoolander runs the emergency config:
+To start over from the starter config, move your config directory aside. On the next start, Zoolander copies the [starter config](/zoolander/installation#starter-config) into a new one:
 
 ```bash
-mv ~/.config/zoolander/init.lua ~/.config/zoolander/init.lua.broken
+mv ~/.config/zoolander ~/.config/zoolander.broken
 ```
+
+Moving only `init.lua` aside is not enough. The starter's `init.lua` loads `monitors.lua`, `keybinds.lua`, `windows.lua` and `exec.lua`, and Zoolander keeps any of those that already exist.
 
 The config directory watch stops if you delete or replace the directory itself. The log says `config directory watch removed; hot reload stopped, use zoolanderctl reload`. Reload by hand until you restart Zoolander.

@@ -26,8 +26,7 @@ For the portal backend that the installed portal config prefers, also install `x
 | `/usr/lib/zoolander/libzoolander_bell.so` | Plays the system bell through PipeWire. Loaded on the first ring. |
 | `/usr/share/wayland-sessions/zoolander.desktop` | Session entry named **Zoolander**. Runs `/usr/bin/zoolander-session`. |
 | `/usr/share/xdg-desktop-portal/zoolander-portals.conf` | Portal backend order: `otter`, then `wlr`, then `gtk`. |
-
-The package does not install a default `init.lua`. On first launch, Zoolander uses its built-in emergency config until you write one. See [First launch](#first-launch).
+| `/usr/share/zoolander/config/` | The starter config: `init.lua`, `monitors.lua`, `keybinds.lua`, `windows.lua` and `exec.lua`. Copied into your config directory on first start. See [First launch](#first-launch). |
 
 ### Build from source
 
@@ -150,9 +149,29 @@ Zoolander looks for its config in this order:
 2. `$XDG_CONFIG_HOME/zoolander/init.lua`, when `XDG_CONFIG_HOME` is an absolute path.
 3. `$HOME/.config/zoolander/init.lua`.
 
-When it uses the default location, Zoolander creates the `zoolander` directory (mode `0700`) if it does not exist. It does not create `init.lua`.
+When it uses the default location, Zoolander creates the `zoolander` directory (mode `0700`) if it does not exist.
 
-If the file is missing or fails to load, Zoolander logs the error and loads the emergency config:
+### Starter config
+
+When Zoolander starts without `--config` and the default `init.lua` does not exist, it copies the starter config from `/usr/share/zoolander/config` into the config directory and loads the copy. It copies each starter file the directory lacks and never replaces a file that exists. The log names each copy:
+
+```text
+first start: copied "/usr/share/zoolander/config/init.lua" to "/home/you/.config/zoolander/init.lua"
+```
+
+If the copy cannot create `init.lua`, for example because your home directory is read-only, Zoolander loads the installed starter in place:
+
+```text
+first start: "/home/you/.config/zoolander/init.lua" could not be created; loading the starter config "/usr/share/zoolander/config/init.lua"
+```
+
+The copied files are yours to edit, by hand or with [Zoolander Settings](/zoolander/configuring/settings-app). Delete one and the next start without an `init.lua` copies the starter's version back. [Example config](/zoolander/configuring/example-config) shows every file and the `rule` helper its window rules use.
+
+`zoolander --config-schema` reports the starter directory as `starter_dir`, or `null` when no starter is installed. A build run from its source tree has none.
+
+### Emergency config
+
+If the config fails to load, or `init.lua` is missing and no starter is installed, Zoolander logs the error and loads the emergency config:
 
 ```text
 reading "/home/you/.config/zoolander/init.lua" failed: <error>
@@ -178,4 +197,4 @@ The emergency config has no quit binding of its own. If the Otter apps are not i
 WAYLAND_DISPLAY=wayland-1 zoolanderctl quit
 ```
 
-Zoolander keeps watching the config directory while the emergency config runs. Save a working `init.lua` there and it loads at once. Start from the [example config](/zoolander/configuring/example-config).
+Zoolander keeps watching the config directory while the emergency config runs. Save a working `init.lua` there and it loads at once. Start from the [starter config](/zoolander/configuring/example-config).
