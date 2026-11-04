@@ -192,6 +192,33 @@ Each message starts with `zl.set_presentation: `. `zl.presentation` raises the t
 
 Without an `output`, `zl.set_presentation` sets the global presentation. That form does not read `bitdepth`, `min_luminance`, `max_luminance` or `max_avg_luminance`. It logs them as unknown fields and does not raise.
 
+### Toggle HDR
+
+Two shortcuts change only a monitor's `hdr`. Both default to the focused monitor.
+
+```lua
+zl.toggle_hdr([output]) -> boolean
+zl.set_hdr(mode [, output]) -> nothing
+```
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `output` | A connector name such as `DP-1`, or `"focused"`. | string | `"focused"` |
+| `mode` | `off`, `auto` or `always`. | string | required |
+
+`zl.toggle_hdr` sets `hdr` to `off` when the monitor shows HDR now, and to `always` otherwise. It returns `true` when it turned HDR on and `false` when it turned it off. It reads whether HDR is engaged, as `zoolanderctl monitors-json` reports in `hdr.enabled`, not the configured mode. So a monitor on `auto` that shows a fullscreen HDR video turns off. A monitor that cannot show HDR is set to `always` each time.
+
+`zl.set_hdr` sets the monitor's `hdr` to `mode`. An invalid mode raises `zl.set_hdr: mode must be off, auto or always`.
+
+Both are `zl.set_presentation({ hdr = ... }, output)` with the same errors and lifetime. They raise for `"focused"` while no monitor has focus, and for a monitor held at `bitdepth = 8` when they would set `always`. A reload gives the monitor back its configured `hdr`.
+
+```lua
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "h", function() zl.toggle_hdr() end, { description = "Toggle HDR on this monitor" })
+zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT + zl.MOD_CTRL, "h", function() zl.set_hdr("auto", "DP-1") end, { description = "HDR auto on DP-1" })
+```
+
+[Zoolander Settings](/zoolander/configuring/settings-app) offers both as **Display** actions in its keybind editor.
+
 ### What output rules do not set
 
 `zl.output_rule` has no option for mirroring. To change an output while Zoolander runs without editing the config, use a client of the wlr-output-management protocol, such as `wlr-randr` or `kanshi`.

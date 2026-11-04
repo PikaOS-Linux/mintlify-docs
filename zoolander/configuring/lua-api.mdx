@@ -21,6 +21,8 @@ Global settings. See [Variables](/zoolander/configuring/variables).
 | `zl.set_floating(options)` | Raise floating windows the pointer rests on: `raise_on_hover` and `raise_delay`. |
 | `zl.set_presentation(options [, output])` | Tearing, immediate fullscreen, direct scanout, partial damage, VRR, HDR and SDR brightness and saturation. With `output` (a connector name or `"focused"`), changes one monitor's VRR, HDR, bit depth, SDR and luminance settings at runtime. See [Change presentation at runtime](/zoolander/configuring/monitors#change-presentation-at-runtime). |
 | `zl.presentation([output]) -> table` | The presentation in force, globally or for one monitor. |
+| `zl.toggle_hdr([output]) -> boolean` | Turn HDR off on a monitor that shows HDR now, otherwise set it to `always`. Defaults to the focused monitor. See [Toggle HDR](/zoolander/configuring/monitors#toggle-hdr). |
+| `zl.set_hdr(mode [, output])` | Set one monitor's `hdr` to `off`, `auto` or `always`. Defaults to the focused monitor. |
 | `zl.set_xwayland(options)` | Turn Xwayland on or off and set `force_zero_scaling`. |
 | `zl.set_window_style(options)` | Gaps, borders and border gradients, rounding, opacity and shadows. |
 | `zl.set_ssd(enabled_or_options)` | Server-side decorations: title bars, borders, title font and buttons. |
