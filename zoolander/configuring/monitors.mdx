@@ -126,6 +126,22 @@ An output with no rule keeps the mode the backend picks, at scale 1 with no tran
 2. An output placed earlier in this session returns to that position.
 3. Any other output goes to the right of the rightmost output, at `y = 0`.
 
+## Direct scanout
+
+When one fullscreen window covers an output, Zoolander can hand its buffer straight to the display plane instead of drawing a frame. This is direct scanout, controlled by `direct_scanout` in `zl.set_presentation` and on by default.
+
+- A game whose buffer is tagged with the output's own colour encoding scans out, such as a PQ game on an HDR output.
+- An SDR game fullscreen on an HDR output scans out where the plane has a colour pipeline. The display engine converts SDR to PQ, as the renderer would.
+- `XBGR8888` and opaque `ABGR8888` buffers, which many Vulkan games present, scan out as well as `XRGB8888`.
+
+`zoolanderctl monitors` shows a `direct scanout:` line per output with `active` or the reason the last frame was composited, and whether the plane has a colour pipeline:
+
+```text
+  direct scanout: active (plane converts colour), plane colour pipeline=true
+```
+
+See [Direct scanout does not engage](/zoolander/troubleshooting#direct-scanout-does-not-engage) for each reason and the GPU support for colour conversion.
+
 ## Hotplug
 
 When an output connects:

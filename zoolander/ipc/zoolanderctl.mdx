@@ -32,7 +32,7 @@ zoolanderctl eval 'return zl.window_count()'
 | `reload` | Reload the config now. | `OK reload ok`, or `ERR` and the error message |
 | `workspace NAME` | Whether a workspace has windows. | `OK occupied`, `OK empty` or `ERR unknown workspace` |
 | `eval LUA` | Run Lua in the live config runtime and return its first result. | `OK <result>` or `ERR <error>` |
-| `monitors` | Every output: monitor identity, layout, current mode and mode list, scanout, HDR and colour state. | `OK N outputs`, then a report |
+| `monitors` | Every output: monitor identity, layout, current mode and mode list, scanout, direct scanout, HDR and colour state. | `OK N outputs`, then a report |
 | `monitors-json` | The same as one line of JSON, including outputs that are turned off. | `OK json`, then one JSON line |
 | `clients` | Every window: identifier, app_id, title, pid, workspace, output, geometry and state. | `OK N clients`, then a report |
 | `clients-json` | The same as one line of JSON. | `OK json`, then one JSON line |
@@ -113,9 +113,34 @@ Changes made with `eval` last until the next reload replaces the runtime.
 
 ### monitors
 
-`monitors` prints a block per output with its EDID make, model and serial, its position, size, scale and transform in the layout, the current mode and physical size, the scanout format, modifier, bit depth and max bpc, adaptive sync, async flip and content type, the HDR state, the EDID primaries, gamma and luminance, the renderer's colour transform, and every mode the connector lists.
+`monitors` prints a block per output with its EDID make, model and serial, its position, size, scale and transform in the layout, the current mode and physical size, the scanout format, modifier, bit depth and max bpc, whether direct scanout is active, adaptive sync, async flip and content type, the HDR state, the EDID primaries, gamma and luminance, the renderer's colour transform, and every mode the connector lists.
 
-`monitors-json` gives the same state as one line of JSON (version 1). Outputs that are turned off appear with `"enabled": false`.
+The `direct scanout:` line says whether the output shows a client buffer straight from the display plane:
+
+```text
+  direct scanout: active (plane converts colour), plane colour pipeline=true
+  direct scanout: cursor, plane colour pipeline=false
+```
+
+| Part | Meaning |
+| --- | --- |
+| `active` | The last frame scanned a client buffer out directly. |
+| A reason, such as `cursor` or `format` | The last frame was composited, and this is the check that stopped direct scanout. See [Direct scanout does not engage](/zoolander/troubleshooting#direct-scanout-does-not-engage) for every reason. |
+| `(plane converts colour)` | The plane's colour pipeline converts the buffer to the output's encoding, for example an SDR game on an HDR output. Only shown with `active`. |
+| `plane colour pipeline=` | Whether the display plane has a colour pipeline Zoolander can use for that conversion. |
+
+`monitors-json` gives the same state as one line of JSON (version 1). Outputs that are turned off appear with `"enabled": false`. Each live output has a `direct_scanout` object:
+
+| Field | Meaning |
+| --- | --- |
+| `active` | `true` when the last frame scanned a client buffer out directly. |
+| `blocked` | The reason the last frame was composited, as a string, or `null` when `active` is `true`. |
+| `plane_color_capable` | Whether the display plane has a usable colour pipeline. |
+| `converted` | `true` when direct scanout is active and the plane's colour pipeline converts the buffer. |
+
+```bash
+zoolanderctl monitors-json | jq '.outputs[] | {name, direct_scanout}'
+```
 
 ### clients
 

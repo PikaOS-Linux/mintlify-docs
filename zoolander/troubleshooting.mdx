@@ -1,7 +1,7 @@
 ---
 title: "Troubleshooting Zoolander"
 sidebarTitle: "Troubleshooting"
-description: "Read Zoolander's logs, turn on Vulkan diagnostics, fix GPU, seat and Xwayland problems, and get back to a working config."
+description: "Read Zoolander's logs, turn on Vulkan diagnostics, find out why direct scanout does not engage, fix GPU, seat and Xwayland problems, and get back to a working config."
 ---
 
 ## Logs
@@ -120,6 +120,52 @@ The session works but uses more CPU. To get Vulkan:
 - On a hybrid laptop, the display may be wired to the integrated GPU. Zoolander then renders there. Use `--drm-list` to see which card drives your panel.
 
 Even with Vulkan, if the display plane and the driver share no scanout modifier, Zoolander copies frames into dumb buffers. That works but costs CPU time.
+
+## Direct scanout does not engage
+
+With direct scanout, the display shows a fullscreen game's buffer straight from the plane and Zoolander draws nothing for that frame. It is on by default (`direct_scanout` in [`zl.set_presentation`](/zoolander/configuring/variables)). To see whether it is active, and if not why, run:
+
+```bash
+zoolanderctl monitors | grep 'direct scanout'
+```
+
+The line shows `active`, or the first check that stopped the last frame. The reason updates every frame, so read it while the game runs in front.
+
+| Reason | What stops direct scanout |
+| --- | --- |
+| `disabled` | `direct_scanout = false` in `zl.set_presentation`. |
+| `no_window` | No window covers the whole output on its own. A border or title bar, a bar or notification on the `top` or `overlay` layer, a popup, the overview, a window drag, a move or resize, and the lock screen all count. Make the game fullscreen. |
+| `animating` | An animation is running on the output. |
+| `rotated` | The output has a transform other than `normal`. |
+| `not_covering` | The window's content does not cover the output exactly. |
+| `no_buffer` | The window has no buffer yet. |
+| `color` | The buffer's colour encoding is not the output's, and the plane cannot convert it. See [HDR outputs](#hdr-outputs). |
+| `transformed` | The client set a buffer transform. |
+| `translucent` | The client made the surface less than fully opaque. |
+| `subsurface` | The window has a visible subsurface. |
+| `not_dmabuf` | The buffer is in shared memory, or Zoolander could not import it. |
+| `size` | The buffer is not the size of the output's mode. Set the game's resolution to the output's. |
+| `cropped` | The client crops its buffer with a viewport. |
+| `format` | The plane cannot take the buffer's pixel format. Zoolander takes `XRGB8888`, `XBGR8888`, `XRGB2101010` and `XBGR2101010`, and their alpha variants when the client marks the buffer opaque. |
+| `effects` | Window opacity, a fade, or inactive dimming applies to the window. |
+| `capture` | A screen capture needs a frame that Zoolander draws. |
+| `cursor` | A cursor overlaps the output and cannot stay on the hardware cursor plane. Tablet tool cursors and remote seat cursors count. Move the pointer to another output, or let the game hide it. |
+| `popup` | An input method popup overlaps the output. |
+| `carried_sources` | The previous frame was composited and its client buffers are still in use. Zoolander tries again on the next frame. |
+| `rejected` | The kernel refused the plane setup. |
+
+### HDR outputs
+
+A game that renders PQ on an HDR output scans out like any other. A buffer tagged with the output's own colour encoding counts as a match.
+
+An SDR game on an HDR output needs converting to PQ. Where the display plane has a colour pipeline, the display engine does that conversion and the game still scans out. `monitors` then shows `active (plane converts colour)`. The pipeline needs a kernel with plane colour pipelines (colorops) and:
+
+- On AMD, a shaper 1D LUT and a 3D LUT on the primary plane.
+- On NVIDIA, driver 615 or newer with its colour pipeline module parameter turned on.
+
+`plane colour pipeline=false` means the output has no usable pipeline, and an SDR game on an HDR output composites with the reason `color`. Conversions the plane cannot reproduce, such as tone mapping, also composite.
+
+The hardware cursor and a converting plane only mix on AMD RX 9000 series GPUs, whose display engine blends the cursor before the colour pipeline. There, a game with a visible cursor keeps direct scanout. On other GPUs, a cursor over a converted frame makes it composite with the reason `cursor`.
 
 ## Xwayland
 
