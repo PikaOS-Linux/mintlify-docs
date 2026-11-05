@@ -119,7 +119,8 @@ For the global values these actions override, see [Variables](/zoolander/configu
 - Relative and absolute motion, pointer warps and output changes all stay inside the window.
 - When the window gets focus again, the pointer moves back inside it.
 - The rule lets go while another window has focus, and while the overview, the command sheet, the layout picker, or a move or resize is active.
-- A pointer lock or confinement that the app asks for through `zwp_pointer_constraints_v1` takes precedence while it is active.
+- A pointer lock or confinement that the app asks for through `zwp_pointer_constraints_v1` decides where the pointer goes inside the window, but cannot take it outside.
+- An X11 game that warps the pointer back to its centre with its cursor showing, as many do while aiming, keeps its warps. Xwayland applies such a warp only to its own pointer, so Zoolander watches the window's pointer motion and follows any move it did not make. A game that grabs the pointer with its cursor showing reports its motion only to itself, so its warps cannot be followed.
 
 ```lua
 zl.add_window_rule("app_id", "^(steam_app_.*)$", { confine_cursor = true })
@@ -128,6 +129,8 @@ zl.add_window_rule("app_id", "^(steam_app_.*)$", { confine_cursor = true })
 ### Force HDR for a game
 
 `force_game_hdr` tells a matching window that its output is in HDR mode while the output shows SDR, either because the display cannot do HDR or because its `hdr` setting is `off`. It works like gamescope's `--hdr-debug-force-support`, for one window at a time. Games then take their HDR path, and Zoolander converts their PQ back to the SDR the output shows. On an output that is in HDR mode, the rule changes nothing.
+
+Converting HDR to SDR keeps each colour's hue. A colour outside the output's primaries loses saturation toward its own grey, keeping its brightness. A highlight brighter than the output's peak after the tone curve is dimmed until it fits, keeping its saturation. No channel clips on its own, so bright skies stay blue rather than turning cyan.
 
 ```lua
 zl.add_window_rule("app_id", "^(steam_app_.*)$", { force_game_hdr = true })

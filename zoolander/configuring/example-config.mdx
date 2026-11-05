@@ -341,7 +341,8 @@ zl.add_window_rule("title", "^(Picture-in-Picture)$", { float = true })
 -- zl.add_window_rule("app_id", "^(spotify)$", { workspace = "special:music" })
 --
 -- Keep the pointer inside a focused game, so it cannot drift onto another
--- monitor. A game's own pointer lock still wins while it holds one.
+-- monitor. A game's own pointer lock decides where the pointer goes inside
+-- the window, but cannot take it out.
 -- zl.add_window_rule("app_id", "^(steam_app_.*)$", { confine_cursor = true })
 --
 -- force_game_hdr tells a game its output is in HDR mode while the output

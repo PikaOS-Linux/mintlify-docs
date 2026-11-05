@@ -128,6 +128,7 @@ These fields override the global [`zl.set_presentation`](/zoolander/configuring/
 | `vrr` | `off`, `always`, `fullscreen`, `fullscreen_game`, or `0` to `3`. | string or integer |
 | `hdr` | `off`, `auto` or `always`. | string |
 | `bitdepth` | `8` or `10`. See [Bit depth](#bit-depth). | integer |
+| `color_profile` | `srgb` or `edid`. See [Colour profile](#colour-profile). | string |
 | `sdr_brightness` | 0.1 to 4. | number |
 | `sdr_saturation` | 0 to 2. | number |
 | `sdr_min_luminance` | 0 to 10 nits. | number |
@@ -152,6 +153,23 @@ Without `bitdepth`, the output scans out 8 bits per channel in SDR and 10 while 
 
 A depth the output cannot use logs a warning on each reload, and the driver's depth applies instead. Removing the setting hands the depth back to the driver on the next reload.
 
+#### Colour profile
+
+A wide-gamut display in its native colour mode shows the sRGB it is sent stretched over its whole gamut, so SDR looks oversaturated. `color_profile = "edid"` encodes the output in the primaries the display's EDID reports instead:
+
+- Untagged content is converted as sRGB, and colour-managed content from the colour space it declares, so colours look as they do on an sRGB display.
+- Screenshots and screen recordings still read sRGB.
+- An output whose EDID gives no primaries stays sRGB. HDR ignores the setting.
+- Direct scanout needs a colour conversion on such an output, so fullscreen windows are composited.
+
+Use it only with the display in its native or wide colour mode. In its own sRGB picture mode the display already maps sRGB, and colours come out desaturated. The default is `srgb`.
+
+```lua
+zl.output_rule({ output = "DP-1", color_profile = "edid" })
+```
+
+`zoolanderctl monitors` prints the primaries the renderer encodes in on its `render primaries` line.
+
 ### Change presentation at runtime
 
 `zl.set_presentation` takes an output as its second argument, so a binding can change one monitor while Zoolander runs:
@@ -170,7 +188,7 @@ With an `output`, the fields apply to that monitor alone, over its `zl.output_ru
 
 A value set this way lasts until the config reloads. The reload gives every monitor back the presentation its config gives it. Zoolander keeps the value by connector name, so a monitor that is unplugged and plugged back in keeps it. `zoolanderctl monitors-json` reports the values each monitor runs with, these included.
 
-`zl.presentation` returns the presentation in force: the global one without `output`, or what that monitor runs with. The table has `allow_tearing`, `immediate_fullscreen`, `direct_scanout` and `partial_damage` as booleans, `vrr`, `hdr` and `sdr_eotf` as names, and the `sdr_*` numbers. For a monitor, it also has `bitdepth`, `min_luminance`, `max_luminance` and `max_avg_luminance` when a rule or a call set them. Left out, the driver picks the depth and the EDID gives the luminances.
+`zl.presentation` returns the presentation in force: the global one without `output`, or what that monitor runs with. The table has `allow_tearing`, `immediate_fullscreen`, `direct_scanout` and `partial_damage` as booleans, `vrr`, `hdr` and `sdr_eotf` as names, and the `sdr_*` numbers. For a monitor, it also has `color_profile`, and `bitdepth`, `min_luminance`, `max_luminance` and `max_avg_luminance` when a rule or a call set them. Left out, the driver picks the depth and the EDID gives the luminances.
 
 ```lua
 zl.bind(zl.MOD_LOGO + zl.MOD_SHIFT, "h", function()
@@ -190,7 +208,7 @@ end, { description = "Toggle HDR on this monitor" })
 
 Each message starts with `zl.set_presentation: `. `zl.presentation` raises the three `output` errors, starting with `zl.presentation: `. Out-of-range values raise the same errors as in `zl.output_rule`.
 
-Without an `output`, `zl.set_presentation` sets the global presentation. That form does not read `bitdepth`, `min_luminance`, `max_luminance` or `max_avg_luminance`. It logs them as unknown fields and does not raise.
+Without an `output`, `zl.set_presentation` sets the global presentation. That form does not read `bitdepth`, `color_profile`, `min_luminance`, `max_luminance` or `max_avg_luminance`. It logs them as unknown fields and does not raise.
 
 ### Toggle HDR
 
@@ -261,6 +279,8 @@ When an output connects:
 2. If the output was connected earlier in the session, its workspaces and their windows come back to it.
 3. Otherwise it gets a new workspace called `1`.
 4. Handlers for the `output_added` event run with a monitor table for the new output.
+
+A display that changes its EDID while it stays connected, as some do when their HDR mode changes, is treated as unplugged and plugged back in, so its modes, primaries and luminances come from the new EDID.
 
 When an output disconnects:
 
