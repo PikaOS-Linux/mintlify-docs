@@ -71,6 +71,7 @@ zl.set_keyboard({
 | `accel_profile` | libinput acceleration profile. `"adaptive"` speeds the pointer up as you move faster. `"flat"` applies one constant factor. | enum: `adaptive`, `flat` | `"adaptive"` |
 | `sensitivity` | libinput pointer speed. Range `-1..1`. `0` is the device default. | float | `0` |
 | `follow_mouse` | How keyboard focus follows the pointer. See the list below. Also accepts `0..3`. | enum: `disabled` (0), `focus` (1), `click` (2), `detached` (3) | `"focus"` |
+| `rules_follow_pointer` | Open new windows on the monitor under the pointer instead of the focused one. A window rule's `workspace` that lives on another monitor goes to the workspace at the same position on the pointer's monitor. | bool | `false` |
 
 `follow_mouse` values:
 

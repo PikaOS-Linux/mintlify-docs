@@ -95,7 +95,7 @@ Inside the anchored form:
 | --- | --- | --- | --- |
 | `float` | Open the window floating. It opens at the size its client chose, kept inside the work area and within the window's own minimum and maximum size. | bool | `false` |
 | `fullscreen` | Make the window fullscreen. | bool | `false` |
-| `workspace` | Open the window on this workspace. The name is 1 to 127 bytes. `special` or `special:name` opens it on that special workspace, which Zoolander creates hidden if needed. | string | none |
+| `workspace` | Open the window on this workspace. The name is 1 to 127 bytes. `special` or `special:name` opens it on that special workspace, which Zoolander creates hidden if needed. With `rules_follow_pointer` in [`zl.set_pointer`](/zoolander/configuring/variables), a regular workspace on another monitor maps to the same position on the monitor under the pointer. | string | none |
 | `follow` | With `workspace`, also switch to that workspace when the window moves there. For a special workspace, `follow` shows it at once. Without `follow`, it stays hidden until `zl.toggle_special_workspace` shows it. Needs `workspace`. | bool | `false` |
 | `dim_around` | Dim everything behind the window. The strength is the `around` value of `zl.set_dim`. | bool | `false` |
 | `no_animation` | Turn off open, close and move animations for the window. | bool | `false` |
@@ -173,7 +173,7 @@ zl.add_window_rule("app_id", "org.gnome.Calculator", { float = true, rounding = 
 -- Calculator floats with rounding 16. Other GNOME apps tile with rounding 8.
 ```
 
-A config holds up to 32 window rules. Past that, the call raises `zl.add_window_rule: the rule table is full`.
+A config holds up to 128 window rules. Past that, the call raises `zl.add_window_rule: the rule table is full`.
 
 ## When rules run
 
@@ -204,7 +204,7 @@ Rules follow the window's current state. If a title change means a `float` rule 
 | `workspace cannot hold a NUL byte` | The `workspace` name contains a NUL byte. |
 | `follow needs a workspace` | `follow = true` without `workspace`. |
 | `the rule sets nothing` | No action set. |
-| `the rule table is full` | More than 32 rules. |
+| `the rule table is full` | More than 128 rules. |
 
 Each message starts with `zl.add_window_rule: `.
 
