@@ -4,40 +4,133 @@ sidebarTitle: "otter-cue"
 description: "Workspace-only otr interaction-sound synthesis and optional Lua/audio integration."
 ---
 
-`otter-cue` is a workspace interaction-sound library, not a packaged end-user app. It supplies synthesized cues and binding policy for hosts that opt in.
+`otter-cue` is the interaction-sound library of the Otter Shell workspace. It synthesizes 17 short cues and plays them through PipeWire. It is a library for hosts that opt in, such as `otter-osd`, and it is not packaged as an end-user app.
 
-Import leaves such as `otter_cue.sound`, `recipe`, `engine`, `bind`, and `playback`. There is no installed global engine API.
+The package name is `otter_cue`. Import modules such as `otter_cue.sound`, `otter_cue.engine`, `otter_cue.bind` and `otter_cue.playback`.
+
+```toml
+[dependencies]
+otter_cue = { path = "../../otter-cue/otr" }
+```
+
+## Cues
+
+`sound.SoundName` names the cues: `chime`, `sparkle`, `droplet`, `bloom`, `whisper`, `tick`, `press`, `release`, `toggle`, `success`, `error`, `page`, `loading`, `ready`, `pulse`, `scan` and `arrival`. `SoundName.parse(text)` and `as_text()` convert between names and tags.
+
+`recipe.get(name)` returns a cue's synthesis recipe. `recipe.duration_seconds(&r)` and `recipe.duration_frames(&r, sample_rate)` give its length.
 
 ## Synthesis and binding
 
-`engine.Engine` is caller-owned. Use `init`, `set_enabled`, `set_volume`, `play`, `play_named`, `busy`, `pull`, and `render`. Play methods return false when a cue is dropped, including mute, zero volume, unknown name, or exhausted voices.
+`engine.Engine` is a mixer with eight voices that you own. It renders mono `f32` samples and needs no audio server.
 
-The engine has eight voices. `bind.Bind.init()` keeps interaction/hover state and dispatches to a borrowed engine. `choose` selects a sound without owning playback.
+```otr
+import std
+import otter_cue.bind
+import otter_cue.engine
+import otter_cue.recipe
+import otter_cue.sound
 
-`recipe` contains cue synthesis recipes. Lower-level DSP, filter, noise, shimmer, compressor, and voice modules support deterministic rendering.
+pub fn main() void {
+    var eng = engine.Engine.init(sound.default_sample_rate)
+    eng.set_volume(0.8)
+
+    // Render one cue offline into a mono f32 buffer.
+    var out: [48000]f32 = unsafe { undefined }
+    frames := eng.render(.success, .{ volume: 0.5 }, &mut out)
+    var peak: f32 = 0
+    for sample in out[0..frames] {
+        peak = @max(peak, if sample < 0 { -sample } else { sample })
+    }
+    std.io.printf("{} frames, peak {d:.3}\n", .{ frames, peak })   // 26944 frames, peak 0.062
+
+    r := recipe.get(.success)
+    std.io.printf("{d:.2}s\n", .{ recipe.duration_seconds(&r) })   // 0.56s
+
+    // A Bind picks the cue for a pointer action and throttles hovers.
+    var b = bind.Bind.init()
+    _ = b.attach()
+    played := b.dispatch(&mut eng, .hover, .mouse_fine, "whisper", 1000, false)
+    again := b.dispatch(&mut eng, .hover, .mouse_fine, "whisper", 1050, false)
+    std.io.printf("{} {}\n", .{ played, again })                   // true false
+}
+```
+
+| Engine method | Purpose |
+| --- | --- |
+| `init(sample_rate)` | A new engine. `sound.default_sample_rate` is 48000 |
+| `set_enabled(enabled)`, `set_volume(volume)` | Mute and master volume, 0 to 1 |
+| `play(name, opts)`, `play_named(text, opts)` | Start a cue on a free voice |
+| `pull(out)` | Overwrite `out` with the next block of the mix |
+| `render(name, opts, out)` | Play a cue and pull until it ends or `out` is full. Returns the frames written |
+| `busy()`, `live_voices()` | Whether any voice is playing, and how many |
+
+`play` and `play_named` return false when the engine drops the cue: it is muted, the volume is zero, the name is unknown, or all eight voices are busy.
+
+`bind.Bind` maps the pointer actions `hover`, `press`, `release` and `toggle` to cues. `dispatch` plays the cue on an engine you pass. `choose` returns the cue without playing it. A hover within 150 ms of the last one plays nothing, and neither does a hover from a pointer that is not a mouse.
 
 ## Playback
 
-`playback.Session` owns synchronized engine/stream state. It opens the stream and worker lazily on first play. Its idle mixer sleeps until work arrives rather than polling in a millisecond loop.
+`playback.Session` owns an engine, a PipeWire stream and a mixer thread. It opens the stream and starts the thread on the first play. The mixer sleeps while no voice is playing.
 
-`play`, `play_named`, and `drain` take explicit I/O where required. The `enable_pipewire` build option defaults true; disabling it uses the no-stream path. Pure rendering does not require a live audio server.
+```otr
+import std
+import std.mem
+import otter_cue.playback
+import otter_cue.sound
+
+pub fn main(env: std.Env) void {
+    var session = playback.Session.init(mem.heap, sound.default_sample_rate)
+    defer session.deinit()
+
+    session.set_volume(0.6)
+    if !session.play(env.io, .success, .{}) {
+        std.io.eprintf("cue dropped\n", .{})
+        return
+    }
+    _ = session.play_named(env.io, "tick", .{ volume: 0.5 })
+    session.drain(env.io)
+}
+```
+
+`play` returns true when a voice took the cue and the stream is up. `drain` waits until every voice has finished. `live_failed()` turns true once the stream fails to open or write, and later plays are dropped. `playback.play_buffer(samples, sample_rate)` plays a buffer you rendered and returns when it has played.
+
+The `enable_pipewire` build option defaults to true. With it off, a session never opens a stream and drops its cues, while `Engine` rendering works as before.
 
 ## Lua
 
-`otter_cue_lua` registers `otter.cue`:
+The `otter_cue_lua` package in `otr/lua/` provides `otter.cue` for [otter-lua](/developers/libraries/otter-lua) hosts.
 
-| Functions                                                  | Capability |
-| ---------------------------------------------------------- | ---------- |
-| `names`, `is_name`, `duration`, `render`                   | None       |
-| `play`, `bind`                                             | `audio`    |
-| `set_enabled`, `set_volume`, `enabled`, `volume`, `status` | None       |
+| Functions | Capability |
+| --- | --- |
+| `names()`, `is_name(s)`, `duration(name)`, `render(name, volume)` | None |
+| `play(name, volume)`, `bind(action, name, pointer, from_inside)` | `audio` |
+| `set_enabled(b)`, `set_volume(v)`, `enabled()`, `volume()`, `status()` | None |
 
-`render(name, volume?)` returns frame count and peak, not a PCM buffer. `status()` returns `idle`, `live`, or `failed`.
+```lua
+local cue = require("otter.cue")
+local log = require("otter.log")
 
-Plugins share one playback session and process-wide hover throttle. Hover cues within 150 ms are suppressed. Plugin mute/volume settings remain per instance and are released on unload.
+local names = cue.names()                  -- 17 names, "chime" first
+local frames, peak = cue.render("success") -- measures a cue without playing it
 
-Verify synthesis with offline fixtures. Live playback tests must use an isolated audio server rather than the developer's session.
+cue.set_volume(0.25)
+if cue.play("tick") then
+  log.info("status", cue.status())         -- "live"
+end
+
+cue.bind("hover", "whisper")               -- true: played
+cue.bind("hover", "whisper")               -- false: within 150 ms of the last hover
+cue.bind("press")                          -- the default cue for a press
+```
+
+`render` returns a frame count and a peak level, and no sample data. `status()` returns `"idle"`, `"live"` or `"failed"`. The pointer argument of `bind` is `"mouse"` or `"other"`.
+
+All plugins in a process share one playback session and one hover throttle. Each plugin instance keeps its own mute and volume settings.
+
+## Testing
+
+Test synthesis by rendering offline and comparing samples. Run live playback tests against a private PipeWire instance and never against your own session.
 
 ## Source reference
 
-`otr/engine.otr`, `otr/bind.otr`, `otr/playback.otr`, `otr/lua/cue.otr`, `otr/API.md` in the component repository.
+`otr/engine.otr`, `otr/bind.otr`, `otr/playback.otr`, `otr/lua/cue.otr` and `otr/API.md` in the `otter-cue` repository. The Lua example follows `otr/lua/tests/cue_player/init.lua`.

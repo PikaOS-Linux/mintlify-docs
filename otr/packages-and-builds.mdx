@@ -1,0 +1,300 @@
+---
+title: "Packages and builds"
+description: "The otr.toml manifest, dependencies, C inputs, build options, build modes, cross-compiling and caching."
+---
+
+## Single files
+
+A single `.otr` file is a complete program. You do not need a manifest:
+
+```bash
+otr run hello.otr
+otr build hello.otr -o hello --release
+```
+
+Add an `otr.toml` when you need dependencies, C sources or build options.
+
+## Packages
+
+A package is a directory of modules described by an `otr.toml` manifest. The program's package is the root file's directory. Its manifest is the `otr.toml` beside the root file, or the nearest one above it.
+
+Here is a workspace with an app and a library it depends on:
+
+```text
+geometry/
+  otr.toml
+  geometry.otr
+  rect.otr
+app/
+  otr.toml
+  src/main.otr
+```
+
+```toml geometry/otr.toml
+[package]
+name = "geometry"
+```
+
+```otr geometry/rect.otr
+pub const Rect = struct {
+    pub w: i64
+    pub h: i64
+
+    pub fn area(self: &Rect) i64 {
+        return self.w * self.h
+    }
+}
+```
+
+```otr geometry/geometry.otr
+/// Shapes shared by the apps.
+import rect
+
+pub const Rect = rect.Rect
+```
+
+```toml app/otr.toml
+[package]
+name = "app"
+otr_min = "0.2.6"
+
+[dependencies]
+geometry = { path = "../geometry" }
+
+[options]
+verbose = false
+greeting = "hello"
+```
+
+```otr app/src/main.otr
+import std
+import build_options
+import geometry
+
+pub fn main() void {
+    r := geometry.Rect{ w: 4, h: 5 }
+    if build_options.verbose {
+        std.io.printf("{}: computing area\n", .{ build_options.greeting })
+    }
+    std.io.printf("{}\n", .{ r.area() })
+}
+```
+
+```bash
+cd app
+otr run src/main.otr
+```
+
+```text
+20
+```
+
+## The manifest
+
+```toml
+[package]
+name = "app"                 # an identifier
+otr_min = "0.1.0"            # the oldest compiler that builds it
+root = "src/app.otr"         # for a dependency: what `import <name>` loads
+
+[dependencies]
+wayland = { path = "../otter_wayland" }
+
+[c]
+sources = ["native/glue.c", "vendor/libfoo.a"]
+include_dirs = ["native/include"]
+public_include_dirs = ["include"]
+cflags = ["-DGLUE=1"]
+pkg_config = ["wayland-client", "xkbcommon"]
+libs = ["m"]
+
+[c.when.with_dbus]
+sources = ["vendor/basu/bus.c"]
+
+[options]
+with_dbus = true
+max_outputs = 8
+backend = "wayland"
+
+[build]
+cpu = "x86_64_v3"
+pie = true
+```
+
+The manifest accepts a subset of TOML: tables, bare and quoted keys, strings, integers, booleans, arrays of strings, and inline tables of strings. Unknown tables and keys are errors. Paths are relative to the manifest's directory unless they are absolute.
+
+`otr_min` is checked against the compiler's version. A manifest that asks for a newer compiler than yours is an error.
+
+## Dependencies
+
+A dependency is a path to another package. The depending manifest chooses the import name, which must be an identifier. A directory named `otter-wayland` is imported as, say, `otter_wayland`.
+
+```toml
+[dependencies]
+otter_wayland = { path = "../otter-wayland" }
+```
+
+`-M name=path` adds a dependency from the command line.
+
+A dependency's root module is, in order: the file its path names, its manifest's `root`, the module named after its manifest's `name`, or the module named after its directory.
+
+Each dependency resolves its own dependencies through its own manifest, so a package names only what it uses directly. A package reached along several paths is one package, and its types are the same types to every dependent.
+
+Module lookup never leaves a package. You reach another package's modules by its dependency name only.
+
+<Note>The manifest parses git dependencies but does not fetch them. Check the dependency out and give its path.</Note>
+
+## C inputs
+
+The `[c]` table names what to compile and link alongside your otr code.
+
+| Key | Contents |
+| --- | --- |
+| `sources` | C (`.c`), assembly (`.S`) and C++ (`.cc`, `.cpp`, `.cxx`) sources, objects (`.o`), archives (`.a`) and shared libraries (`.so`) |
+| `include_dirs` | Include directories for this package's C and its `import c` only |
+| `public_include_dirs` | Include directories that also reach every package depending on this one |
+| `cflags` | Extra compiler flags for this package's sources |
+| `pkg_config` | Libraries whose flags come from `pkg-config` |
+| `libs` | Libraries to link with `-l` |
+
+The bundled clang compiles each source at the build mode's optimisation level: `-O0 -g` in debug, `-O2` in release and `-O3` in release-fast. Sources compile in parallel. Each object is cached in `.otr-cache` by the hash of its source, flags and included headers.
+
+C++ compiles as `gnu++20` against the bundled libc++.
+
+You can give the same inputs on the command line:
+
+```bash
+otr build app.otr glue.c --pkg-config xkbcommon -I native/include -l m
+```
+
+pkg-config describes the host's libraries, so a cross-compiling build that uses it is refused.
+
+A package's include directories reach other packages only when they are public. Two packages that each ship a `config.h` get their own.
+
+## Build options
+
+`[options]` declares typed compile-time options with their defaults. The type is the default's type: bool, integer or string.
+
+The build writes a module named `build_options` with one `pub const` per option:
+
+```otr
+import build_options
+
+if build_options.verbose {
+    std.io.printf("{}: computing area\n", .{ build_options.greeting })
+}
+```
+
+Set an option with `-D name=value`. `-D name` alone means `-D name=true`.
+
+```bash
+otr run src/main.otr -D verbose=true -D greeting=hi
+```
+
+```text
+hi: computing area
+20
+```
+
+An option is a compile-time constant, so an `if` on one compiles only the branch it takes. The dropped branch may call into C that the option leaves out.
+
+`[options.x86_64]` and `[options.aarch64]` give an option a different default for one architecture.
+
+### Options that add C code
+
+`[c.when.<option>]` holds `[c]` keys that apply when a bool option is true. `[c.when.<option>.<value>]` applies when an option has that value.
+
+```toml
+[c.when.with_dbus]
+sources = ["vendor/basu/bus.c"]
+
+[c.when.allocator.mimalloc]
+libs = ["mimalloc"]
+```
+
+Both apply after `-D`, so `-D with_dbus=false` drops the sources, flags and libraries the table names.
+
+## Build modes
+
+| Mode | Flag | Backend | Integer overflow |
+| --- | --- | --- | --- |
+| debug | (none) | TPDE | Panics |
+| release | `--release` | LLVM | Panics |
+| release-fast | `--release-fast` | LLVM | Wraps |
+
+Bounds checks and the other [run-time checks](/otr/memory/runtime-checks-and-unsafe) stay in every mode.
+
+Debug builds favour compile speed and include debug information. Use a release mode for anything you measure or ship.
+
+`--time` reports how long each build stage took, and the peak memory:
+
+```bash
+otr build src/main.otr -o app --release --time
+```
+
+```text
+analyse 4624 us
+lower 162 us
+shims 143 us
+bitcode 291 us
+clang 20402 us
+link 9361 us
+total 34985 us
+peak rss 25080 kB
+```
+
+## Targets
+
+`--target <arch>-linux[-gnu|-musl]` builds for another architecture or C library. The architectures are `x86_64` and `aarch64`.
+
+```bash
+otr build app.otr -o app --release --target aarch64-linux-musl
+```
+
+The toolchain ships the C library for every target, so cross-compiling needs nothing extra.
+
+A glibc build runs on any glibc from 2.34. A musl build is static.
+
+`otr run` and `otr test` can run a program built for another architecture when `OTR_EXEC` names an emulator such as `qemu-aarch64`.
+
+`--cpu <cpu>` sets the CPU level for ordinary code. See [Raising the baseline](/otr/simd-and-data-layout#raising-the-baseline).
+
+## Linking
+
+Every function and datum is compiled into its own section, and executables are linked with `--gc-sections`. Unused parts of the standard library, the runtime and linked C archives are left out. A release build of the package example above is about 26 KB.
+
+An executable is linked at a fixed address by default, which starts faster. `--pie`, or `[build] pie = true`, makes a glibc executable position-independent for address randomisation. `--no-pie` overrides the manifest.
+
+`--link-arg <flag>` passes a flag to the linker unchanged. `-rpath <dir>` lets the executable find shared libraries in a directory.
+
+## Caching
+
+Builds keep their state in a `.otr-cache` directory. It is safe to delete, and you should add it to `.gitignore`.
+
+A build reuses its executable while every file it read is unchanged. It compares contents by hash, so touching a file without changing it does not trigger a rebuild.
+
+`build`, `check` and `test` also skip a function's safety checks when an earlier run by the same compiler checked an identical function clean. `otr check` skips analysing a function body whose dependencies are unchanged.
+
+| Variable | Effect |
+| --- | --- |
+| `OTR_CHECK_CACHE=off` | Ignores the check caches |
+| `OTR_CHECK_CACHE=verify` | Checks everything anyway, and stops if a reused result was wrong |
+| `OTR_TMPDIR` | A directory for the build's temporary files, in place of `.otr-cache/tmp` |
+
+The cache does not notice a change to a library the program links, or to a pkg-config `.pc` file.
+
+## Build runners
+
+otr has no build-script format. When a project needs multi-step builds, write the steps as an otr program and run it with `otr run`.
+
+Otter Shell does this. Each package has an `otr/build.otr` that you run from the package root:
+
+```bash
+otr run otr/build.otr -- check
+otr run otr/build.otr -- test
+otr run otr/build.otr -- install --prefix /tmp/otter
+```
+
+The runner is ordinary otr code that uses `std.process` to call `otr build`, `otr test` and other tools. See [Building Otter Shell](/developers/building) for the steps those runners provide.
+
+<Tip>The borrow checker's cost for one function grows faster than the function's length. A long function costs more to check than the same code split in two, so keep functions short in large programs.</Tip>

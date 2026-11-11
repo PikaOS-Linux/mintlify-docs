@@ -1,68 +1,108 @@
 ---
 title: "Developer overview"
 sidebarTitle: "Overview"
-description: "The released otr architecture, shared native libraries, Lua extension platform, and per-component repository workflow."
+description: "How Otter Shell is built: otr applications and libraries, Lua extensions, and one repository per package."
 ---
 
-Otter Shell v0.13.12 uses otr 0.2.5 for its native applications and libraries. Lua scripts provide plugins and selected surface UIs through `otter-lua`. Shared layout, drawing, Wayland, configuration, and desktop services stay native.
+Otter Shell's applications and libraries are written in [otr](/otr/overview), a compiled systems language. Lua scripts extend the apps through `otter-lua`, a sandboxed LuaJIT host. Layout, drawing, Wayland, configuration, and desktop services are otr code. Lua describes widgets, launcher results, and selected app UIs on top of them.
+
+## Two ways to write code
+
+| You want to | Write | Start at |
+| --- | --- | --- |
+| Build an app or daemon | otr, on the shared libraries | [Creating an app](/developers/creating-an-app) |
+| Add a bar widget or launcher provider | A Lua plugin | [Writing plugins](/developers/plugins) |
+| Replace a supported app's UI | A Lua UI script | [UI scripts](/developers/lua/ui-scripts) |
+| Change a library | otr, in that library's repository | [Libraries overview](/developers/libraries) |
+
+An otr module imports the library modules it needs by package name. This is how every app sets up logging:
+
+```otr
+import otter_utils.log
+
+const lg = log.Scoped("otter-bar")
+
+lg.warn("Failed to initialize theme watcher: {s}", .{ @error_name(e) })
+```
+
+A Lua plugin reaches the same services through `otter.*` modules and draws with `sd.*`:
+
+```lua
+local host = require("otter.host")
+local theme = require("otter.theme")
+
+theme.subscribe(function() host.redraw() end)
+```
+
+If otr is new to you, read the [otr quickstart](/otr/quickstart) and [language basics](/otr/language/basics). For the Lua side, read [Widgets and providers](/developers/lua/widgets-and-providers) and [Bindings and capabilities](/developers/lua/bindings).
 
 ## Repository structure
 
-The [otter-shell](https://git.pika-os.com/otter-shell) organization has one Git repository per component. The workspace root is a thin repository containing package submodules. Commit component code in its own repository; root changes only track workspace files and submodule pins.
+The [otter-shell](https://git.pika-os.com/otter-shell) organization has one Git repository per package. The workspace root is a thin repository of package submodules. Commit code in the package's own repository. Root commits track workspace files and submodule pins.
 
-| Repository                                                       | Role                                                               |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `otter-bar`, `otter-launcher`, `otter-term`, and other apps      | Native applications, with released sources in `otr/`               |
-| `otter-ui`, `otter-render`, `otter-wayland`, and other libraries | Shared native libraries, statically linked into otr applications   |
-| `otter-lua`                                                      | LuaJIT host, plugin discovery, capability policy, and Lua bindings |
-| `otter-shell-plugins`, `otter-plugin-factory`                    | Lua plugin examples and the `opf` CLI                              |
-| `otter-zenith`                                                   | Tagged source pins and Debian packaging for the shell              |
-| `otter-bench`                                                    | Otter Bench / Otter HUD suite                                      |
-| `otter-gaming-utils`                                             | Separate gaming-tools packaging                                    |
+| Repository | Role |
+| --- | --- |
+| `otter-bar`, `otter-launcher`, `otter-term`, and the other apps | otr applications, with sources in `otr/` |
+| `otter-ui`, `otter-render`, `otter-wayland`, and the other libraries | Shared otr libraries, statically linked into each app |
+| `otter-lua` | LuaJIT host, plugin discovery, capability policy, and the binding ABI |
+| `otter-shell-plugins`, `otter-plugin-factory` | Lua plugin examples and the `opf` CLI |
+| `otter-examples` | Starter templates for otr apps, Lua UIs, and Lua plugins |
+| `otter-zenith` | Tagged source pins and Debian packaging |
+| `otter-bench` | Otter Bench and Otter HUD, a Zig 0.17 project |
+| `otter-gaming-utils` | Packaging for the gaming tools |
 
-[otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) pins the shell release in `pins.json` and the compiler in `otr-toolchain.pin`. Each component's `otr/build.otr` runs from its **package root**, for example `cd otter-bar; otr run otr/build.otr --release-fast -- check`.
+Each package keeps its sources, its `otr.toml` manifest, and its build runner in `otr/`. Run the runner from the package root:
+
+```bash
+cd otter-bar
+otr run otr/build.otr -- check
+```
+
+[Building](/developers/building) explains the runner's steps, release flags, and C dependencies.
 
 ## Architecture
 
-| Layer                           | Components                                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Applications and Lua extensions | Native otr apps, hosted Lua plugins and surface scripts                                         |
-| UI and Lua hosting              | `otter-ui`, `otter-lua`                                                                         |
-| Rendering and platform          | `otter-render`, `otter-wayland`, `otter-desktop`, `otter-theme`                                 |
-| Shared data and helpers         | `otter-conf`, `otter-config-types`, `otter-tools-core`, `otter-vte`, `otter-geo`, `otter-utils` |
-| Specialized services            | `otter-cue` interaction sounds and per-app native dependency boundaries                         |
+| Layer | Packages |
+| --- | --- |
+| Applications and Lua extensions | otr apps, Lua plugins, and Lua UI scripts |
+| UI and Lua hosting | `otter-ui`, `otter-lua` |
+| Rendering and platform | `otter-render`, `otter-wayland`, `otter-desktop`, `otter-theme` |
+| Shared data and helpers | `otter-conf`, `otter-config-types`, `otter-tools-core`, `otter-vte`, `otter-geo`, `otter-utils` |
+| Media and text | `otter-media`, `otter-syntax` |
+| Network and sound | `otter-http`, `otter-crypto`, `otter-cue` |
 
-[otter-http](/developers/libraries/otter-http) provides native HTTP/HTTPS, [otter-crypto](/developers/libraries/otter-crypto) provides cryptographic primitives, and [otter-cue](/developers/libraries/otter-cue) provides opt-in interaction sounds. [otter-lua](/developers/libraries/otter-lua) connects hosted scripts to native services.
+Dependencies point downward. A library never imports an app, and an app never imports another app's internals.
 
-UI applications describe layout through otter-ui, emit otter-render command lists, and rasterize into Wayland shared-memory buffers. Lua builds frames through native bindings; it does not replace the native layout or rasterizer.
+A UI app describes its layout as a Surface Description tree through `otter-ui`. `otter-ui` emits an `otter-render` command list, and the renderer rasterizes it on the CPU into a Wayland shared-memory buffer. A Lua script records its frame through `sd.*` calls, and the host replays that frame through the same layout and rasterizer.
 
-The otr applications statically link their Otter libraries and support [Lua plugins](/developers/plugins) for extensions. Shared `libotter_*.so` APIs and the Zig `.so` plugin ABI are unsupported.
+Each app links its Otter libraries statically. Extensions are [Lua plugins](/developers/plugins), which the host loads from data directories at run time.
 
-## Toolchain and retained Zig code
+## Toolchain
 
-Use otr **0.2.5** and the component versions pinned in `otter-zenith`. System development dependencies vary by package; [Building](/developers/building) explains runners, dependency preparation, and verification.
+Packaging builds with otr 0.2.6, the release named in `otter-zenith/otr-toolchain.pin`. [Install otr](/otr/installation) covers the PikaOS package and a source build.
 
-Zig 0.17.0 builds the terminal `vt/`, package-manager `zapt/`, highlighting `zhl/`, and static PipeWire boundaries. The browser remains on its separate `zig-maint` source/library set and WPE WebKit packaging path. Otter Bench and its separate gaming packaging also retain their own Zig library pins; do not build them against otr-only library siblings. Legacy differential scripts can require a preserved historical tree or frozen Zig artifacts; removed root Zig build files are not available in a clean otr checkout. Use `zig build` only where the component's instructions call for it.
+A few `deps` steps build a C library through a Zig 0.17 wrapper: `libotter_vt` for the terminal, `libotter_zapt` for the package manager, and the static PipeWire. `otter-browser` is a Zig 0.17 project with its own build.
 
 ## Configuration and Lua paths
 
-Application settings use `$XDG_CONFIG_HOME/otter-shell/`, defaulting to `~/.config/otter-shell/`. Shared styling is selected by `theme.conf`; plugin policy uses `plugins.conf`, and selected surface UI choices use `ui.conf`.
+Application settings live in `$XDG_CONFIG_HOME/otter-shell/`, which defaults to `~/.config/otter-shell/`. `theme.conf` selects the shared theme, `plugins.conf` holds plugin policy, and `ui.conf` chooses between an app's native UI and its Lua UI.
 
-Store Lua code in data directories: user plugins under `$XDG_DATA_HOME/otter-shell/plugins/`, and user surface scripts under `$XDG_DATA_HOME/otter-shell/ui/`. The default data home is `~/.local/share`. See [Configuration overview](/configuration/overview).
+Lua code lives in data directories. User plugins go in `$XDG_DATA_HOME/otter-shell/plugins/` and user UI scripts in `$XDG_DATA_HOME/otter-shell/ui/`. The default data home is `~/.local/share`. See [Configuration overview](/configuration/overview).
 
 ## Packaging boundaries
 
-- `otter-shell` adds desktop applications to `otter-shell-core`. Neither defines a user-session compositor. The greeter uses Hyprland for its login screen only.
+- `otter-shell` adds the desktop applications to `otter-shell-core`. Neither metapackage defines a user-session compositor. The greeter runs on Zoolander for the login screen only.
 - Assistant and speech packages belong to `otter-shell-extras`.
 - Otter Bench and Otter HUD belong to the separate `otter-gaming-utils` metapackage.
-- `otter-hypr` and `otter-cue` are workspace components, not standalone end-user packages in zenith's `debian/control`.
-- A library appearing in release pins does not imply an installable package with that name.
+- `otter-cue` is a workspace library. `otter-zenith/debian/control` lists no package with that name.
+- A library that appears in the release pins is not an installable package of that name.
 
-See [Installation](/installation) for exact metapackage contents.
+See [Installation](/installation) for the metapackage contents.
 
 ## Next
 
 - [Building from source](/developers/building): package runners and verification
-- [Creating an app](/developers/creating-an-app): native application development
-- [Writing plugins](/developers/plugins): Lua extension development
-- [Libraries overview](/developers/libraries): native APIs and Lua bindings
+- [Creating an app](/developers/creating-an-app): an otr app and its Lua UI variant
+- [Writing plugins](/developers/plugins): Lua widgets and launcher providers
+- [Libraries overview](/developers/libraries): otr packages and their Lua bindings
+- [otr language](/otr/overview): the language reference

@@ -12,7 +12,7 @@ Otter Shell v0.13.12 uses otr 0.2.5 to build its native applications. You do not
 
 - Otter Shell packages target PikaOS repositories.
 - You need a Wayland compositor that supports the protocols your apps use. The bar, launcher, and most overlays need `zwlr_layer_shell_v1`.
-- Apps ship as native binaries with their Otter libraries statically linked. You do not need otr or Zig on your desktop.
+- Apps ship as native binaries with their Otter libraries statically linked. You do not need the otr compiler on your desktop.
 
 <Note>
   Otter Shell does **not** ship a compositor. You pick and configure your own Wayland session. The PikaOS installer defaults to Zoolander when the install pool offers it. Hyprland, Sway, and Niri are also common. The display manager (`otter-greeter`) uses [Zoolander](/zoolander/overview) for the login screen, so `otter-greeter` depends on the separate `zoolander` package. Your user session compositor is separate.

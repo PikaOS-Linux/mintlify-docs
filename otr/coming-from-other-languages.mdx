@@ -1,0 +1,150 @@
+---
+title: "Coming from another language"
+sidebarTitle: "Coming from..."
+description: "What carries over and what changes if you know Zig, Rust, Go or C."
+---
+
+## From Zig
+
+otr keeps Zig's shape: `comptime`, types as values, error unions, optionals, `defer` and `errdefer`, explicit allocators, and no hidden control flow. The differences are in syntax and in what the compiler checks.
+
+| Zig | otr |
+| --- | --- |
+| `const x = 1;` (local) | `x := 1` |
+| `var x: i64 = 0;` | `var x: i64 = 0` |
+| `if (a > b) { ... }` | `if a > b { ... }` |
+| `while (cond) { ... }` | `for cond { ... }` |
+| `for (items) \|item\| { ... }` | `for item in items { ... }` |
+| `for (items, 0..) \|item, i\|` | `for item, i in items` |
+| `for (0..n) \|i\|` | `for i in 0..n` |
+| `switch (x) { .a => 1, else => 0 }` | `switch x { .a => 1` (newline) `else => 0 }` |
+| `.{ .x = 1, .y = 2 }` | `.{ x: 1, y: 2 }` |
+| `*T`, `*const T` | `&mut T`, `&T` |
+| `[]T`, `[]const T` | `[]mut T`, `[]T` |
+| `@import("std")` | `import std` |
+| `@intCast(x)` with a result type | `@int_cast(T, x)` |
+| `std.ArrayList(T)` | `list.List(T)` |
+| `std.debug.print("{d}\n", .{x})` | `std.io.printf("{}\n", .{ x })` |
+| `union(enum)` | `union`, which is always tagged |
+| `threadlocal var` | `const x = thread.Local(T).init(v)` |
+| `@cImport` or translate-c in the build | `import c "header.h" as h` |
+
+What changes in practice:
+
+- Shared is the default. `&T` and `[]T` are read-only, and you write `mut` for write access. This is the reverse of Zig, where `const` is the extra word.
+- Builtins are `snake_case` and take the target type as their first argument.
+- Forgetting `deinit` is a compile error, and so is using a value after it was freed or moved.
+- You cannot store a pointer in a struct field. Use an owned type, a `ref struct`, a region or a pool handle.
+- Containers keep their allocator. You do not pass it to every call.
+- There are no mutable globals. A global is a `const` of a synchronised or thread-local type.
+- Private struct fields are readable from other modules but not writable.
+- Shadowing a local is an error.
+- `anytype` exists, and `where` clauses let you state what a type parameter must provide.
+
+## From Rust
+
+otr gives you the same guarantees for safe code with a smaller rule set. The trade is that references are second-class.
+
+| Rust | otr |
+| --- | --- |
+| `let x = 1;` | `x := 1` |
+| `let mut x = 1;` | `var x = 1` |
+| `&T`, `&mut T` | `&T`, `&mut T` |
+| `&'a T` in a struct field | Not allowed. Use a `ref struct`, a region or a handle |
+| `&'static T` | `&static T` |
+| `impl Drop` | `pub fn deinit(self: Self)`, called explicitly |
+| `Option<T>`, `Result<T, E>` | `?T`, `E!T` |
+| `?` | `try` |
+| `match` | `switch` |
+| `enum` with data | `union` |
+| `trait` | `interface`, satisfied structurally |
+| `dyn Trait` | `dyn Interface` |
+| `fn f<T: Trait>(x: T)` | `fn f(comptime T: type, x: T) where T: Trait` |
+| `Vec<T>`, `String`, `HashMap<K, V>` | `List(T)`, `String`, `HashMap(K, V)` |
+| `Box<T>`, `Arc<T>`, `Rc<T>` | `Box(T)`, `Arc(T)`, `Rc(T)` |
+| `Cell<T>`, `RefCell<T>` | `Cell(T)`, `RefCell(T)` |
+| `Fn`, `FnMut`, `FnOnce` | `fn`, `mut fn`, `once fn` |
+| `move \|x\| ...` | `fn[captures](x: T) R { ... }` with an explicit capture list |
+| `thread_local!` | `thread.Local(T)` |
+| `typed_arena` or `bumpalo` | `region r = Arena.init(heap)` |
+| `slotmap` | `pool.Pool(T)` and `Handle(T)` |
+| `async fn` and `.await` | Ordinary functions that take an `Io`, plus `io.async` and `await(io)` |
+| `bindgen` | `import c "header.h" as h` |
+
+What changes in practice:
+
+- There are no lifetime annotations anywhere. A function's result borrows from every reference argument whose type could reach it.
+- Destructors do not run implicitly. You write `defer x.deinit()`, and the compiler rejects code that forgets. Nothing is dropped at the end of a scope for you.
+- Because nothing is dropped implicitly, assigning over a live resource is an error and partial moves out of structs are not allowed.
+- A panic aborts. There is no unwinding and no `catch_unwind`.
+- Traits are not implemented for types. A type implements an interface by having the methods.
+- There is no function colouring. Blocking and async code are the same code, and the runtime you pass decides how waits happen.
+- Macros do not exist. Compile-time functions and reflection cover derive-style code generation.
+- Regions are in the language, so arena-allocated graphs with cycles are safe without `unsafe` or indices.
+
+## From Go
+
+otr borrows Go's surface: no semicolons, no parentheses around conditions, `:=`, one loop keyword, structural interfaces, and a strict import discipline. Underneath, it is a different kind of language.
+
+| Go | otr |
+| --- | --- |
+| `x := 1` | `x := 1`, which is immutable. Use `var x = 1` to mutate |
+| `for i := 0; i < n; i++` | `for i in 0..n` |
+| `for i, v := range xs` | `for v, i in xs`. The value comes first |
+| `for cond { }` | `for cond { }` |
+| `if err != nil { return err }` | `try` |
+| `(T, error)` | `E!T` |
+| `nil` pointer | `?T` and `null`, which you must unwrap |
+| `[]T` and `append` | `list.List(T)` and `push` |
+| `map[K]V` | `hash_map.HashMap(K, V)` |
+| `interface { M() }` | `interface { fn m(self: &Self) void }` |
+| `defer f()` | `defer f()`, scoped to the block instead of the function |
+| `go f()` | `io.spawn(fn[...]() void { ... })` |
+| `chan T` | `sync.Channel(T)` |
+| `sync.Mutex` beside the data | `sync.Mutex(T)` that owns the data |
+| Type switch | `switch` on a `union` |
+| cgo | `import c "header.h" as h` |
+
+What changes in practice:
+
+- There is no garbage collector. Every allocation has an owner, and you free it with `deinit`. A region gets you close to Go's style for a bounded piece of work: allocate freely, alias freely, free everything at once.
+- `defer` runs at the end of the enclosing block, which makes it usable inside loops.
+- A bare `:=` binding cannot be reassigned.
+- Data races are compile errors. A value shared between tasks must be `Sync`, which in practice means an `Atomic`, a `Mutex` or a channel.
+- An unused import is not an error.
+- Generics are compile-time functions over types, with no boxing.
+
+## From C
+
+| C | otr |
+| --- | --- |
+| `int x = 1;` | `var x: i32 = 1` |
+| `const int x = 1;` | `x: i32 = 1` |
+| `T *p` used as "maybe a T" | `?&T` |
+| `T *p, size_t n` | `[]T` |
+| `const char *` | `str`, or `[:0]u8` at the C boundary |
+| `malloc` and `free` | A container, `Box(T)`, or a region |
+| `struct` with a tag field and a `union` | `union` |
+| `enum` | `enum`, or `enum(T) { ..., _ }` for an open one |
+| `#define N 42` | `const N = 42` |
+| Function-like macro | A function, or a `comptime` function |
+| `#include "x.h"` | `import x` for otr, `import c "x.h" as x` for C |
+| `#ifdef FEATURE` | `if build_options.feature { ... }` |
+| `static` global | A `const` of `Atomic`, `Mutex(T)` or `thread.Local(T)` |
+| `void *user_data` | `ffi.Context`, lent for the dispatch call |
+| `container_of` lists | `pool.Chain` |
+| `errno` | Error unions, with names after errno in `std.linux` |
+| `goto cleanup` | `defer` and `errdefer` |
+| `__attribute__((cold))`, `always_inline` | `@cold()`, `@always_inline()` |
+| Intrinsics and `#ifdef __AVX2__` | `simd for`, `Vec(N, T)` and automatic dispatch |
+
+What changes in practice:
+
+- Arrays know their length, and every index is checked.
+- Integer overflow panics in debug and release builds. Write `+%` when you want wrapping.
+- Conversions between integer types are explicit unless they widen.
+- There is no null. An optional must be unwrapped before use.
+- Uninitialised reads are compile errors.
+- You can still do anything C can, inside `unsafe`.
+
+You can adopt otr one piece at a time in a C project. Build an otr file with `--lib static --emit-h`, and link the archive and header like any other C library. See [Build a library for C](/otr/c-interop#build-a-library-for-c).

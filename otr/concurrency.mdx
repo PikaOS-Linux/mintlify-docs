@@ -1,0 +1,254 @@
+---
+title: "Concurrency"
+description: "The Io value, scoped and detached tasks, cancellation, channels, shared state and thread-locals."
+---
+
+Anything that can block takes an `Io` value. You start asynchronous work through methods on it. Code is not split into async and non-async versions. The caller chooses the runtime.
+
+`main` receives the default runtime in `env.io`.
+
+## Scoped tasks
+
+`io.async(task)` starts a task and returns a `Future(T)`. The task's closure may borrow from the caller. The future holds those borrows until you consume it with `await(io)` or `cancel(io)`, so borrowed data cannot be freed or changed while a task is using it.
+
+```otr
+import std
+
+fn sum(xs: []i64) i64 {
+    var s: i64 = 0
+    for x in xs { s += x }
+    return s
+}
+
+pub fn main(env: std.Env) !void {
+    io := env.io
+
+    data := [6]i64{ 1, 2, 3, 4, 5, 6 }
+    lo := io.async(fn[&data]() i64 { return sum(data[0..3]) })
+    hi := io.async(fn[&data]() i64 { return sum(data[3..6]) })
+    std.io.printf("{} {}\n", .{ lo.await(io), hi.await(io) })   // 6 15
+}
+```
+
+A future is a resource. You must await or cancel it on every path.
+
+A scoped task may capture `&x` when `x`'s type is `Sync`, and `&mut x` when it is `Send`.
+
+## Detached tasks
+
+`io.spawn(task)` starts a task that outlives the caller. Its closure must own everything it captures, and be `Send`.
+
+```otr
+for {
+    conn := try listener.accept(io)
+    try io.spawn(fn[io, conn]() net.Error!void {
+        defer conn.deinit()
+        var buf: [64]u8 = unsafe { undefined }
+        n := (try conn.read(io, &mut buf[0..])).len
+        try conn.write_all(io, buf[0..n])
+    })
+}
+```
+
+`conn` is moved into the task, which then owns it and must close it.
+
+## Send and Sync
+
+The compiler derives two properties for every type.
+
+A type is `Send` when a value of it may move to another thread. It is `Send` unless it contains a borrowed reference, a ref struct, a region type, a raw pointer, or a standard-library type marked otherwise.
+
+A type is `Sync` when `&T` may be shared between threads. It is `Sync` when it is `Send` and has no interior mutability except through `Atomic`, `Mutex`, `RwLock` or another type marked `Sync`.
+
+Types that wrap raw pointers soundly, such as `List(T)`, declare themselves `Send` in `unsafe`.
+
+## Cancellation
+
+Cancellation is cooperative. `future.cancel(io)` marks the task cancelled, waits for it, and returns its result.
+
+From then on, every standard-library wait the task makes fails with `error.Canceled`: sleeping, waiting on channels, reading, writing, accepting, connecting and waiting for child processes. The wait the task is in when you cancel is interrupted.
+
+Cancellation stays set. A task that handles the error and waits again fails again, so a task that passes errors up with `try` ends soon.
+
+A task that computes without waiting can poll with `io.check_cancel()`. Code that never waits runs to the end.
+
+## Channels
+
+`sync.Channel(T)` is a bounded queue with any number of senders and receivers. `clone` gives another handle to the same queue, which you move into a task. The queue is freed when the last handle is consumed by `deinit`.
+
+```otr
+results := sync.Channel(i64).init(std.mem.heap, 2)
+defer results.deinit()
+
+for i in 1..4 {
+    tx := results.clone()
+    try io.spawn(fn[io, tx, n = @int_cast(i64, i)]() void {
+        defer tx.deinit()
+        tx.send(io, n * n) catch {}
+    })
+}
+
+var total: i64 = 0
+for _ in 0..3 {
+    total += (try results.recv(io)) orelse 0
+}
+std.io.printf("{}\n", .{ total })   // 14
+```
+
+Unlike a future, a channel handle can be kept in a struct. A long-running loop uses one to collect the results of background tasks with `try_recv` or `io.select`.
+
+`sync.CancelToken` is a flag any thread can raise to ask tasks to stop. As a `select` source it becomes ready once cancelled.
+
+## Waiting on several sources
+
+| Call | Waits for |
+| --- | --- |
+| `io.wait_readable(fd)` | A file descriptor to become readable |
+| `io.wait_fd(fd, readable, writable, deadline)` | Readable, writable, or a deadline |
+| `io.sleep_until(deadline)` | A monotonic deadline from `time.monotonic_ns()` |
+| `io.select(.{ a, b, ... }, deadline)` | The first ready source, or the deadline |
+| `io.poll(...)` | Caller-owned `PollFd` ready masks, including error and hangup bits |
+
+A source is an `i32` descriptor or a reference to a value with `poll_fd()`: `sync.Channel`, `sync.CancelToken`, `process.Signals`, `process.Child`, `fs.Watcher`, `net.Conn` or `net.Listener`.
+
+`select` returns `.source{ i }` with the index of the first ready source, or `.timeout`.
+
+```otr
+for {
+    ready := io.select(.{ &rx, &tok }, null) catch return
+    switch ready {
+        .source |i| => {
+            if i == 1 { return }                  // the cancel token
+            if rx.try_recv() |job| { handle(job) }
+        }
+        .timeout => {}
+    }
+}
+```
+
+## Shared state
+
+### Atomic
+
+`sync.Atomic` is a 64-bit word updated atomically, with `load`, `store`, `fetch_add`, `fetch_sub` and `compare_swap`. The `_acquire`, `_release` and `_relaxed` variants use weaker orderings.
+
+### Mutex and RwLock
+
+`sync.Mutex(T)` owns the data it protects. `lock()` returns a guard, and the guard is a resource: its `deinit` unlocks.
+
+```otr
+shared := arc.Arc(sync.Mutex(i64)).init(sync.Mutex(i64).init(0))
+defer shared.deinit()
+
+other := shared.clone()
+t := try thread.spawn(fn[other]() void {
+    var g = other.get().lock()
+    g.get().* += 41
+    g.deinit()
+    other.deinit()
+})
+t.join()
+
+var g = shared.get().lock()
+defer g.deinit()
+g.get().* += 1
+```
+
+You cannot reach the data without holding the lock, and you cannot forget to unlock, because the compiler requires the guard to be consumed.
+
+`sync.RwLock(T)` allows any number of readers through `read()`, or one writer through `write()`.
+
+`arc.Arc(T)` gives the mutex shared ownership across threads. Each owner calls `deinit`.
+
+### Global state
+
+There are no mutable globals. Shared state is a top-level `const` of a synchronised type. It lives in one piece of static storage that every thread uses.
+
+```otr
+const hits = sync.Atomic.init(0)
+const total = sync.Mutex(i64).init(0)
+
+fn work(n: i64) void {
+    _ = hits.fetch_add(1)
+    var g = total.lock()
+    g.get().* += n
+    g.deinit()
+}
+```
+
+Top-level constants must be `Sync`. A constant whose initialiser needs run-time code is initialised once at start-up, before `main`.
+
+State that one thread changes, such as configuration, is a `cell.Global(T)`. The first thread to use it owns it, and another thread using it panics. `with`, `read`, `get` and `set` lend the value for one call. `cell.LazyGlobal(T)` builds its value on first access.
+
+## Thread-locals
+
+A top-level `const` of `thread.Local(T)` has a copy per thread. Each copy starts as the initialiser, which must be known at compile time.
+
+```otr
+const hits = thread.Local(u64).init(0)
+
+fn bump() u64 {
+    hits.set(hits.get() + 1)
+    return hits.get()
+}
+```
+
+| Type | Access |
+| --- | --- |
+| `thread.Local(T)` | Copies the value in and out with `get`, `set` and `replace` |
+| `thread.LocalCell(T)` | Lends this thread's copy to a callback with `with` or `read`, checked like a `RefCell` |
+| `thread.LocalContext(T)` | Lends a borrow of some state to the `with` calls made on this thread during one call |
+
+You can only use a thread-local as the receiver of a method call. You cannot borrow it, copy it or pass it, so no reference to a thread's copy is kept anywhere. A thread-local cannot hold a resource, because nothing consumes it when its thread ends.
+
+## Threads
+
+`thread.spawn(closure)` starts an OS thread and returns a `Thread` that you `join()`.
+
+```otr
+var workers = list.List(thread.Thread).init(std.mem.heap)
+defer workers.deinit()
+for i in 0..4 {
+    c := counter.clone()
+    workers.push(try thread.spawn(fn[c]() void {
+        _ = c.get().fetch_add(1)
+        c.deinit()
+    }))
+}
+for {
+    w := workers.pop() orelse break
+    w.join()
+}
+```
+
+`thread.Worker(T)` is a thread owned by a resource. It joins the thread before dropping the value the thread borrows.
+
+Most programs use `io.spawn` and `io.async` instead, which run on the runtime's workers.
+
+## Runtimes
+
+The standard library has two runtimes. Your code is the same under both.
+
+### Io.Threaded
+
+A thread pool with a worker per CPU. Each worker has its own run queue, and idle workers take half of a busy worker's queue. A worker that is about to block in a system call lets another worker take its place when work is waiting, so blocking tasks cannot starve the rest.
+
+### Io.Uring
+
+A Linux io_uring event loop that runs tasks as fibers on a ring per CPU. Every standard-library operation that can wait becomes a ring request and pauses only the calling fiber.
+
+```otr
+try std.Uring.run(fn[io, &done]() void {
+    listener := net.listen(io, .{ host: "127.0.0.1" }) catch return
+    defer listener.deinit()
+    ...
+})
+```
+
+`std.Uring.run(task)` runs `task` and every task it starts until all finish.
+
+Work the kernel cannot do asynchronously, such as a C library call or a DNS lookup, goes to the thread pool with `io.blocking(f)`, and the fiber waits for its result.
+
+Where io_uring is unavailable, `Uring.run` runs the same fibers and does each request as a system call on the pool. This covers old kernels, sandboxes and emulators. Set `OTR_NO_URING=1` to force that path.
+
+<Warning>A fiber can resume on a different thread after it waits. A task on `Io.Uring` that waits while it is lent a `LocalCell`, or inside `LocalContext.lend`, panics.</Warning>

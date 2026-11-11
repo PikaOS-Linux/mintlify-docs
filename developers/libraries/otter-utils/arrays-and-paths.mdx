@@ -1,37 +1,63 @@
 ---
 title: "Arrays and paths"
 sidebarTitle: "Arrays and paths"
-description: "Standard otr containers and otter_utils.fixed_string replace legacy utility types."
+description: "Bounded text with otter_utils.fixed_string and path buffers with otter_utils.xdg_paths.Buf."
 ---
 
 ## Bounded containers
 
-Use `std.bounded.BoundedList(T, N)` for fixed-capacity records and `std.bounded.InlineString(N)` for bounded text. Use `std.list.List(T)` when capacity must grow. The Zig `BoundedArray` wrapper is not available.
+`otter-utils` has no container types of its own. Use `std.bounded.BoundedList(T, N)` for fixed-capacity records and `std.bounded.InlineString(N)` for bounded text. Use `std.list.List(T)` when capacity must grow.
 
-Containers that allocate keep their allocator. Drop an owned list with `deinit()` rather than passing the allocator again.
+A container that allocates keeps its allocator, and you release it with `deinit()`. See [Ownership and borrowing](/otr/memory/ownership-and-borrowing).
 
-## Configuration strings
+## Fixed strings
 
-`otter_utils.fixed_string.FixedString(N)` wraps inline text. `set` keeps what fits and does not split a UTF-8 sequence.
+`otter_utils.fixed_string.FixedString(N)` stores at most `N` bytes inline. `set` never fails. It keeps what fits and cuts before a UTF-8 sequence that would not fit whole.
 
 ```otr
+import std
 import otter_utils.fixed_string
 
 pub fn main() void {
-    var title = fixed_string.FixedString(32).init()
-    title.set("Otter Shell")
-    _ = title.get()
+    var label = fixed_string.FixedString(8).from("Otter Shell")
+    std.io.printf("{} ({} bytes)\n", .{ label.get(), label.len() })   // Otter Sh (8 bytes)
+
+    label.set("none")
+    if label.is_none() {
+        label.clear()
+    }
 }
 ```
 
-Methods include `from`, `set`, `get`, `len`, `is_empty`, `clear`, `eql`, `is_none`, and `as_cstr`. `is_none` recognizes empty text, `none`, and `None`.
+| Method | Purpose |
+| --- | --- |
+| `init()`, `from(value)` | An empty string, or one holding `value` |
+| `set(value)`, `clear()` | Replace or empty the contents |
+| `get()`, `len()`, `is_empty()` | Read the contents |
+| `eql(other)` | Compare with a `str` |
+| `is_none()` | True for empty text, `none` and `None`, which is how configs switch an optional value off |
+| `as_cstr()` | The contents as a `[:0]u8` for C |
 
-## Paths
+Parsed configuration fields use `otter_conf.text.Text`, which borrows from the loaded config. See [Format and types](/developers/libraries/otter-conf/format-and-types).
 
-Use `std.path` for general path handling. Shared Otter Shell path builders use `otter_utils.xdg_paths.Buf`. A returned `str` borrows that buffer: consume it before reusing or clearing the buffer.
+## Path buffers
 
-Use `otter_conf.text.Text` for parser-owned configuration fields. `FixedString` is not a replacement for the configuration parser's ownership model.
+Use `std.path` for general path handling. The Otter Shell path builders write into an `otter_utils.xdg_paths.Buf`, a fixed buffer of `std.path.max_len` bytes. The `str` a builder returns borrows that buffer, so use it before you write to the buffer again.
+
+```otr
+import std
+import otter_utils.xdg_paths
+
+pub fn main(env: std.Env) void {
+    var buf = xdg_paths.Buf.init()
+    if xdg_paths.otter_config_path(env, &mut buf, "otter-bar.conf") |p| {
+        std.io.println(p)
+    }
+}
+```
+
+`Buf` has `push`, `push_str` and `set`, which return `error.Full` when the text does not fit, plus `clear`, `len` and `as_str`. `xdg_paths.compose(&mut buf, parts)` writes a tuple of strings one after another and returns null when they do not fit.
 
 ## Source reference
 
-`otr/fixed_string.otr`, `otr/xdg_paths.otr` in the component repository.
+`otr/fixed_string.otr` and `otr/xdg_paths.otr` in the `otter-utils` repository.

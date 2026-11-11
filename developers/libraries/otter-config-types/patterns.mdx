@@ -1,37 +1,118 @@
 ---
 title: "Patterns"
 sidebarTitle: "Patterns"
-description: "Ownership and editor metadata rules for otr configuration schemas."
+description: "Ownership, theme fallbacks and editor metadata rules for otr configuration schemas."
 ---
 
 ## Define fields once
 
-Keep the schema's fields public and defaulted. Applications parse these structs; editors inspect the same types. Configuration key names are part of the user-facing format, so do not rename fields only to match a code-style preference.
+Every schema field is `pub` and has a default. Apps parse the struct and the settings editor inspects the same type. A field name is the config key users write, so renaming a field changes the file format.
+
+`osd.Config` shows the shape of a schema. Fields come first, then the two tables that describe them:
+
+```otr
+import otter_geo.color
+import fields
+
+pub const file_name = "otter-osd.conf"
+
+pub const Position = enum {
+    top_center,
+    bottom_center,
+    center,
+
+    pub const labels = [3][]static u8{ "Top center", "Bottom center", "Center" }
+}
+
+pub const Config = struct {
+    pub timeout: u32 = 1500
+    pub position: Position = .bottom_center
+    pub bar_height: u16 = 8
+    pub border_radius: ?u16 = null
+    pub background_color: ?color.Color = null
+    pub text_color: ?color.Color = null
+
+    pub const theme_fallbacks = [3]fields.ThemeFallback{
+        .{ field: "border_radius", value: .number{ .{ metric: .panel_radius } } },
+        .{ field: "background_color", value: .color{ .{ role: .surface, alpha: .opacity } } },
+        .{ field: "text_color", value: .color{ .{ role: .foreground } } },
+    }
+
+    pub const field_presentation = [1]fields.FieldPresentation{
+        .{ field: "bar_height", presentation: .{ label: "Level Bar Height" } },
+    }
+}
+```
+
+This is a shortened copy of `otr/osd.otr`. The real struct has more fields and entries.
 
 ## Owned values
 
-Use `text.Text.of("...")` for string defaults and `text.TextList` for string lists. A struct owning `Text`, `TextList`, or `Dynamic` entries declares `deinit(self)` and delegates to `otter_conf.support.free_config`.
+Use `text.Text.of("...")` for string defaults and `text.TextList` for string lists. A struct that owns `Text`, `TextList` or `Dynamic` entries declares `deinit(self)` and calls `otter_conf.support.free_config`. The same holds for a nested section that a widget keeps on its own, such as `bar.ClockConfig`.
 
-This applies to nested sub-configs a widget owns independently. A copy of resource-shaped config data is not an independent owner; clone text where both values must live.
+Copying such a struct does not make a second owner. Call `clone(alloc)` on a `Text` when two values must live independently.
 
-`bar.CustomButtonConfig.to_button_config(&self, alloc)` clones strings into the returned button config so it can outlive the parsed source.
+## Theme fallbacks
+
+A `?Color` or `?u16` field that follows the theme stays null until the user sets it. The struct's `theme_fallbacks` table names what the field falls back to:
+
+- A `ThemeColor` names a color role and an alpha. The alpha is the role's own, the role's scaled by the theme's `opacity`, or a fixed value.
+- A `ThemeNumber` names a theme metric, computed as `metric * times + plus`.
+
+Apps read these fields through `fields.resolve`:
+
+```otr
+background := fields.resolve(&cfg, "background_color", &theme)
+radius := fields.resolve(&cfg, "border_radius", &theme)
+```
+
+`resolve` returns the file's value, or the table's entry resolved against the theme. The compiler picks the entry, and a field without one does not compile. `fields.fallback(S, "field", &theme)` gives the entry alone for code that holds no config value. `fields.has_fallback(S, "field")` tells you whether an entry exists.
+
+A field whose fallback is a blend, a contrast pick or depends on the indicator style has no entry. Its app resolves it.
 
 ## Editor metadata
 
-Import `otter_config_types.fields`:
+Import `otter_config_types.fields`. Each function takes the schema type and a flat key.
 
-| Function                       | Result                                     |
-| ------------------------------ | ------------------------------------------ |
-| `is_known_field(T, key)`       | Whether the flat key belongs to the schema |
-| `field_needs_quoting(T, key)`  | Quoting rule, or null for an unknown key   |
-| `get_enum_field_names(T, key)` | Static enum names, or null                 |
+| Function | Result |
+| --- | --- |
+| `is_known_field(T, key)` | Whether the key belongs to the schema |
+| `field_needs_quoting(T, key)` | Whether the value is written quoted, or null for an unknown key |
+| `get_enum_field_names(T, key)` | The enum's variant names, or null |
+| `get_enum_field_labels(T, key)` | The enum's `labels`, index for index with the names |
+| `get_presentation(T, key)` | The field's `Presentation`: a label, fixed choices for free text, or a slider |
+| `get_theme_fallback(T, key)` | The field's `ThemeValue`, or null |
 
-Metadata understands flattened sections and Dynamic indexed keys. Unset optional fields can be absent from serialized defaults while still existing in the schema.
+```otr
+import std
+import otter_config_types.fields
+import otter_config_types.osd
 
-## Adding settings
+pub fn main() void {
+    std.io.printf("{}\n", .{ fields.is_known_field(osd.Config, "margin_bottom") })          // true
+    std.io.printf("{}\n", .{ fields.field_needs_quoting(osd.Config, "text_color").? })      // true
+    std.io.printf("{}\n", .{ fields.field_needs_quoting(osd.Config, "timeout").? })         // false
 
-Update the shared schema and app behavior together. Expose new configurable behavior in Settings where relevant, including controls required to maintain it. Verify parsing, serialized defaults, and field metadata rather than testing only the application's local struct.
+    if fields.get_enum_field_names(osd.Config, "position") |names| {
+        labels := fields.get_enum_field_labels(osd.Config, "position").?
+        for name, i in names {
+            std.io.printf("{} is shown as {}\n", .{ name, labels[i] })
+        }
+    }
+    if fields.get_presentation(osd.Config, "bar_height") |p| {
+        std.io.println(p.label orelse "")                                                    // Level Bar Height
+    }
+}
+```
+
+The lookups understand flattened sections and `Dynamic` keys such as `button_3_command`. Strings and custom `parse` types such as `Color` are quoted. Numbers, booleans, enums and string lists are not.
+
+Every enum used as a field declares `labels`. `fields.presentation_is_consistent(Config)` checks that each table entry names a real field of the right type, and each schema's tests call it.
+
+## Adding a setting
+
+Add the field to the schema with its default, and add a `theme_fallbacks` or `field_presentation` entry when it needs one. `otter-settings` builds its pages from the schema, so the new field appears there without settings code.
 
 ## Source reference
 
-`otr/fields.otr`, `otr/bar.otr` in the component repository.
+`otr/fields.otr`, `otr/osd.otr` and `otr/bar.otr` in the `otter-config-types` repository.

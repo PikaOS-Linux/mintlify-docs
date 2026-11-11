@@ -1,63 +1,136 @@
 ---
 title: "Libraries overview"
 sidebarTitle: "Overview"
-description: "Shared otr libraries and optional Lua bindings in Otter Shell v0.13.12."
+description: "The shared otr libraries behind Otter Shell apps, their package names, and their Lua bindings."
 ---
 
-Otter Shell v0.13.12 applications use shared libraries written in otr. Each component's implementation lives in its `otr/` directory. Examples from `src/*.zig` use a different API.
-
-Libraries are source dependencies for developers, not separate desktop applications. Each package declares its dependencies and build options in `otr.toml`.
+Otter Shell apps build on shared libraries written in otr. Each library is its own repository with its sources in `otr/`. An app names the libraries it uses in its `otr.toml`, and the compiler links them into the app statically.
 
 ## Library map
 
-| Library                                                        | Native package       | Purpose                                               |
-| -------------------------------------------------------------- | -------------------- | ----------------------------------------------------- |
-| [otter-geo](/developers/libraries/otter-geo)                   | `otter_geo`          | Geometry, transforms, colors                          |
-| [otter-utils](/developers/libraries/otter-utils)               | `otter_utils`        | Paths, logging, process and session helpers           |
-| [otter-conf](/developers/libraries/otter-conf)                 | `otter_conf`         | Typed configuration, serialization, imports, watching |
-| [otter-config-types](/developers/libraries/otter-config-types) | `otter_config_types` | Shared application schemas and field metadata         |
-| [otter-render](/developers/libraries/otter-render)             | `otter_render`       | CPU surfaces, fonts, images, command lists            |
-| [otter-theme](/developers/libraries/otter-theme)               | `otter_theme`        | Semantic colors, layout, spacing, theme loading       |
-| [otter-wayland](/developers/libraries/otter-wayland)           | `otter_wayland`      | Wayland connection, input, capture, surfaces          |
-| [otter-vte](/developers/libraries/otter-vte)                   | `otter_vte`          | Terminal cell and glyph rendering                     |
-| [otter-desktop](/developers/libraries/otter-desktop)           | `otter_desktop`      | D-Bus, application discovery, system integration      |
-| [otter-tools-core](/developers/libraries/otter-tools-core)     | `otter_tools_core`   | Calculator, calendar, weather, search helpers         |
-| [otter-ui](/developers/libraries/otter-ui)                     | `otter_ui`           | Surface Description, controls, bar widgets            |
-| [otter-lua](/developers/libraries/otter-lua)                   | `otter_lua`          | Sandboxed LuaJIT UI and plugin host                   |
-| [otter-crypto](/developers/libraries/otter-crypto)             | `otter_crypto`       | Cryptographic primitives over otr's standard library  |
-| [otter-http](/developers/libraries/otter-http)                 | `otter_http`         | HTTP/HTTPS client and event-loop integration          |
-| [otter-cue](/developers/libraries/otter-cue)                   | `otter_cue`          | Workspace interaction-sound library                   |
+The package name is the import root. An app that depends on `otter-utils` writes `import otter_utils.log`.
 
-## Imports and ownership
+| Library | Package | Purpose |
+| --- | --- | --- |
+| [otter-geo](/developers/libraries/otter-geo) | `otter_geo` | Geometry types, transforms, colors |
+| [otter-utils](/developers/libraries/otter-utils) | `otter_utils` | Logging, XDG paths, icon lookup, i18n, build steps |
+| [otter-conf](/developers/libraries/otter-conf) | `otter_conf` | Flat key-value config parser, loader, serializer, watcher |
+| [otter-config-types](/developers/libraries/otter-config-types) | `otter_config_types` | Every app's config schema and the Settings field metadata |
+| [otter-theme](/developers/libraries/otter-theme) | `otter_theme` | Colors, layout, spacing, theme loading and watching |
+| [otter-render](/developers/libraries/otter-render) | `otter_render` | Fonts, text shaping, images, command lists, the CPU rasterizer |
+| [otter-wayland](/developers/libraries/otter-wayland) | `otter_wayland` | Wayland client: surfaces, input, clipboard, outputs, capture |
+| [otter-ui](/developers/libraries/otter-ui) | `otter_ui` | Surface Description frames, controls, scroll views |
+| [otter-vte](/developers/libraries/otter-vte) | `otter_vte` | Terminal cell and glyph rendering |
+| [otter-desktop](/developers/libraries/otter-desktop) | `otter_desktop` | Desktop entries, MIME, D-Bus services, system information, PAM |
+| [otter-tools-core](/developers/libraries/otter-tools-core) | `otter_tools_core` | Helpers for the small tools: clipboard history, calendar, weather, calculator |
+| [otter-lua](/developers/libraries/otter-lua) | `otter_lua` | Sandboxed LuaJIT host for plugins and UI scripts |
+| [otter-http](/developers/libraries/otter-http) | `otter_http` | Event-loop HTTP and HTTPS client |
+| [otter-crypto](/developers/libraries/otter-crypto) | `otter_crypto` | Ciphers, hashes, signatures, key exchange |
+| [otter-cue](/developers/libraries/otter-cue) | `otter_cue` | Interaction sounds over PipeWire |
+| otter-media | `otter_media` | Media engine: demux, decode, A/V clock, subtitles |
+| otter-syntax | `otter_syntax` | Syntax highlighting for 35 languages |
 
-Import leaf modules, such as `otter_geo.rect`, `otter_conf.loader`, or `otter_render.command_list`. There is no package-wide root barrel. Native function names generally use `snake_case`.
+## Depend on a library
 
-Use `std.Env` and explicit `std.Io` parameters where required. Do not install the Zig global I/O singleton. Resource values own their strings, lists, mappings, or service handles; call their consuming `deinit()` once. Frame-scoped `ref struct` values borrow data rather than keeping raw pointers.
+Add the library to `[dependencies]` with the path to its `otr/` folder. This is the dependency table of the `otter-examples` starter:
 
-## Optional packages
+```toml otr/otr.toml
+[dependencies]
+otter_geo = { path = "../../otter-geo/otr" }
+otter_utils = { path = "../../otter-utils/otr" }
+otter_theme = { path = "../../otter-theme/otr" }
+otter_render = { path = "../../otter-render/otr" }
+otter_wayland = { path = "../../otter-wayland/otr" }
+otter_wayland_render = { path = "../../otter-wayland/otr/render" }
+otter_ui = { path = "../../otter-ui/otr" }
+```
 
-- `otter_wayland_core` (`otter-wayland/otr/core/`) serves protocol-only applications without renderer or xkbcommon dependencies. Use it instead of, not alongside, `otter_wayland`.
-- `otter_desktop_pipewire` (`otter-desktop/otr/pipewire/`) supplies audio and video integration separately from `otter_desktop`.
-- `otter_ui_volume` (`otter-ui/otr/volume/`) wires the UI volume widget to PipeWire.
-- Per-library Lua bindings live in separate `otr/lua/` packages. A native library dependency does not automatically expose a Lua module or link LuaJIT.
+Then import the modules you need. The libraries have no package-wide root module, so you import each module by its path:
+
+```otr
+import otter_geo.rect as geo
+import otter_render.color
+import otter_theme.theme
+import otter_ui.style
+import otter_ui.ui_frame
+
+const Rect = geo.Rect
+const Color = color.Color
+const Theme = theme.Theme
+```
+
+A module's name after the last dot is how you refer to it, and `as` renames it. Function and module names use `snake_case`.
+
+Library functions that read the environment or do I/O take a `std.Env` or its `env.io`, which your `main` receives:
+
+```otr
+t := loader.load_theme(env, mem.heap)
+defer t.deinit()
+f := try font.Font.init(mem.heap, env.io, .{ font_family: t.globals.font_family.as_str() })
+```
+
+A value with a `deinit` method is a resource. The compiler rejects any path that does not consume it, so call `deinit` once, usually with `defer`. See [Ownership and borrowing](/otr/memory/ownership-and-borrowing).
+
+## Sub-packages
+
+Some repositories hold more than one package. A sub-package has its own `otr.toml` in a subfolder, so an app links only the parts it uses.
+
+| Package | Path | Purpose |
+| --- | --- | --- |
+| `otter_wayland_core` | `otter-wayland/otr/core/` | The surface-free part of the Wayland client, for daemons that draw nothing |
+| `otter_wayland_render` | `otter-wayland/otr/render/` | SHM renderer, layer popups, capture and selection overlays |
+| `otter_render_formats` | `otter-render/otr/formats/` | AVIF, HEIC, JPEG XL, TIFF, and camera RAW decoding |
+| `otter_desktop_pipewire` | `otter-desktop/otr/pipewire/` | PipeWire audio devices, playback, and the stream sink |
+| `otter_ui_widgets` | `otter-ui/widgets-otr/` | The bar widgets, one folder per widget |
+| `otter_ui_volume` | `otter-ui/otr/volume/` | The volume widget wired to PipeWire |
+| `otter_media_tags` | `otter-media/otr/tags/` | Tag reader for audio files |
+| `otter_tools_search` | `otter-tools-core/otr/search/` | Search indexing |
+| `otter_ocr` | `otter-tools-core/otr/ocr/` | OCR |
+| `otter_tools_spell` | `otter-tools-core/otr/spell/` | Spell checking over Enchant |
+
+`otter_wayland` includes every module of `otter_wayland_core` under its own name. Depend on the core package alone when your program has no surface.
+
+## Lua bindings
+
+A library exposes itself to Lua through a separate package in its `otr/lua/` folder. An app that hosts Lua adds the binding packages it wants to its manifest. An app that hosts no Lua never links LuaJIT.
+
+| Binding package | Path |
+| --- | --- |
+| `otter_ui_lua` | `otter-ui/otr/lua/` |
+| `otter_ui_widgets_lua` | `otter-ui/widgets-otr/lua/` |
+| `otter_theme_lua` | `otter-theme/otr/lua/` |
+| `otter_render_lua` | `otter-render/otr/lua/` |
+| `otter_wayland_lua` | `otter-wayland/otr/lua/` |
+| `otter_desktop_lua` | `otter-desktop/otr/lua/` |
+| `otter_conf_lua` | `otter-conf/otr/lua/` |
+| `otter_config_types_lua` | `otter-config-types/otr/lua/` |
+| `otter_vte_lua` | `otter-vte/otr/lua/` |
+| `otter_tools_core_lua` | `otter-tools-core/otr/lua/` |
+| `otter_http_lua` | `otter-http/otr/lua/` |
+| `otter_crypto_lua` | `otter-crypto/otr/lua/` |
+| `otter_cue_lua` | `otter-cue/otr/lua/` |
+
+[Bindings and capabilities](/developers/lua/bindings) lists the `otter.*` modules a script sees and the capability each one needs.
 
 ## Build options
 
-otr options use `-D name=value`, not Zig's `-Doptimize=ReleaseFast` syntax. Read the consuming package's manifest before choosing options.
+Libraries declare compile-time options in the `[options]` table of their `otr.toml`. An app sets the value for its own build in its manifest, or with `-D name=value` on the `otr build` command line.
 
-| Option                             | Package                  | Purpose                             |
-| ---------------------------------- | ------------------------ | ----------------------------------- |
-| `enable_dbus`                      | `otter_desktop`          | Include D-Bus integration           |
-| `enable_pam`                       | `otter_desktop`          | Include PAM support                 |
-| `pipewire`                         | `otter_desktop_pipewire` | `static` by default, or `system`    |
-| `enable_render_text`               | `otter_render`           | Include font and shaping backends   |
-| `enable_render_svg`                | `otter_render`           | Include SVG decoding                |
-| `enable_render_jpeg`               | `otter_render`           | Enable runtime JPEG decoder loading |
-| `enable_render_wide_image_formats` | `otter_render`           | Enable runtime WebP decoder loading |
-| `enable_pipewire`                  | `otter_cue`              | Enable live sound playback          |
+| Option | Declared by | Default | Purpose |
+| --- | --- | --- | --- |
+| `enable_dbus` | `otter_desktop` | `true` | Include the D-Bus services |
+| `enable_pipewire` | `otter_desktop`, `otter_cue` | `true` | Include PipeWire support |
+| `enable_pam` | `otter_desktop` | `false` | Link PAM for authentication |
+| `pipewire` | `otter_desktop_pipewire` | `static` | Link the vendored static PipeWire, or `system` for the system library |
+| `enable_render_text` | `otter_render` | `true` | Include fonts and text shaping |
+| `enable_render_svg` | `otter_render` | `true` | Include SVG decoding |
+| `enable_render_jpeg` | `otter_render` | `true` | Include JPEG decoding |
+| `enable_render_wide_image_formats` | `otter_render` | `true` | Include WebP decoding |
+
+The defaults in the table are the library's own. The `otter-examples` starter turns off `enable_dbus`, `enable_pipewire`, `enable_render_jpeg`, and `enable_render_wide_image_formats` in its manifest because its card uses none of them.
 
 ## Source and checks
 
-Each library is an independent repository under [git.pika-os.com/otter-shell](https://git.pika-os.com/otter-shell). Use its v0.13.12 `otr/` source and `otr/API.md` where provided. Public declarations and consumer checks are the final authority if a migration note is stale.
+Each library is a repository under [git.pika-os.com/otter-shell](https://git.pika-os.com/otter-shell). Most libraries have an `otr/API.md` that lists the public modules. The `pub` declarations in the source are the authority.
 
-From a component repository root, `otr run otr/build.otr --release-fast -- check` runs its API and formatting checks. Other steps depend on the component: read `otr/build.otr` before running tests, E2E fixtures, or benchmarks. Run graphical verification only in an isolated headless environment, never against your live desktop.
+From a library's repository root, `otr run otr/build.otr -- check` type-checks every module and checks formatting. The doc comment at the top of `otr/build.otr` lists the other steps. See [Building](/developers/building).

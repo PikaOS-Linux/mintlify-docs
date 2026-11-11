@@ -4,32 +4,72 @@ sidebarTitle: "Logging"
 description: "Scoped otr logging with owned counters and periodic reports."
 ---
 
-Import `otter_utils.log`. `Scoped(scope)` formats allocation-free stderr lines with a padded scope name. `StdScoped(scope)` provides the alternate standard-log layout.
+Import `otter_utils.log`. `Scoped(scope)` returns a logger type with `err`, `warn`, `info`, `debug` and `trace`. Each call formats one line without allocating and writes it to standard error.
+
+```otr
+import std
+import otter_utils.log
+
+const lg = log.Scoped("example")
+
+pub fn main(env: std.Env) void {
+    _ = log.set_level_from_env(env, "OTTER_EXAMPLE_LOG")
+    lg.info("ready on {}", .{ env.get_env("WAYLAND_DISPLAY") orelse "no display" })
+}
+```
+
+```text
+INF example          ready on wayland-1
+```
+
+A line is the level, the scope padded to 16 columns, then the message. Lines hold at most 512 bytes, and a longer message ends in `...`. The format string takes the same placeholders as `std.io.printf`, including `{d:.1}` and `{s}`.
+
+`StdScoped(scope)` writes the `level(scope): message` layout instead and has no `trace`.
+
+## Levels
+
+`Level` is `err`, `warn`, `info`, `debug` or `trace`. One atomic level applies to every thread and every scope.
+
+| Function | Purpose |
+| --- | --- |
+| `set_level(l)` | Sets the level |
+| `set_level_from_env(env, name)` | Sets the level from an environment variable and returns it. An unset or unknown value changes nothing and returns null |
+| `level()`, `enabled(l)` | Read the level, or test whether a line at `l` would print |
+| `Level.parse(text)` | Accepts the level names in any case, plus `warning` and `error` |
+
+Each app reads its own variable, such as `OTTER_BAR_LOG` or `OTTER_DOCK_LOG`.
+
+## Counters and reporters
+
+`Counter` is a plain `u64` counter that your loop state owns. It has `inc`, `add`, `get` and `reset`, and `reset` returns the count it cleared. `StaticCounter.init()` is the atomic form for a top-level `const`.
+
+`Reporter(scope, interval_seconds)` logs a rate at most once per interval. Keep it beside the counter and call a report method on every loop iteration.
 
 ```otr
 import otter_utils.log
 
-const logger = log.Scoped("example")
+const lg = log.Scoped("example")
+
+const Loop = struct {
+    frames: log.Counter = .{}
+    reporter: log.Reporter("example", 30) = .{}
+}
 
 pub fn main() void {
-    logger.info("ready", .{})
+    var loop = Loop{}
+    loop.reporter.start()
+    for _ in 0..3 {
+        loop.frames.inc()
+        loop.reporter.report1("frames", &mut loop.frames)
+    }
+    if log.enabled(.debug) {
+        lg.debug("{} frames left unreported", .{ loop.frames.get() })
+    }
 }
 ```
 
-`set_level`, `level`, and `enabled` manage the process-wide level. The level is atomic; a change applies across threads.
-
-## Counters
-
-`Counter` is plain state owned by your loop. Its methods are `inc`, `add`, `get`, and `reset`. `reset` returns the previous count.
-
-Use `StaticCounter.init()` for a shared top-level atomic counter. Do not make every local counter atomic.
-
-## Reporters
-
-`Reporter(scope, interval_seconds)` limits how often you print rate summaries. Keep it in the owner's state and call its reporting methods from normal loop activity.
-
-Lines have a 512-byte bound. Oversized messages end in `...`. Use standard otr formatting placeholders, not Zig-only formatting APIs.
+`report1` logs the counter's total and rate at `info` level, then resets the counter. `report_fmt(fmt, args)` prints your own line on the same schedule, and `should_report()` returns the seconds since the last report when the interval has passed.
 
 ## Source reference
 
-`otr/log.otr` in the component repository.
+`otr/log.otr` in the `otter-utils` repository.

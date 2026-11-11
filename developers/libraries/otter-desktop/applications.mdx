@@ -1,38 +1,122 @@
 ---
 title: "Applications"
 sidebarTitle: "Applications"
-description: "otr desktop entry discovery, owned text blobs, icon resolution, and child reaping."
+description: "Desktop entries, the application list, launching, MIME handlers, and icon lookup."
 ---
 
-Import leaves under `otter_desktop.apps`.
+Import modules from `otter_desktop.apps`.
 
-| Module                                 | Purpose                                         |
-| -------------------------------------- | ----------------------------------------------- |
-| `desktop_entry`                        | Parse and own desktop-entry data                |
-| `app_list`, `watcher`                  | Scan, search, and watch application directories |
-| `launcher`, `file_args`                | Expand arguments and launch entries/actions     |
-| `icon_lookup`, `icon_theme`            | Resolve icon paths and themes                   |
-| `mime_catalog`, `xdg_mime`, `xdg_open` | MIME and default-handler integration            |
-| `xdg_paths`                            | Application search directories                  |
+| Module | Purpose |
+| --- | --- |
+| `desktop_entry` | Parses one `.desktop` file into a `DesktopEntry`. |
+| `app_list`, `watcher` | Scans the application directories, searches the entries and watches for changes. |
+| `launcher`, `file_args` | Expands the `Exec` line and starts an entry. |
+| `mime_catalog`, `xdg_mime`, `xdg_open` | MIME types and default handlers. |
+| `icon_theme` | Detects the configured icon theme. |
+| `session_catalog`, `session_launcher` | Login sessions. See [Greeter and auth](/developers/libraries/otter-desktop/greeter-and-auth). |
 
-## Ownership and context
+## List, search and launch
 
-`DesktopEntry` stores one owned text blob plus spans. Use `text(span)`, iterators, or `clone(alloc)` instead of retaining pointers into another entry.
+```otr
+import std
+import std.mem
+import otter_utils.process
+import otter_desktop.apps.app_list
+import otter_desktop.apps.launcher
 
-`AppList.scan(env)` receives environment explicitly. Directory-specific variants support isolated fixtures.
+pub fn main(env: std.Env) !void {
+    var apps = app_list.AppList.init(mem.heap)
+    defer apps.deinit()
+    try apps.scan(env)
 
-`IconResolver.init(env, alloc, theme)` owns resolution state. Theme/path caches are not permission to keep an image pointer across image-store mutations.
+    var hits: [8]u32 = unsafe { undefined }
+    n := apps.search("term", &mut hits)
+    for i in 0..n {
+        entry := &apps.entries_view()[hits[i]]
+        std.io.printf("{}  {}  {}\n", .{ entry.id(), entry.name(), entry.icon() orelse "" })
+    }
 
-Launch functions take a reaper and environment. Keep the reaper in the event loop so launched children are collected. `LaunchOptions` borrows overrides and URI lists for the call.
+    var reaper = try process.Reaper.init()
+    defer reaper.deinit()
+    if apps.find_by_id("otter-term") |entry| {
+        try launcher.launch(&mut reaper, env, entry)
+    }
+}
+```
+
+`AppList.scan(env)` reads every application directory from the XDG environment. `scan_dirs` takes an explicit directory list, which is how tests use fixtures.
+
+`search(query, results)` writes matching entry indices into your buffer and returns how many it wrote. `find_by_id` looks an entry up by desktop id. `find_by_id_or_unique_alias` also accepts a short name such as `editor` for `org.editor`, when only one entry matches it.
+
+### Entries
+
+A `DesktopEntry` owns its text. Read it through `id()`, `name()`, `comment()`, `exec()`, `icon()` and `path()`. `categories()` and `keywords()` return iterators, and `actions_view()` lists the entry's desktop actions. `is_visible()` is false for an entry with `Hidden` or `NoDisplay` set. Use `clone(alloc)` to keep an entry after the list changes.
+
+### Watching for changes
+
+`AppList.init_with_watcher(alloc)` adds an inotify watcher. Add `watcher_fd()` to your event loop and call `process_watcher_events()` when it is readable. It returns true when the list changed, and `generation()` changes with it.
+
+### Launching
+
+Launch functions take a `process.Reaper` from `otter_utils.process`, which collects the child when it exits. Keep one reaper for the life of your app, add its `poll_fd()` to your loop and call `drain` when it is readable.
+
+`launch_with` takes `LaunchOptions`:
+
+| Field | Meaning |
+| --- | --- |
+| `exec_override` | A command line to run instead of the entry's `Exec`. |
+| `extra_env` | Extra `NAME=value` strings for the child. |
+| `apply_preferred_gpu` | Honors the entry's discrete GPU preference. Defaults to `true`. |
+| `terminal` | The terminal to wrap a `Terminal=true` entry in. `detect_terminal(env)` picks one. |
+| `file_args_uri_list` | A `text/uri-list` to pass as the entry's file arguments. |
+
+## Open a file or URI
+
+`xdg_open.launch_default(&mut reaper, env, uri, token)` opens a URI with its default application. `content_type_for_uri` returns the MIME type, and `list_for_uri` returns the applications that can open it, default first.
+
+## Icons
+
+Icon lookup is in otter-utils, so that libraries below otter-desktop can use it. `otter_utils.icon_lookup.IconResolver` resolves an icon name or app id to a file path and caches the answer.
+
+```otr
+import otter_utils.icon_lookup
+
+var icons = icon_lookup.IconResolver.init(env, mem.heap, null)
+defer icons.deinit()
+
+if icons.lookup("firefox") |path| {
+    std.io.println(path)
+}
+```
+
+The third argument is the preferred theme, or `null` for the default order. `otter_desktop.apps.icon_theme.detect` reads the theme the user configured. See [otter-utils](/developers/libraries/otter-utils).
 
 ## Lua
 
-- `otter.desktop.apps`: `list`, `find`, `search`, `actions`, `subscribe`; `launch` requires `spawn`.
-- `otter.desktop.xdg_open`: content-type and handler reads; `open`/`open_with` require `spawn`.
-- `otter.desktop.icons`: lookup/theme operations with a plugin-owned resolver.
+`otter.desktop.apps` lists and launches applications. `launch` needs the `spawn` capability.
 
-A listed desktop entry is not itself a grant to execute it.
+```lua
+local apps = require("otter.desktop.apps")
+
+for _, app in ipairs(apps.search("term", 5)) do
+  print(app.id, app.name, app.icon)
+end
+
+apps.subscribe(function()
+  -- the installed applications changed
+end)
+
+apps.launch("otter-term")   -- needs "spawn"
+```
+
+| Module | Functions |
+| --- | --- |
+| `otter.desktop.apps` | `list()`, `find(id)`, `search(query, limit)`, `actions(id)`, `subscribe(f)`, and `launch(id, action, uris)` with `spawn`. |
+| `otter.desktop.xdg_open` | `content_type(uri)`, `applications(uri, type)`, and `open(uri)` and `open_with(app_id, uri, type)` with `spawn`. |
+| `otter.desktop.icons` | `lookup(name)`, `lookup_in_theme(theme, name)`, `lookup_symbolic(name, symbolic_first)`, `themes()`, `set_theme(name)`. |
+
+Each plugin has its own icon resolver, so one plugin's theme choice does not affect another.
 
 ## Source reference
 
-`otr/apps/desktop_entry.otr`, `otr/apps/app_list.otr`, `otr/apps/launcher.otr`, `otr/apps/icon_lookup.otr`, `otr/lua/` in the component repository.
+`otr/apps/desktop_entry.otr`, `otr/apps/app_list.otr`, `otr/apps/launcher.otr`, `otr/apps/xdg_open.otr`, `otr/lua/apps.otr` in the component repository, and `otr/icon_lookup.otr` in otter-utils.

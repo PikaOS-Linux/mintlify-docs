@@ -1,42 +1,121 @@
 ---
 title: "Types and operations"
 sidebarTitle: "Types and operations"
-description: "Geometry and color APIs in otter_geo leaf modules."
+description: "Geometry, transform and color APIs in the otter_geo modules."
 ---
 
-## Geometry module
+## Geometry types
 
 Import `otter_geo.rect` for these value types:
 
-| Type          | Fields or purpose                                                             |
-| ------------- | ----------------------------------------------------------------------------- |
-| `Point`       | Signed `x`, `y`; `zero`, `add`, `sub`, `spanning_rect`                        |
-| `Rect`        | Signed `x`, `y`; `u16` `width`, `height`                                      |
-| `Padding`     | `north`, `south`, `east`, `west`; `zero`, `uniform`, `horizontal`, `vertical` |
-| `Circle`      | Circle helpers including `largest_circle`, `bounding_box`, `radius`           |
-| `Align`       | `start`, `center`, `end`                                                      |
-| `BorderRects` | `top`, `bottom`, `left`, `right` rectangles                                   |
+| Type | Fields and helpers |
+| --- | --- |
+| `Point` | `x`, `y` as `i32`. `zero`, `add`, `sub`, `eql`, `spanning_rect` |
+| `Rect` | `x`, `y` as `i32`, `width`, `height` as `u16`. `zero` |
+| `Padding` | `north`, `south`, `east`, `west`. `zero`, `uniform`, `horizontal`, `vertical`, `from_config` |
+| `Circle` | `d`, `x`, `y`. `largest_circle`, `bounding_box`, `radius`, `contains_point` |
+| `Align` | `start`, `center`, `end` |
+| `BorderRects` | The `top`, `bottom`, `left` and `right` rectangles of a border |
+
+Methods that take a size take a `Point`, where `x` is the width and `y` is the height.
 
 ## Rectangle operations
 
-- `contains`, `contains_point`, and local/inclusive variants test bounds. Choose the inclusive form only when you want the far edge included.
-- `intersection` returns `?Rect`; `bounding_box` includes both rectangles.
-- `remove_padding` returns null if the requested inset does not fit. `add_padding` expands bounds.
-- `center` and `align_with` place dimensions inside a rectangle.
-- `translate`, `origin`, `dims`, `end_x`, `end_y`, and `lerp` support layout and motion.
+| Method | Result |
+| --- | --- |
+| `contains(inner)` | Whether `inner` lies inside the rectangle |
+| `contains_point(p)`, `contains_local_point(p)` | Whether a point lies inside. Both count points on the far edges. The local form takes a point relative to the rectangle's origin |
+| `intersection(other)` | The overlap as `?Rect`, null when the rectangles do not overlap |
+| `bounding_box(other)` | The smallest rectangle that holds both |
+| `remove_padding(padding)` | The inner rectangle, or null when the padding does not fit |
+| `add_padding(padding)`, `inset(amount)` | Grow by a padding, or shrink by one amount on every side |
+| `center(size)`, `align_with(size, horizontal, vertical)` | A rectangle of `size` placed inside this one |
+| `border_rects(padding)` | The four edge rectangles of a border with those widths |
+| `translate(offset)` | The rectangle moved by a point |
+| `origin()`, `dims()`, `end_x()`, `end_y()` | The corner, the size and the far edges |
+| `Rect.lerp(from, to, t_q16)` | Each field interpolated. `t_q16` runs from 0 to 65536 |
+| `eql(other)`, `Rect.eql_optional(a, b)`, `Rect.union_optional(a, b)` | Comparison, and helpers for `?Rect` damage regions |
+
+```otr
+import std
+import otter_geo.rect as geo
+
+pub fn main() void {
+    panel := geo.Rect{ x: 0, y: 0, width: 400, height: 300 }
+    content := panel.remove_padding(.{ north: 32, south: 8, east: 8, west: 8 }) orelse return
+    dialog := content.center(.{ x: 200, y: 100 })
+    edges := panel.border_rects(geo.Padding.uniform(1))
+    _ = edges.top
+
+    // Halfway through an open animation.
+    closed := geo.Rect{ x: 0, y: 0, width: 400, height: 0 }
+    halfway := geo.Rect.lerp(closed, panel, 32768)
+    std.io.printf("{} {} {}\n", .{ dialog.x, dialog.y, halfway.height })   // 100 112 150
+
+    if dialog.intersection(.{ x: 0, y: 0, width: 150, height: 300 }) |visible| {
+        std.io.printf("{}\n", .{ visible.width })                           // 50
+    }
+}
+```
 
 ## Transforms
 
-Import `otter_geo.transform`. `Transform` is a C-layout 2×2 16.16 matrix with `eql`, `is_identity`, and `compose`. Do not use floating-point layout coordinates to represent it.
+Import `otter_geo.transform`. `Transform` is an `extern struct` of four `i32` fields, `xx`, `xy`, `yx` and `yy`, in signed 16.16 fixed point. It has the C layout, so it passes straight to protocols that take a matrix.
+
+The constants are `identity`, `rotate_cw`, `rotate_ccw` and `rotate_180`. `compose(other)` multiplies two transforms, and `eql` and `is_identity` compare them.
+
+```otr
+import std
+import otter_geo.transform
+
+pub fn main() void {
+    half := transform.Transform.rotate_cw.compose(transform.Transform.rotate_cw)
+    std.io.printf("{}\n", .{ half.eql(transform.Transform.rotate_180) })   // true
+}
+```
 
 ## Colors
 
-Import `otter_geo.color`. `Color` uses Wayland ARGB8888 pixel layout by default. `from_rgba` accepts `0xRRGGBBAA`; `from_rgb` accepts `0xRRGGBB`.
+Import `otter_geo.color`. `Color` is a packed struct of `b`, `g`, `r` and `a` bytes, which is the Wayland ARGB8888 pixel as a `u32`.
 
-`parse` accepts palette names and short or full hex forms. `to_str` and `to_hex_string` return a fixed nine-byte hex representation. `with_alpha`, `composite`, `blend`, and `is_dark` provide value-level operations.
+| Function | Result |
+| --- | --- |
+| `Color.init(r, g, b, a)`, `Color.rgb(r, g, b)` | A color from components |
+| `Color.from_rgba(0xRRGGBBAA)`, `Color.from_rgb(0xRRGGBB)` | A color from a packed literal |
+| `Color.parse(s)` | A color from text, or a `ParseColorError` |
+| `Color.parse_hex(s)` | The same, with white for text that does not parse |
+| `to_hex_string()`, `to_str()` | `#RRGGBBAA` in upper case, as `[9]u8` |
+| `with_alpha(a)` | The color with a new alpha |
+| `Color.composite(bg, fg)` | `fg` drawn over `bg` |
+| `Color.blend(a, b, ratio)` | A mix, where ratio 0 is `a` and 255 is `b` |
+| `is_dark()` | Whether the color's relative luminance is low |
 
-Lua drawing colors use `0xRRGGBBAA`; do not treat the internal ARGB pixel integer as a Lua color.
+`parse` accepts a palette name in any case, such as `white`, `foam` or `main`. It also accepts `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA`, with optional `_` separators between digits. `color.message(e)` turns a parse error into text for the user, and `color.name_of(c)` returns a palette color's name.
+
+```otr
+import std
+import otter_geo.color
+
+pub fn main() !void {
+    named := try color.Color.parse("foam")
+    short := try color.Color.parse("#123")                    // #112233FF
+    accent := color.Color.from_rgba(0x7aa2f7ff)
+
+    scrim := color.Color.black.with_alpha(128)
+    dimmed := color.Color.composite(accent, scrim)
+    text := if dimmed.is_dark() { color.Color.white } else { color.Color.black }
+    std.io.println(text.to_hex_string()[0..])
+
+    std.io.println(color.message(error.TooShort))             // Color hex string too short
+    _ = named
+    _ = short
+}
+```
+
+`Color.parse` and `to_str` are the hooks [otter-conf](/developers/libraries/otter-conf/advanced-features#custom-values) calls, so a config field of type `Color` or `?Color` reads and writes these forms.
+
+The fields are stored in `b`, `g`, `r`, `a` order. Build colors with `init`, `rgb` or `from_rgba`, and pass `0xRRGGBBAA` to Lua.
 
 ## Source reference
 
-`otr/rect.otr`, `otr/transform.otr`, `otr/color.otr` in the component repository.
+`otr/rect.otr`, `otr/transform.otr` and `otr/color.otr` in the `otter-geo` repository. The examples follow the `test` blocks in those files.

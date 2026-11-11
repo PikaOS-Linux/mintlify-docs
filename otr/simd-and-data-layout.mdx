@@ -1,0 +1,221 @@
+---
+title: "SIMD and data layout"
+description: "Struct-of-arrays layout, vector types, simd for loops and automatic CPU dispatch."
+---
+
+Data layout and vector execution are part of the language. The fast way to write a loop is also the obvious way.
+
+## Struct-of-arrays layout
+
+An array of structs keeps each element's fields together. A struct of arrays keeps each field in its own contiguous column, which is what SIMD loops and caches want. In otr you switch between them with one word.
+
+```otr
+import std
+import std.list
+
+const Vec3 = struct { x: f32, y: f32, z: f32 }
+
+const Particle = struct {
+    pos: Vec3
+    vel: Vec3
+    mass: f32
+}
+
+pub fn main() void {
+    var ps = list.SoaList(Particle).init(std.mem.heap)    // same API as List(Particle)
+    defer ps.deinit()
+    for i in 0..100 {
+        f := @float_from_int(f32, i)
+        ps.push(.{ pos: .{ x: f, y: 0, z: 0 }, vel: .{ x: 1, y: 2, z: 0 }, mass: 0.5 })
+    }
+
+    p := ps[3]                 // gathers a copy of one element
+    ps[3].pos.x += 1           // element syntax is the same as for an array of structs
+}
+```
+
+`soa [N]T` and `soa []T` are the array and slice forms, with `soa []mut T`, `soa []r T` and `soa []static T` variants. Struct-typed fields are split recursively, so `Particle` above has seven `f32` columns.
+
+### Columns
+
+On a `soa` array or slice, `ps.f` is the whole column for field `f` as an ordinary slice:
+
+```otr
+fn total_mass(ps: soa []Particle) f32 {
+    var total: f32 = 0
+    simd for m in ps.mass {
+        total += m
+    }
+    return total
+}
+```
+
+`ps.pos.x` is the `[]f32` column of a nested field. Different columns are different fields to the borrow checker, so you can borrow `ps.pos.x` and `ps.vel.x` mutably at the same time.
+
+### Rules
+
+| Expression | Behaviour |
+| --- | --- |
+| `ps[i].f` | Reads or writes one field |
+| `ps[i] = v` | Writes every column |
+| `v := ps[i]` | Gathers a copy |
+| `for p in ps` | Yields copies |
+| `for mut p in ps` | Names each row in place. Field accesses read and write the columns |
+| `&ps[i]` | An error. A `soa` element is not contiguous, so it has no address |
+| `&mut ps[i].f` | Borrows one element of one column |
+
+Every column starts on a 64-byte boundary and its capacity is rounded up to a multiple of 64 bytes, so SIMD loops over columns never need alignment peeling.
+
+The standard library provides `list.SoaList(T)`, `pool.SoaPool(T)` and `r.soa_list(T)` with the same APIs as their array-of-structs counterparts.
+
+## Vectors
+
+`Vec(N, T)` is a fixed-width vector of integers, floats or bools.
+
+```otr
+a := Vec(4, f32){ 1, 2, 3, 4 }
+b := a * 2.0 + a                              // elementwise, scalars broadcast
+m := b > Vec(4, f32){ 5, 5, 5, 5 }            // Mask(4)
+c := @select(m, a, b)
+std.io.printf("{}\n", .{ c.sum() })           // 12
+```
+
+Every arithmetic, bitwise and comparison operator works elementwise. Comparisons produce a `Mask(N)`. A scalar operand is broadcast.
+
+Integer vector arithmetic wraps, like the hardware instructions. The one panic is division by zero, checked once per vector.
+
+A width wider than the hardware is split across registers and a narrower one is padded, so any `N` is correct on every target.
+
+| Operation | Forms |
+| --- | --- |
+| Load and store | `load`, `store`, `load_partial`, `store_partial` |
+| Indexed | `gather`, `scatter` with an index vector |
+| Reductions | `sum`, `min`, `max`, `any`, `all` |
+| Selection | `@select(mask, a, b)`, `@shuffle(v, .{ 3, 2, 1, 0 })` |
+| Conversion | `@int_cast`, `@truncate`, `@float_from_int`, `@int_from_float`, `@float_cast`, `@bit_cast` |
+| Math | `@min`, `@max`, `@sqrt`, `@fma` |
+
+Loads and stores are bounds-checked once per vector.
+
+### Native-width vectors
+
+`Simd(T)` is a vector as wide as the CPU variant being compiled: 4 `f32` lanes for SSE4.2, 8 for AVX2, 16 for AVX-512. `Simd(T).lanes` is a compile-time constant inside each variant.
+
+```otr
+fn scale(xs: []mut f32, k: f32) void {
+    var i: usize = 0
+    for i + Simd(f32).lanes <= xs.len {
+        v := Simd(f32).load(xs[i..])
+        (v * k).store(xs[i..])
+        i += Simd(f32).lanes
+    }
+    for i < xs.len { xs[i] *= k; i += 1 }
+}
+```
+
+`Simd(T)` can only appear inside SIMD functions and never in the signature of a dispatched function, because its width is only known inside a variant.
+
+## simd for
+
+A `simd for` loop is compiled with native-width vectors in every CPU variant, with the remainder handled by masked operations. If the body cannot be vectorised, compilation fails with the reason. C-style auto-vectorisation fails silently instead.
+
+```otr
+fn saxpy(out: []mut f32, a: []f32, b: []f32, k: f32) void {
+    simd for i in 0..out.len {
+        out[i] = a[i] * k + b[i]
+    }
+}
+
+fn step(ps: soa []mut Particle, dt: f32) void {
+    simd for i in 0..ps.len {
+        ps.pos.x[i] += ps.vel.x[i] * dt
+        ps.pos.y[i] += ps.vel.y[i] * dt
+    }
+}
+
+fn clamp_all(xs: []mut f32, hi: f32) void {
+    simd for i in 0..xs.len {
+        if xs[i] > hi {
+            xs[i] = hi
+        }
+    }
+}
+```
+
+### What the body may do
+
+- Arithmetic, comparisons, and `if`/`else`, which compile to masks.
+- Builtins with vector forms: `@min`, `@max`, `@sqrt`, `@fma`.
+- Calls to functions whose bodies follow these same rules. They are inlined.
+- Read slices at the loop index plus a compile-time constant, or at any index, which compiles as a gather.
+- Write slices only at exactly the loop index, so iterations are independent.
+- Update outer variables only as reductions: `+=`, `*=`, `&=`, `|=`, `^=`, `x = @min(x, e)`, `x = @max(x, e)`.
+
+The body may not contain `break`, `continue`, `return`, `defer`, `try` or a nested `simd for`.
+
+Each lane is one iteration. A `var` of a number or bool type declared in the body holds a value per lane.
+
+### Masks
+
+Under an `if`, a store at the loop index keeps the old value in the lanes where the condition is false. A reduction adds the operator's identity for them. Masked-off lanes never panic or touch memory.
+
+### No alias checks
+
+A slice written in the body is held as `[]mut`, which is exclusive, so it cannot overlap anything else the loop reads. The compiler never emits run-time overlap checks or scalar fallbacks.
+
+### Float results
+
+Each CPU variant reduces floats at its own width and may fuse a multiply followed by an add, so the last bits of a float result can differ between machines. Integer results never differ.
+
+`simd (exact) for` makes a loop bit-identical on every variant:
+
+```otr
+fn sum_exact(xs: []f64) f64 {
+    var total: f64 = 0
+    simd (exact) for x in xs {
+        total += x
+    }
+    return total
+}
+```
+
+## Automatic CPU dispatch
+
+One binary runs on every CPU of its architecture and uses the widest instruction set the machine has. Nothing in the source mentions targets.
+
+A function is a SIMD function if it contains `simd for`, uses `Simd(T)`, or is declared `simd fn`. In release builds, every SIMD function and every function it calls is compiled once per CPU level. A call from ordinary code into a SIMD function goes through a dispatch slot that the runtime fills once before `main`. There is no per-call feature check.
+
+| Architecture | Baseline | Additional variants |
+| --- | --- | --- |
+| x86-64 | `x86-64-v2` (SSE4.2, POPCNT) | `x86-64-v3` (AVX2, FMA, BMI2), `x86-64-v4` (AVX-512) |
+| AArch64 | `armv8-a` (NEON) | `sve`, `sve2` |
+
+Binary size grows only by the SIMD functions times the number of variants. Ordinary code is compiled once, for the baseline.
+
+Marking an ordinary hot function `simd fn` multiversions it without explicit vectors, so LLVM's own vectoriser can use each variant's instructions.
+
+### Raising the baseline
+
+`--cpu <cpu>` compiles ordinary code for a higher level too. The values are `baseline`, `native`, `x86_64_v2`, `x86_64_v3`, `x86_64_v4`, `armv8-a`, `sve` and `sve2`. You can set the same thing in `otr.toml` as `[build] cpu = "x86_64_v3"`.
+
+A program built for a level stops at start-up on a CPU without it:
+
+```text
+error: this program needs a CPU with x86-64-v3
+```
+
+`native` targets the CPU that is compiling, for builds you will only run on that machine.
+
+### Testing every variant
+
+`otr test --release` runs each test that reaches SIMD code once per variant the host CPU supports, and reports the level:
+
+```text
+test "name" [x86-64-v2] ... ok
+```
+
+Set `OTR_SIMD=x86-64-v2` to cap the variant chosen at start-up. This reproduces a slower machine's code path on your own.
+
+### Debug builds
+
+Debug builds compile only the baseline variant and lower vector operations to per-lane scalar code. Results are identical, and only speed differs. Measure performance with `--release` or `--release-fast`.

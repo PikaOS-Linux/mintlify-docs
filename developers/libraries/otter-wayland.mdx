@@ -1,30 +1,101 @@
 ---
 title: "otter-wayland"
 sidebarTitle: "otter-wayland"
-description: "otr Wayland clients with owned proxies, event hubs, input, SHM, and capture."
+description: "Wayland client library in otr: connection, event hub, surfaces, input, shared-memory rendering, and capture."
 ---
 
-`otter-wayland` wraps Wayland protocols and shared surface policy. Import native leaf modules such as `otter_wayland.connection`, `otter_wayland.hub`, and `otter_wayland.xdg_toplevel`.
+`otter-wayland` is the Wayland client that every Otter Shell app uses. It speaks the wire protocol itself and does not link libwayland-client. It has no root module, so you import leaf modules such as `otter_wayland.connection`.
+
+## Packages
+
+The repository holds four packages.
+
+| Package | Path | Contents |
+| --- | --- | --- |
+| `otter_wayland` | `otr/` | Connection, hub, protocols, surfaces, outputs, input, clipboard, compositor IPC. Needs xkbcommon. |
+| `otter_wayland_render` | `otr/render/` | The modules that draw or decode pixels: `shm`, `renderer`, `layer_popup`, `app_window`, `selection_overlay`, `capture_session`, `capture_stream`, `capture_thumbnails`. Depends on otter-render. |
+| `otter_wayland_core` | `otr/core/` | The protocol-only subset, for daemons with no window. It leaves out the keyboard, seat and virtual keyboard modules, so it needs neither xkbcommon nor otter-render. |
+| `otter_wayland_lua` | `otr/lua/` | The `otter.wayland` Lua module. |
+
+```toml
+[dependencies]
+otter_wayland = { path = "../../otter-wayland/otr" }
+otter_wayland_render = { path = "../../otter-wayland/otr/render" }
+```
+
+A program uses `otter_wayland` or `otter_wayland_core`, never both. They are separate packages, so their types do not mix.
 
 ## Event model
 
-Each proxy has one owner. State records store copyable `wl.Id` identities rather than raw proxy pointers. Listeners append records to `hub.Hub`; components `pump` those records and expose event queues or generation counters.
+Protocol listeners write records into a `hub.Hub` that the connection owns. Your loop does three things each turn:
 
-There is no callback-plus-userdata or `SubscriberList` API. Dispatch the connection, pump relevant components, then drain events in your app loop.
+1. Dispatch the connection.
+2. Call `pump` on each component, which applies the records it cares about.
+3. Drain each component's events with `next_event`, or compare its generation counter with the value you last drew.
 
-## Native transport
+Components hold no callbacks and no pointers to your state. Each proxy has one owner. State and events refer to objects by `wl.Id`, a copyable identity, and you borrow the proxy from its owner when you send a request.
 
-Neither `otter_wayland` nor `otter_wayland_core` links libwayland-client. The client owns its Unix socket, wire objects, queued messages, and received descriptors in otr. The full package uses system xkbcommon; core needs neither rendering nor xkbcommon.
+```otr
+import std
+import otter_wayland.capture_output
+import otter_wayland.connection
 
-## Lightweight clients
+pub fn main() !void {
+    var conn = try connection.Connection.init(.{ outputs: true })
+    defer conn.deinit()
+    var outputs = capture_output.OutputList.init(&conn.hub)
+    defer outputs.deinit()
 
-Protocol-only applications can use `otter_wayland_core` from `otr/core/`. It excludes render and xkbcommon-dependent modules. Use either `otter_wayland` or core, never both: their types and hub contexts are distinct package identities.
+    for {
+        g := conn.next_global() orelse break
+        if outputs.take_global(g) |other| {
+            other.deinit()
+        }
+    }
+    try conn.roundtrip()
+    outputs.pump(&conn.hub)
+
+    for o in outputs.items() {
+        std.io.printf("{} {}x{}\n", .{ o.name_slice(), o.width, o.height })
+    }
+}
+```
 
 ## Lua
 
-`otter_wayland_lua` provides `otter.wayland`. Read outputs, toplevels, and workspaces without an action capability. Activation, closing, and workspace changes require `wayland-actions`; clipboard reads and writes require `clipboard`.
+The `otter_wayland_lua` package provides `otter.wayland`. Reading outputs, windows and workspaces needs no capability. Actions need `wayland-actions`, and the clipboard needs `clipboard`.
 
-The binding opens its own connection lazily and registers its descriptor with the plugin host. `subscribe` callbacks run through the host loop, not from protocol dispatch.
+```lua
+local wayland = require("otter.wayland")
+
+for _, out in ipairs(wayland.outputs()) do
+  print(out.name, out.logical_width, out.logical_height, out.scale)
+end
+
+for _, win in ipairs(wayland.toplevels()) do
+  if win.activated then print("focused:", win.app_id, win.title) end
+end
+
+local handle = wayland.subscribe(function()
+  -- windows or workspaces changed; ask for a redraw
+end)
+
+wayland.activate("org.mozilla.firefox")   -- needs "wayland-actions"
+```
+
+| Function | Returns | Capability |
+| --- | --- | --- |
+| `outputs()` | A table per output with `name`, `x`, `y`, `width`, `height`, `scale`, `scale_q8`, `logical_width`, `logical_height`. | none |
+| `toplevels()` | A table per window with `app_id`, `title`, `activated`, `minimized`, `outputs`. | none |
+| `workspaces()` | A table per workspace with `id`, `name`, `active`, `occupied`. | none |
+| `workspace_view(output, max_tags, hide_empty)` | The workspace strip for one output: `active`, `symbols`, and `items` with `id`, `display_id`, `state`, `name`. `nil` for an unknown output. | none |
+| `active_on_output(name)` | Whether the focused window belongs on that output. | none |
+| `subscribe(f)`, `unsubscribe(handle)` | A handle. `f` runs on the host loop after windows or workspaces change. | none |
+| `activate(app_id)`, `close(app_id)` | `true` when a window matched. | `wayland-actions` |
+| `set_workspace(id)`, `activate_workspace(output, id)` | | `wayland-actions` |
+| `clipboard()`, `set_clipboard(text)` | The selection text or `nil`, and `true` on success. | `clipboard` |
+
+The module opens its own connection on first use and adds its descriptor to the plugin host's loop. A call without the capability it needs raises an error. If the compositor exits, the next call raises `no Wayland compositor`.
 
 ## Reference pages
 
@@ -35,4 +106,4 @@ The binding opens its own connection lazily and registers its descriptor with th
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml`, `otr/API.md`, `otr/render/api_check.otr` and `otr/lua/wayland.otr` in the component repository. Protocol XML is in `protocols/`.

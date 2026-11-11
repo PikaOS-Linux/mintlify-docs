@@ -1,37 +1,140 @@
 ---
 title: "Bar widgets"
 sidebarTitle: "Bar widgets"
-description: "Native otr widgets borrow services per call and expose optional Lua drawing helpers."
+description: "The otter_ui_widgets package: native bar widgets, their service clients, and the otter.ui.widgets Lua module."
 ---
 
-Native bar widgets live in `otter_ui.widgets.*`; Surface Description emitters live in `otter_ui.widgets.specs.*`.
+The bar widgets are in the `otter_ui_widgets` package, in the `widgets-otr/` directory of the otter-ui repository. They are a separate package because they depend on otter-desktop and other service libraries, which `otter_ui` itself does not.
 
-## Ownership
+```toml
+[dependencies]
+otter_ui = { path = "../../otter-ui/otr" }
+otter_ui_widgets = { path = "../../otter-ui/widgets-otr" }
+```
 
-Widgets embed a `Widget` shell for geometry and pointer state. They do not store font or shared-service pointers.
+## Layout of a widget
 
-- Width measurement takes a borrowed mutable font.
-- `draw_frame` uses resources lent through the current frame.
-- `sync_state(service)` updates from an app-owned client.
-- Input methods take a service per call or return an action the app applies.
-- Widgets that own a private client expose descriptor/process entry points.
+Each widget has its own folder. `state.otr` holds the widget struct, its `Config` and its service client. `draw.otr` emits its Surface Description frame. Some have a `popup.otr`.
 
-The owner drives synchronization when service descriptors become ready and requests redraw from returned change flags. The otr API does not use subscriber callback/context registration.
+| Folder | Widget |
+| --- | --- |
+| `clock`, `weather` | Time with a calendar panel, and cached weather. |
+| `workspaces`, `active_window`, `keyboard_layout` | Compositor state through otter-wayland. |
+| `battery`, `power_profiles`, `brightness`, `nightlight` | Power and display. |
+| `cpu_load`, `cpu_temp`, `memory` | System metrics. |
+| `network`, `volume`, `mpris`, `system_tray` | Services with menus or popups. |
+| `button`, `dnd`, `falcond` | Command buttons and toggles. |
+| `bar` | Metrics and drawing shared by every widget. |
 
-## Registries and time
+## Driving a widget
 
-`widget_registry` uses `Slot` indices. A scoped `widget_by_name` lookup does not transfer ownership. App-owned `widgets.clock.LocalClock` keeps timezone state; pointer/tooltip operations receive time explicitly.
+A widget stores its area, its config and the last values it showed. It holds no font and no pointer to your app. You pass what it needs to each call.
 
-## PipeWire volume
+```otr
+import otter_desktop.monitor.sysinfo
+import otter_geo.rect as geo
+import otter_render.font
+import otter_ui_widgets.memory.state as memory
 
-The ordinary volume widget is service-independent. Add `otter_ui_volume` and use its `volume` module to apply sync, scroll, click, and popup actions to a borrowed PipeWire client. This keeps PipeWire out of UI-only apps.
+/// Lays the widget out at `x` and returns the x after it.
+fn place(w: &mut memory.Memory, f: &mut font.Font, x: i32, bar_height: u16) i32 {
+    width := w.get_width(f)
+    w.set_area(geo.Rect{ x: x, y: 0, width: @int_cast(u16, width), height: bar_height })
+    return x + @as(i32, width)
+}
+
+fn tick(w: &mut memory.Memory, f: &mut font.Font, info: &mut sysinfo.SysInfo) bool {
+    _ = info.poll()
+    return w.sync_state(f, info)
+}
+
+fn draw(w: &mut memory.Memory, frame: anytype) void {
+    w.draw_frame(frame, w.widget.area)
+}
+
+pub fn main() void {
+    var info = sysinfo.SysInfo.init()
+    var w = memory.Memory.init(geo.Rect.zero, .{ warning_threshold: 75 }, &info)
+    _ = w.needs_redraw()
+}
+```
+
+| Method | When to call it |
+| --- | --- |
+| `init(area, config, ...)` | Once. The config carries colors, thresholds and padding. |
+| `get_width(&mut font)` | During bar layout, to learn how wide the widget wants to be. |
+| `set_area(rect)` | After layout, with the widget's final rectangle. |
+| `sync_state(...)` | When its data source changed. It returns true when the widget needs a redraw. |
+| `draw_frame(frame, clip)` | While painting, with the current `UiFrame`. |
+| `motion(point, now_ms)`, `leave()` | For pointer movement, which drives hover and tooltips. |
+| `needs_redraw()` | To ask whether anything changed since the last paint. |
+| `release(&mut images)` | Before dropping the image store, to hand back cached icons. |
+
+Widgets with their own service client, such as battery, also expose its `poll_fd` and a process method. Add the descriptor to your event loop and redraw when processing reports a change.
+
+Every widget embeds an `otter_ui.widget.Widget`, which holds the area, the last pointer position and a full-redraw flag.
+
+## Volume and PipeWire
+
+`otter_ui_widgets.volume.state.VolumeWidget` holds no PipeWire type. Its input methods return what the user asked for. The `otter_ui_volume` package applies that to a PipeWire client:
+
+```toml
+otter_ui_volume = { path = "../../otter-ui/otr/volume" }
+```
+
+`otter_ui_volume.volume` has `sync_state(w, pw)`, `click(w, btn, pw)`, `scroll(w, axis, discrete, now_ms, pw)`, `show_popup`, `hide_popup`, `handle_popup_click` and `handle_popup_motion`. Only an app that adds this package links PipeWire.
 
 ## Lua
 
-`otter.ui.widgets` exposes native widget formatting/layout rules and `draw(name, x, y, height, view, width?)`. It does not independently create UPower, NetworkManager, or PipeWire clients. Supply view data from host-registered desktop bindings.
+By default otter-bar draws its built-in widgets through Lua plugins. Each plugin reads data from an `otter.desktop` or `otter.wayland` module and passes it to `otter.ui.widgets.draw`, which runs the native widget's drawing code. The memory widget is the shortest:
 
-`otter.ui.art` provides asynchronous MPRIS album-art fetching under the `media` capability. Hosts must register it explicitly. Built-in widget drawing and stateful service access are separate surfaces.
+```lua
+local w = require("otter.ui.widgets")
+local host = require("otter.host")
+local bar = require("otter.bar")
+local timer = require("otter.timer")
+local si = require("otter.desktop.sysinfo")
+
+local c = bar.config("memory")
+
+local function read() return math.floor(si.memory().percent + 0.5) end
+local pct = read()
+timer.every(3000, function()
+    local p = read()
+    if p ~= pct then pct = p; host.redraw() end
+end)
+
+local view = {
+    color = c.color, warning_color = c.warning_color, critical_color = c.critical_color,
+    background = c.background_color, warning_threshold = c.warning_threshold, critical_threshold = c.critical_threshold,
+}
+local width = 0
+return {
+    measure = function(max_w, max_h)
+        if width > 0 then return width, max_h end
+        return max_h * 3, max_h
+    end,
+    draw = function(wd, h)
+        sd.begin(wd, h)
+        view.percent = pct
+        local used = w.draw("memory", 0, 0, h, view, nil)
+        sd.finish()
+        if used ~= width then
+            width = used
+            host.redraw()
+        end
+    end,
+}
+```
+
+`w.draw(name, x, y, height, view, width)` draws the named widget from a view table and returns the width it used. The view's fields match the native widget's `Config` plus its current data.
+
+A widget plugin returns `measure(max_w, max_h)`, `draw(w, h)` and `event(kind, hit, x, y)`. `kind` is `click`, `right_click`, `middle_click`, `scroll_up` or `scroll_down`. Optional exports such as `tooltip` and `menu` use the bar's native popups.
+
+`otter.ui.widgets` also has `measure`, `text_width`, `now`, `icon_exists` and `mpris_scrolling`, and the formatting and icon rules the native widgets use. The module reads no service itself and needs no capability. `otter.ui.art` fetches MPRIS album art, and its `fetch` needs the `media` capability.
+
+To write a new widget from scratch, start from the `examples-counter` plugin shown on the [otter-ui overview](/developers/libraries/otter-ui#lua).
 
 ## Source reference
 
-`otr/widgets/`, `otr/widget_registry.otr`, `otr/volume/volume.otr`, `otr/lua/widgets.otr`, `otr/lua/art.otr` in the component repository.
+`widgets-otr/<widget>/state.otr` and `draw.otr`, `widgets-otr/lua/widgets.otr`, `otr/widget.otr` and `otr/volume/volume.otr` in the component repository. The Lua widgets are in `otr/plugins/` in otter-bar, with their contract in `otr/plugins/README.md`.

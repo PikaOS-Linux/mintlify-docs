@@ -1,79 +1,191 @@
 ---
 title: "Lua widgets and providers"
 sidebarTitle: "Widgets and providers"
-description: "Describe widget frames, handle input, and return launcher results with Lua exports."
+description: "Write a Lua bar widget and a launcher provider, enable them, and handle input, tooltips, and menus."
 ---
 
-Start with [Writing plugins](/developers/plugins) for manifests, `opf`, discovery, and policy. Widgets and providers share the Lua runtime but expose different functions to their hosts.
+Start with [Writing plugins](/developers/plugins) for manifests, `opf`, discovery, and policy. Widgets and providers run in the same plugin host. The host calls different functions on the table each entry script returns.
 
-## A clickable widget
+## A minimal bar widget
 
-A `kind = "widget"` plugin returns `measure`, `draw`, and an optional `event` function:
+A widget is a directory with a `plugin.toml` manifest and an entry script. This one is `examples-counter` from `otter-examples/otr/plugins/`.
+
+```toml
+# examples-counter/plugin.toml
+name = "examples-counter"
+version = "0.1.0"
+kind = "widget"
+description = "The Otter Examples counter as a bar widget"
+capabilities = []
+```
 
 ```lua
+-- examples-counter/init.lua
 local host = require("otter.host")
+local log = require("otter.log")
+local theme = require("otter.theme")
+
+local width = 132
 local clicks = 0
+
+-- Colours follow the theme: redraw when it changes.
+theme.subscribe(function() host.redraw() end)
 
 return {
   measure = function(max_w, max_h)
-    return math.min(96, max_w), max_h
+    return math.min(width, max_w), max_h
   end,
   draw = function(w, h)
+    local t = theme.get()
+    local size = math.min(14, h)
     sd.begin(w, h)
-    sd.rect(0, 0, w, h, 0x2288aa33, 4)
+    sd.rect(0, 2, w, h - 4, theme.alpha(t.colors.accent, 0x28), t.layout.control_radius)
     sd.hit(1)
-    sd.text(6, 6, "Clicks: " .. clicks, 14, 0xffffffff)
+    local label = "Clicked " .. clicks .. (clicks == 1 and " time" or " times")
+    sd.text(8, math.floor((h - size) / 2) - 1, label, size, t.colors.accent)
     sd.finish()
   end,
   event = function(kind, id)
     if kind == "click" and id == 1 then
       clicks = clicks + 1
+      log.info("examples-counter: clicked", clicks)
       host.redraw()
     end
   end,
 }
 ```
 
-`measure(max_w, max_h)` returns the desired width and height. `draw(w, h)` records a complete frame. `event(kind, id, x, y)` receives pointer events for tagged hit regions.
+The host calls three exports:
 
-A widget draws again after input, resizing, or `otter.host.redraw()`. Use native subscriptions, timers, or file watches to request updates when state changes. An idle widget with no event sources does not need periodic polling or Lua calls.
+| Export                     | Purpose                                                                 |
+| -------------------------- | ----------------------------------------------------------------------- |
+| `measure(max_w, max_h)`    | Return the width and height the widget wants.                           |
+| `draw(w, h)`               | Record one complete frame with `sd.*`.                                  |
+| `event(kind, hit, x, y)`   | Handle pointer input on the hit region tagged `hit`. This export is optional. |
+
+In the bar, `kind` is `click`, `right_click`, `middle_click`, `scroll_up`, or `scroll_down`.
+
+The host draws a widget after it calls `otter.host.redraw()`, after a resize, and after an event it handled. A widget with no timers, watches, or subscriptions causes no wakeups and no Lua calls while idle. Request redraws from timers, file watches, or binding subscriptions when your data changes.
+
+## Enable the widget in the bar
+
+Install the directory under `~/.local/share/otter-shell/plugins/`. While you develop, you can point `OTTER_PLUGIN_PATH` at its parent directory. Then name the widget in a bar layout in `~/.config/otter-shell/otter-bar.conf`:
+
+```conf
+layout_center = "plugin:examples-counter"
+```
+
+`plugin:<id>` loads the plugin directory `<id>` from the plugin search roots. `lua:<dir>` loads the directory you name, given as an absolute path or a path starting with `~/`. The bar loads at most 16 Lua widgets.
+
+The bar's own widgets are Lua plugins too. A layout name such as `clock` loads `plugin:clock`. Write `native:clock` to keep the native widget. The bar also falls back to the native widget when the plugin is missing, disabled, or fails to load.
+
+Disable a plugin or narrow its capabilities in `~/.config/otter-shell/plugins.conf`. Keys use the plugin's directory name:
+
+```conf
+examples-counter_enabled = false
+volume_capabilities = audio
+```
+
+## A widget driven by a service
+
+`cmd-watch` from `otter-lua/examples/` runs a command on a timer and redraws only when the output changes. Its manifest declares `capabilities = ["spawn"]`.
+
+```lua
+local command = { "date", "+%H:%M" }
+local every_ms = 5000
+local font_size = 13
+local color = 0xe6e6e6ff
+
+local process = require("otter.process")
+local timer = require("otter.timer")
+local host = require("otter.host")
+local log = require("otter.log")
+
+local label = "…"
+local running = false
+
+local function refresh()
+  if running then return end
+  running = true
+  process.spawn(command, function(code, out, err)
+    running = false
+    local line = out:match("[^\n]*") or ""
+    if code ~= 0 then
+      log.warn("command failed", code, err)
+      line = "!" .. code
+    end
+    if line ~= label then
+      label = line
+      host.redraw()   -- only a changed label costs a frame
+    end
+  end)
+end
+
+refresh()
+timer.every(every_ms, refresh)
+
+return {
+  measure = function(max_w, max_h)
+    return math.min(#label * font_size * 0.6 + 12, max_w), max_h
+  end,
+  draw = function(w, h)
+    sd.begin(w, h)
+    sd.rect(0, 0, w, h, 0x00000000, 4)
+    sd.hit(1)
+    sd.text(6, (h - font_size) / 2, label, font_size, color)
+    sd.finish()
+  end,
+  event = function(kind, id)
+    if kind == "click" and id == 1 then refresh() end
+  end,
+}
+```
 
 ## Surface Description calls
 
-`sd` is a global supplied by the runtime:
+The runtime installs `sd` as a global:
 
-| Call                                           | Purpose                                  |
-| ---------------------------------------------- | ---------------------------------------- |
-| `sd.begin(w, h)`                               | Open the root frame.                     |
-| `sd.row(x, y, gap)`                            | Open a horizontal container.             |
-| `sd.col(x, y, gap)`                            | Open a vertical container.               |
-| `sd.clip(x, y, w, h)`                          | Open a clipped container.                |
-| `sd.rect(x, y, w, h, color, radius)`           | Filled rectangle.                        |
-| `sd.outline(x, y, w, h, color, radius, width)` | Inside border; width defaults to 1.      |
-| `sd.text(x, y, text, size, color)`             | Text; accepts a string or number.        |
-| `sd.icon(x, y, name, size, color)`             | Named icon; `name` must be a string.     |
-| `sd.hit(id)`                                   | Tag the preceding node with an input id. |
-| `sd.hit(id, "text")`                           | Tag it as a text field.                  |
-| `sd.finish()`                                  | Close the current container or root.     |
+| Call                                           | Purpose                                              |
+| ---------------------------------------------- | ---------------------------------------------------- |
+| `sd.begin(w, h)`                               | Open the root frame.                                 |
+| `sd.row(x, y, gap)`                            | Open a row container at an offset.                   |
+| `sd.col(x, y, gap)`                            | Open a column container at an offset.                |
+| `sd.clip(x, y, w, h)`                          | Open a container that clips its children to its box. |
+| `sd.rect(x, y, w, h, color, radius)`           | Draw a filled rectangle.                             |
+| `sd.outline(x, y, w, h, color, radius, width)` | Stroke the inside of a rectangle. Width defaults to 1. |
+| `sd.text(x, y, text, size, color)`             | Draw text. `text` is a string or a number.           |
+| `sd.icon(x, y, name, size, color)`             | Draw a named icon. `name` must be a string.          |
+| `sd.hit(id)`                                   | Tag the node before it with an input id.             |
+| `sd.hit(id, "text")`                           | Tag the node before it as a text field.              |
+| `sd.finish()`                                  | Close the current container or the root.             |
 
-Colors use `0xRRGGBBAA`. Alpha below `ff` blends over content beneath the node. Close every container and the root. Invalid call order, unfinished frames, more than 4096 nodes, or more than 64 KiB of text fail the frame.
+Colors are `0xRRGGBBAA`. A color with alpha below `ff` blends over the content beneath it. Draw a bordered panel as a `rect` followed by an `outline`.
 
-The native host replays the recording. You do not allocate a Wayland surface or render pixels from Lua.
+Children use coordinates relative to their container. otter-ui's sink, which the shell hosts replay frames into, treats `row` and `col` as origin offsets and does not apply `gap`. Place each child yourself.
+
+Close every container and the root. The host refuses a frame that leaves a container open, calls `sd.*` out of order, records more than 4096 nodes, or holds more than 64 KiB of text. `sd.text` raises for a value that is neither a string nor a number, and `sd.icon` raises for a name that is not a string. A wrong numeric argument becomes zero.
+
+The native host replays the recording. Lua code never allocates a Wayland surface or renders pixels.
 
 ## Text input
 
-Hosts supporting text-field hits focus a node tagged with `sd.hit(id, "text")` when clicked. Text events use `event(kind, id, text)` rather than pointer coordinates:
+A click on a node tagged with `sd.hit(id, "text")` gives it keyboard focus. The widget then receives `event(kind, id, text)` with one of these kinds:
 
-- `focus` and `blur`, with empty text.
-- `text`, with committed field text.
-- `preedit`, for IME composition.
-- `submit`, when Enter is pressed.
+| Kind      | Text argument                                     |
+| --------- | ------------------------------------------------- |
+| `focus`   | Empty.                                            |
+| `text`    | The whole field text after each edit or IME commit. |
+| `preedit` | The IME's composition.                            |
+| `submit`  | Sent when you press Enter.                        |
+| `blur`    | Empty.                                            |
 
-See the packaged `bar-search` plugin for the bar's field behavior.
+In the bar, Enter sends `submit` and keeps the field focused. Escape, a press elsewhere on the bar, and the keyboard moving to another surface send `blur`. Export `field_text(_, hit)` and return `{ { text = "..." } }` to give the field its starting text. The bar sends that as a `text` event right after `focus`.
+
+The `bar-search` plugin in `otter-shell-plugins` is a working text field.
 
 ## Tooltips and menus
 
-Bar, taskbar, and dock hosts support named exports for native tooltips and menus:
+Bar, taskbar, and dock hosts read optional exports from the widget table. Each export returns a list of records, and every record field is a string.
 
 ```lua
 tooltip = function()
@@ -95,50 +207,116 @@ menu_closed = function()
 end,
 ```
 
-Place these fields in the returned widget table. Record fields are strings, including depth and flags. Use `kind = "separator"` for separators. Root items use depth `"0"`; first-level submenu items use `"1"`. The bar supports nested depths through `"8"` and calls the optional `submenu_open(id)` export before opening a submenu. Its menu query uses `state = "submenu"` while a submenu is open. Other hosts can impose narrower menu limits. `screen_w` is the output width, or zero when unknown.
+Put these fields in the table that holds `measure` and `draw`.
 
-Hover shows tooltip text unless the menu is open. Menu activation depends on the host: the bar defaults to left click, while dock tiles use right click. Activating an item calls `menu_activate(id)`; `close = "1"` dismisses it. Dismissal calls `menu_closed()`. A redraw while open refreshes menu records.
+| Export                    | Returns                              | Called when                                           |
+| ------------------------- | ------------------------------------ | ----------------------------------------------------- |
+| `tooltip(_, hit)`         | One record with `text` and `anchor`  | The pointer rests over the widget and no menu is open. |
+| `menu(state, screen_w)`   | One record per menu item             | The menu opens, and again after each redraw request while it is open. |
+| `menu_activate(id)`       | One record with `close`              | You choose an item.                                   |
+| `menu_closed()`           | Nothing                              | The menu goes away.                                   |
+| `submenu_open(id)`        | Nothing                              | A submenu opens, before the next `menu` query.        |
+| `opens(kind, hit)`        | One record with `open` and `anchor`  | Before each click in the bar.                         |
+| `output(name)`            | Nothing                              | Before the bar measures or draws the widget for that output. |
+
+A menu record has these fields:
+
+| Field      | Values                                                      |
+| ---------- | ----------------------------------------------------------- |
+| `kind`     | `"item"` or `"separator"`.                                   |
+| `id`       | The string passed to `menu_activate` and `submenu_open`.    |
+| `label`    | The item text.                                              |
+| `depth`    | The submenu panel. `"0"` is the top panel and the bar accepts up to `"8"`. |
+| `enabled`  | `"0"` disables the item. Any other value enables it.        |
+| `submenu`  | `"1"` when the item opens a panel.                          |
+| `selected` | `"1"` to highlight the item.                                |
+| `open`     | `"1"` on the item whose submenu is open.                    |
+| `toggle`   | `"checkmark"` or `"radio"` to draw a native marker.         |
+| `checked`  | `"1"` when the marker is set.                               |
+
+`state` is `"submenu"` while the menu shows a submenu panel. `screen_w` is the output width, or zero when the host does not know it. The menu closes after `menu_activate` unless the record says `close = "0"`.
+
+In the bar, a left click on a widget that exports `menu` opens the menu and sends no `click` event. Export `opens` to decide per click. Return `open = "menu"` to open the `menu` export, or `open = "brightness"` to open the bar's brightness slider. Any other value sends the click to `event`. Set `anchor = "hit"` in a `tooltip` or `opens` record to place the popup at the hit region under the pointer.
+
+The dock opens a tile's menu on a right click.
+
+A widget that exports `output` can draw differently on each output. The bar keeps one frame per output for it. `active_window` in `otter-bar/otr/plugins/` uses it to show a title only on the output that holds the focused window. This excerpt leaves out its `shown` and `view` helpers:
+
+```lua
+local here
+
+return {
+    output = function(name)
+        here = name
+    end,
+    measure = function(max_w, max_h)
+        if not shown() then return 0, max_h end
+        return math.min(w.measure("active_window", max_h, view()), max_w), max_h
+    end,
+    draw = function(wd, h)
+        sd.begin(wd, h)
+        w.draw("active_window", 0, 0, h, view(), nil)
+        sd.finish()
+    end,
+}
+```
 
 ## Launcher provider
 
-Use this manifest:
+A provider is a `kind = "plugin"` plugin whose manifest lists `launcher` in `provides`. The launcher reads the manifest before it runs any of the plugin's Lua. This one is `examples-profiles` from `otter-examples/otr/plugins/`.
 
 ```toml
-name = "my-provider"
+# examples-profiles/plugin.toml
+name = "examples-profiles"
+version = "0.1.0"
 kind = "plugin"
-entry = "init.lua"
 provides = ["launcher"]
-capabilities = []
+description = "Launcher rows that open the Otter Examples card"
+capabilities = ["spawn"]
 ```
 
-Return string records from `query(text, max)`, and handle the selected record's payload in `activate(payload)`:
-
 ```lua
+-- examples-profiles/init.lua
 local log = require("otter.log")
+local process = require("otter.process")
+
+local rows = {
+  { title = "Otter Examples window", subtitle = "Surface Description card in an xdg toplevel", payload = "window" },
+  { title = "Otter Examples overlay", subtitle = "the same card on a layer-shell surface", payload = "layer" },
+}
+
+local function matches(text)
+  local q = text:match("^[ \t]*(.-)[ \t]*$"):lower()
+  return q ~= "" and (("otter examples"):find(q, 1, true) ~= nil or ("surface description"):find(q, 1, true) ~= nil)
+end
 
 return {
   query = function(text, max)
-    if max < 1 or not ("hello"):find(text:lower(), 1, true) then
-      return {}
+    local out = {}
+    if not matches(text) then return out end
+    for _, row in ipairs(rows) do
+      if #out >= max then break end
+      out[#out + 1] = row
     end
-    return {
-      { title = "Hello", subtitle = "Example result", payload = "hello" },
-    }
+    return out
   end,
   activate = function(payload)
-    log.info("Selected", payload)
+    log.info("examples-profiles: opening", payload)
+    process.launch({ "otter-examples", payload })
   end,
 }
 ```
 
-`title` and `payload` are strings; `subtitle` is optional. Return no more than `max` records. An optional `row(payload, w, h)` export draws a custom result row with `sd.*`.
+The launcher calls `query(text, max)` as you type. Return at most `max` records. Each record has a string `title`, a string `payload`, and an optional `subtitle`. The launcher calls `activate(payload)` when you choose a row. An optional `row(payload, w, h)` export draws a custom result row with `sd.*`.
 
-The launcher reads `kind` and `provides` before executing the plugin. The built-in Lua providers `calc`, `emoji`, `clip`, and `search` default to off to avoid duplicate native results; `snippet-provider` is also opt-in. Enable those explicitly in `plugins.conf` only when wanted. This default does not apply to every custom provider.
+A provider can also export a function named after a launcher mode: `calc`, `emoji`, `clip`, `file`, or `grep`. The launcher calls it with that mode's query and expects the same records. Rows from `emoji` draw in the emoji grid with the payload as the glyph.
+
+The launcher enables a provider unless `plugins.conf` says `<id>_enabled = false`. Five ids are off until you set `<id>_enabled = true`: `snippet-provider`, `calc`, `emoji`, `clip`, and `search`. The last four repeat rows the native launcher already shows.
 
 ## Test the host behavior
 
 Run `opf check` and `opf check --build` after changes. Then exercise your plugin through its real host in an isolated headless session, with temporary `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_RUNTIME_DIR`.
 
-The `otter-shell-plugins/otr/tests/e2e.sh` suite covers plugins in the shared host driver, bar, and launcher under headless Sway. Do not use `opf check`'s inert service substitutes as evidence that process, filesystem, or desktop-service behavior works.
+The `otter-shell-plugins/otr/tests/e2e.sh` suite covers plugins in the shared host driver, bar, and launcher under headless Sway. `opf check` replaces the timer, filesystem, and process modules with inert substitutes, so it cannot show that process, filesystem, or desktop-service behavior works.
 
-Source contracts: `otter-lua/otr/sd.otr`, `otter-lua/otr/plugins.otr`, `otter-launcher/otr/providers.otr`, and the factory's `otr/templates/`.
+Source contracts: `otter-lua/otr/sd.otr`, `otter-lua/otr/plugins.otr`, `otter-ui/otr/lua/widget_abi.otr`, `otter-bar/otr/lua_host.otr`, `otter-bar/otr/plugins/README.md`, and `otter-launcher/otr/providers.otr`.

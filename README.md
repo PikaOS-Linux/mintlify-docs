@@ -10,7 +10,7 @@ Mintlify documentation for Otter Shell. The site covers end-user setup, packaged
 - `sources/` contains imported reference snapshots, not current API contracts or published guide pages. Preserve their historical provenance; verify current claims against package source and manifests instead.
 - Read `AGENTS.md` for terminology, package boundaries, and writing conventions.
 
-Otter Shell v0.13.0 uses otr 0.2.0 and LuaJIT extensions. Some native dependencies and separate products use Zig and have their own build instructions.
+Otter Shell's packages are written in otr and extended with LuaJIT scripts. `otter-zenith/otr-toolchain.pin` names the otr release they build with. `otter-bench` and `otter-browser` are Zig 0.17 projects with their own build instructions.
 
 ## Local preview
 

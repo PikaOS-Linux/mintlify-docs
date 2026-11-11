@@ -1,33 +1,176 @@
 ---
 title: "Input and overlays"
 sidebarTitle: "Input and overlays"
-description: "Native otr hit dispatch, focus, queued overlays, and virtualized input geometry."
+description: "Dispatch pointer and keyboard input by id, scroll views, text fields, overlays, and tooltips in otter-ui."
 ---
 
 ## Dispatch
 
-`UiState.hit_test(point)` returns an optional hit region. `dispatch(event)` updates input state and returns `DispatchResult` for the app to interpret. Dispatch events and results are value types in `ui_frame_types`.
+A rendered frame leaves hit regions in the `UiState`. You feed input to `state.dispatch(event)`, and it answers with the id of the control the event landed on. Your code compares that id with its own and changes its model.
 
-Use the same stable `Id` in rendering and input handling. A click target needs a hit region; a visible rectangle alone is not an action.
+```otr
+/// Returns whether the surface needs a redraw.
+fn on_pointer(ui: &mut UiState, prefs: &mut Prefs, ev: seat.SeatEvent, pointer: &mut geo.Point) bool {
+    switch ev {
+        .motion |m| => {
+            pointer.* = m.point
+            was := ui.input.hovered
+            _ = ui.dispatch(.pointer_motion{ m.point })
+            return !was.eql(ui.input.hovered)
+        }
+        .button |b| => {
+            if b.state != .pressed {
+                _ = ui.dispatch(.button_release{ .{ point: b.point, button: 1 } })
+                return true
+            }
+            if prefs.menu_open and ui.should_dismiss_overlays(b.point) {
+                prefs.menu_open = false
+                return true
+            }
+            press := ui.dispatch(.button_press{ .{ point: b.point, button: 1, time_ms: b.time } })
+            if press.id.eql(ids.blur) {
+                prefs.blur = !prefs.blur
+            } else if press.id.eql(ids.menu_item) {
+                prefs.opacity_q16 = 0xffff
+                prefs.menu_open = false
+            }
+            return press.action != .none
+        }
+        .scroll, .scroll_value120 => {
+            if scroll.Wheel.of(ev) |w| {
+                return scroll_view.wheel(ui, pointer.*, w)
+            }
+            return false
+        }
+        else => return false
+    }
+}
+```
 
-Text editing has separate `input_buffer`, `text_edit`, and `text_box` modules. Feed committed text and composition events correctly rather than interpreting IME preedit as final text.
+`DispatchEvent` is a union:
 
-## Overlays
+| Event | Payload |
+| --- | --- |
+| `pointer_motion` | The pointer position. |
+| `pointer_leave` | None. |
+| `button_press`, `button_release` | A `PointerButtonEvent` with `point`, `button` and an optional `time_ms`. |
+| `scroll` | A `ScrollEvent` with `point` and `delta`. |
+| `keyboard_focus` | A `FocusEvent` that moves focus to the first, previous, next or last control. |
+| `text_input_focus` | The position of a click in a text field. |
 
-`UiFrame.queue_overlay` lays out its borrowed node immediately into an overlay command segment. `finish()` places that segment after main content. It does not store a raw node pointer until the end of the frame.
+`DispatchResult` carries the `action` (`hover`, `press`, `release`, `scroll`, `focus`, `text_focus`, `drag` or `none`), the `id`, the hit `kind`, the control's `rect`, and the node's `hit_data`. On a press, `clicks` is 2 for a double click. Pass the pointer event's timestamp as `time_ms`, because presses without one never count as a double click.
 
-Queue an overlay after its anchor has been rendered. `OverlayAnchor`, `OverlayPlacement`, and `place_overlay` define placement against the viewport. Tooltip text is copied into the per-frame label arena.
+`state.input` is the current `InputSnapshot`: `pointer`, `hovered`, `active`, `focused` and `focus_visible`. Compare `hovered` before and after a motion event to decide whether to redraw.
 
-`should_dismiss_overlays(point)` helps determine click-off dismissal. Overlay damage records support redraws when popups move or disappear.
+Only nodes with a `hit` kind receive input. A rectangle you can see is not clickable until its node has one.
 
-## Virtualized input
+### Keyboard focus
 
-`UniformList` exposes `visible_range`, `hit_index`, `move_selection`, and `scroll_offset_for_selection`. `UniformGrid` provides the corresponding row-aware operations. These helpers do not require a node per off-screen item.
+`dispatch(.keyboard_focus{ .{ current: state.input.focused, move: .next } })` moves focus for Tab, and `.previous` for Shift+Tab. It sets `focus_visible`, and buttons, icon buttons and checkboxes then draw a focus ring. A pointer press clears it. For controls you draw yourself, `otter_ui.focus_ring.around(frame, focused, radius)` draws the same ring.
 
-## Lua boundary
+## Scroll views
 
-`otter.ui` offers ID and list/grid geometry helpers. Lua widgets emit SD commands and hit records; the plugin host delivers `event(kind, id, x, y)` to the plugin export. The native `UiState.dispatch` object is not exposed as a Lua constructor.
+`Node.scroll_view(id, layout, children)` scrolls its children when they are taller than it. The frame keeps the offset under the view's id and draws a scrollbar while the content overflows. Route input through `otter_ui.scroll_view`:
+
+| Function | Call it for |
+| --- | --- |
+| `wheel(ui, point, wheel)` | `scroll` and `scroll_value120` seat events, converted with `scroll.Wheel.of(event)`. |
+| `press(ui, point)`, `drag(ui, point)`, `release(ui)` | Dragging the scrollbar thumb. |
+| `key(ui, focused, keysym)` | Page and arrow keys that no control handled. |
+| `reveal(ui, id)` | Scrolling a newly focused control into view. |
+
+Each returns true when the view moved and needs a redraw.
+
+## Overlays and tooltips
+
+Menus, dropdowns and tooltips are queued on the frame after the main tree.
+
+```otr
+fn render(frame: &mut UiFrame, prefs: &Prefs, viewport: geo.Rect) !void {
+    var rows = [2]Node{
+        Node.checkbox(ids.blur, .{ label: "Blur behind windows", checked: prefs.blur }),
+        Node.slider(ids.opacity, .{ value_q16: prefs.opacity_q16, value_text: "75%" }),
+    }
+    root := Node.scroll_view(ids.list, .{ width: .fill, height: .fill, gap: 8 }, &mut rows)
+    _ = try frame.render(&root, viewport)
+
+    if prefs.menu_open {
+        item := Node.button(ids.menu_item, "Reset to default")
+        try frame.queue_overlay(.{ id: ids.menu, anchor: .element{ ids.opacity }, placement: .below, size: .{ x: 180, y: 32 }, node: &item })
+    }
+    if frame.state.input.hovered.eql(ids.blur) {
+        try frame.queue_tooltip(.{ id: ids.tip, anchor: .element{ ids.blur }, text: "Needs a compositor that blurs on request" })
+    }
+    try frame.finish()
+}
+```
+
+`queue_overlay` lays the node out at once and holds its commands until `finish()`, which places them above everything else.
+
+| `OverlayAnchor` | Anchors to |
+| --- | --- |
+| `.element{ id }` | The rectangle of a rendered element. |
+| `.rect{ r }` | A rectangle you supply. |
+| `.pointer` | The pointer position. |
+| `.viewport` | The whole viewport. |
+
+`placement` is `below`, `above`, `start`, `end` or `centered`. An overlay that would leave the viewport flips to the other side when it fits there, and is then clamped into the viewport.
+
+`queue_tooltip` takes text instead of a node. The frame copies the text, so it can come from a temporary buffer.
+
+Overlays have a higher `z` than the main tree, and `hit_test` returns the topmost region under the pointer. `state.should_dismiss_overlays(point)` is true for a press outside every overlay, which is when a menu should close. `state.overlay_damage_rect()` returns the area to repaint when an overlay moved or closed.
+
+These overlays draw inside your surface. A popup that extends past the surface, such as a bar menu, needs its own layer surface from `otter_wayland_render.layer_popup`. The `otter_ui.popup` modules lay out and draw the menus and tooltips that go in it.
+
+## Text fields
+
+`otter_ui.input_buffer.InputBuffer(N)` is a fixed-capacity text buffer with a cursor, a selection and input-method preedit. Render it with `Node.text_input`, passing `text()` as the spec's `text` and the cursor as `cursor_byte`.
+
+```otr
+fn search_box() void {
+    var query = input_buffer.InputBuffer(256).init()
+    _ = query.append_utf8("otter")
+    _ = query.backspace()
+    _ = query.text()
+}
+```
+
+Feed it committed text with `commit_text` and composition text with `set_preedit`. `otter_ui.text_edit` and `otter_ui.text_box` add key handling and multi-line editing.
+
+### Password fields
+
+Lock, greeter and polkit prompts share one key map, so that they behave the same.
+
+```otr
+fn on_key(field: &mut auth_input.AuthInput, key: &keyboard.KeyEvent) bool {
+    return auth_input.password_key(&mut field.password, key.keysym, key.utf8.as_str(), key.mods.ctrl, key.mods.shift)
+}
+```
+
+`password_key` handles Shift selection, Ctrl+A and word movement, and offers no copy or cut. `AuthInput.clear_sensitive()` wipes the buffer.
+
+## Lua
+
+A Lua widget marks hit areas with `sd.hit(id)`, and the host delivers input to the plugin's `event` export.
+
+```lua
+return {
+  draw = function(w, h)
+    sd.begin(w, h)
+    sd.rect(0, 0, w, h, 0x00000000, 0)
+    sd.hit(1)
+    sd.finish()
+  end,
+  event = function(kind, id, x, y)
+    if kind == "click" and id == 1 then
+      host.redraw()
+    end
+  end,
+}
+```
+
+A bar widget can also export `tooltip`, which returns the rows of its hover text, such as `{ { text = "Memory: 3.1/15.5 GiB" } }`.
 
 ## Source reference
 
-`otr/ui_frame.otr`, `otr/ui_frame_types.otr`, `otr/ui_frame_list.otr`, `otr/lua/ui.otr` in the component repository.
+`otr/ui_frame.otr`, `otr/ui_frame_types.otr`, `otr/scroll_view.otr`, `otr/input_buffer.otr`, `otr/auth_input.otr`, `otr/focus_ring.otr` in the component repository.

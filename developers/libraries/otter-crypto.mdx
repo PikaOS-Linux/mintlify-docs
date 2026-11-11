@@ -4,60 +4,132 @@ sidebarTitle: "otter-crypto"
 description: "Native otr hashing, MACs, authenticated encryption, signatures, and random bytes."
 ---
 
-`otter-crypto` wraps otr standard-library cryptography. It has no libcrypto or other C cryptographic dependency. Import leaf modules, not a package root.
+`otter-crypto` wraps the otr standard library's cryptography. It links no libcrypto and no other C library. The package name is `otter_crypto`, and you import its modules by name.
 
-| Module               | Surface                                            |
-| -------------------- | -------------------------------------------------- |
-| `hash`               | MD5, SHA-1, SHA-256, SHA-512                       |
-| `hmac`               | Corresponding keyed hashes                         |
-| `aes`, `cmac`        | AES-128 blocks, CTR32-BE, CBC-MAC, CMAC            |
-| `aead`               | AES-128-GCM, ChaCha20-Poly1305, XChaCha20-Poly1305 |
-| `chacha`, `poly1305` | Stream/MAC primitives                              |
-| `x25519`             | Key exchange                                       |
-| `ed25519`            | Keys, deterministic signing, verification          |
-| `random`, `wipe`     | OS randomness and explicit clearing                |
+```toml
+[dependencies]
+otter_crypto = { path = "../../otter-crypto/otr" }
+```
+
+| Module | Surface |
+| --- | --- |
+| `hash` | `Md5`, `Sha1`, `Sha256`, `Sha512` |
+| `hmac` | `HmacMd5`, `HmacSha1`, `HmacSha256`, `HmacSha512` and the generic `Hmac(H)` |
+| `aes`, `cmac` | AES-128 block cipher, CTR with a 32-bit big-endian counter, CBC-MAC, CMAC |
+| `aead` | `Aes128Gcm`, `ChaCha20Poly1305`, `XChaCha20Poly1305` |
+| `chacha`, `poly1305` | Raw ChaCha20 with a 64-bit nonce, and Poly1305 |
+| `x25519` | Key exchange |
+| `ed25519` | Keys, deterministic signing, verification |
+| `random`, `wipe` | OS randomness and clearing a value |
+
+## Hashing and encryption
+
+Functions return digests and tags by value. Keys and nonces are arrays you pass by value.
 
 ```otr
+import std
+import std.crypto
+import std.mem
+import otter_crypto.aead
 import otter_crypto.hash
+import otter_crypto.hmac
+import otter_crypto.random
 
-pub fn main() void {
-    digest := hash.Sha256.hash("example")
-    _ = digest
+pub fn main() !void {
+    // One-shot and streaming hashes give the same digest.
+    digest := hash.Sha256.hash("abc")
+    var ctx = hash.Sha256.init()
+    ctx.update("a")
+    ctx.update("bc")
+    streamed := ctx.final()
+    std.io.printf("{}\n", .{ crypto.timing_safe_eql(&digest, &streamed) })   // true
+
+    mac := hmac.HmacSha256.create("The quick brown fox", "key")
+    _ = mac
+
+    // Authenticated encryption with a random 24-byte nonce.
+    var key: [32]u8 = [32]u8{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    var nonce: [24]u8 = [24]u8{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    try random.fill(&mut key)
+    try random.fill(&mut nonce)
+    defer mem.secure_zero(&mut key)
+
+    var message = [11]u8{ 's', 'e', 'c', 'r', 'e', 't', ' ', 'n', 'o', 't', 'e' }
+    tag := aead.XChaCha20Poly1305.encrypt_in_place(&mut message, "v1", nonce, key)
+    try aead.XChaCha20Poly1305.decrypt_in_place(&mut message, tag, "v1", nonce, key)
+    std.io.println(&message)                                                  // secret note
 }
 ```
 
+Each AEAD type has `encrypt(c, m, ad, nonce, key)`, which returns the tag, and `decrypt(m, c, tag, ad, nonce, key)`. The `_in_place` forms work on one buffer, because otr does not let the source and destination alias.
+
+`decrypt` returns `error.AuthenticationFailed` on a bad tag and zeros its output. `decrypt_in_place` therefore destroys the ciphertext on failure. Keep a copy if you need the ciphertext afterwards.
+
+## Key exchange and signatures
+
+```otr
+import otter_crypto.ed25519
+import otter_crypto.x25519
+
+fn keys() !void {
+    var mine = try x25519.KeyPair.generate()
+    theirs := try x25519.KeyPair.generate()
+    shared := try x25519.scalarmult(mine.secret_key, theirs.public_key)
+    mine.wipe()
+    _ = shared
+
+    var signer = try ed25519.KeyPair.generate()
+    sig := signer.sign("release 0.13.44")
+    wire := sig.to_bytes()
+    pk := try ed25519.PublicKey.from_bytes(signer.public_key.to_bytes())
+    try ed25519.Signature.from_bytes(wire).verify("release 0.13.44", pk)
+    signer.wipe()
+}
+```
+
+Ed25519 signing is deterministic, as RFC 8032 specifies. `KeyPair.generate_deterministic(seed)` builds a key pair from a 32-byte seed in both modules. `Signature.verify` rejects the identity point and the point of order 2 as a public key or `R`. `PublicKey.from_bytes` rejects a non-canonical encoding.
+
 ## Ownership and safety
 
-Hash/HMAC contexts are value structs with `wipe()`. AES key schedules, CBC-MAC, and CMAC own boxed state and require consuming `deinit()` to clear and free it.
+Hash and HMAC contexts are plain values with a `wipe()` method. `aes.Aes128`, `aes.CbcMac` and `cmac.CmacAes128` keep their key schedule in a heap box. They are resources, and `deinit()` clears and frees the key material.
 
-Use `random.fill` for key material. It reports OS randomness errors rather than substituting a deterministic source. Use `std.crypto.timing_safe_eql` for secret comparisons and `std.mem.secure_zero` for byte buffers.
+Use `random.fill` for key material. It returns `error.RandomFailed` when the OS cannot supply random bytes. Compare secrets with `std.crypto.timing_safe_eql` and clear byte buffers with `std.mem.secure_zero`.
 
-AEAD decrypt returns an authentication error on invalid input and zeros its destination. In-place decrypt therefore destroys ciphertext on failure. Preserve a separate copy if retry logic needs the ciphertext.
-
-MD5 and SHA-1 are available for existing protocol/file-format compatibility. Do not choose them for new security-sensitive designs. Nonce uniqueness and key lifetime remain the caller's responsibility when using raw AEAD primitives.
+MD5 and SHA-1 exist for the protocols and file formats that require them. Choose SHA-256 or SHA-512 for new work. With the raw AEAD types, you are responsible for never reusing a nonce under one key.
 
 ## Lua
 
-`otter_crypto_lua` provides `otter.crypto` with no capability requirement; its operations do not act on external services.
+The `otter_crypto_lua` package in `otr/lua/` provides `otter.crypto` for [otter-lua](/developers/libraries/otter-lua) hosts. Every function only computes, so the module needs no capability.
 
-- `hash(algorithm, data, raw?)` and `hmac(algorithm, key, data, raw?)` return hex by default.
-- `random(n)` / `random_hex(n)` accept 1..4096 bytes.
-- `equal(a, b)` compares in constant time.
-- `seal(key32, plain, ad?)` uses XChaCha20-Poly1305 with a fresh random nonce.
-- `open(key32, sealed, ad?)` authenticates the `nonce || ciphertext || tag` representation; failure returns `nil, "authentication failed"`.
-
-The host must register the binding; native package imports do not expose Lua functions automatically.
+| Function | Result |
+| --- | --- |
+| `hash(alg, data, raw)` | A digest for `md5`, `sha1`, `sha256` or `sha512`. Hex by default, raw bytes when `raw` is true |
+| `hmac(alg, key, data, raw)` | The keyed digest for the same algorithms |
+| `random(n)`, `random_hex(n)` | `n` random bytes, 1 to 4096, raw or as hex |
+| `equal(a, b)` | A constant-time comparison |
+| `seal(key32, plain, ad)` | XChaCha20-Poly1305 with a fresh random nonce. Returns `nonce .. ciphertext .. tag` |
+| `open(key32, sealed, ad)` | The plaintext, or `nil, "authentication failed"` |
 
 ```lua
 local crypto = require("otter.crypto")
+local log = require("otter.log")
+
+log.info("sha256", crypto.hash("sha256", "abc"))
+-- ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+
 local key = crypto.random(32)
-local sealed = crypto.seal(key, "example", "context")
-local plain, err = crypto.open(key, sealed, "context")
-assert(plain == "example", err)
+local sealed = crypto.seal(key, "secret note", "v1")
+assert(#sealed == 24 + 11 + 16)
+
+local plain, err = crypto.open(key, sealed, "v1")
+assert(plain == "secret note", err)
+
+plain, err = crypto.open(key, sealed, "v2")
+assert(plain == nil and err == "authentication failed")
 ```
 
-This example keeps a fresh key only in memory. Applications that retain encrypted data must also define secure key storage and recovery.
+This example keeps its key in memory only. An app that stores sealed data also needs a place to keep the key.
 
 ## Source reference
 
-`otr/API.md`, `otr/api_check.otr`, `otr/aead.otr`, `otr/ed25519.otr`, `otr/lua/crypto.otr` in the component repository.
+`otr/API.md`, `otr/api_check.otr`, `otr/aead.otr`, `otr/ed25519.otr` and `otr/lua/crypto.otr` in the `otter-crypto` repository. The Lua example follows `otr/lua/tests/crypto.lua`.

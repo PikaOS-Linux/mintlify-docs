@@ -4,54 +4,161 @@ sidebarTitle: "otter-http"
 description: "Native otr HTTP/HTTPS transfers with blocking and descriptor-driven clients."
 ---
 
-`otter-http` uses otr's `std.http`, `std.tls`, and `std.flate`. It does not use libcurl or OpenSSL. Import `otter_http.client`.
+`otter-http` is an HTTP and HTTPS client built on otr's `std.http`, `std.tls` and `std.flate`. It uses no libcurl and no OpenSSL. The package has one module, `otter_http.client`.
 
-## Requests and responses
+```toml
+[dependencies]
+otter_http = { path = "../../otter-http/otr" }
+```
 
-`Request` borrows URL, headers, and body for `start`/`fetch`; the transfer copies them. Supported methods are GET, POST, PUT, PATCH, DELETE, and HEAD. Only HTTP and HTTPS URLs are followed.
+## Blocking requests
 
-| Request field        | Default                                                |
-| -------------------- | ------------------------------------------------------ |
-| `timeout_ms`         | 30000 for the whole exchange                           |
-| `connect_timeout_ms` | 10000 for each connection                              |
-| `max_body`           | 4 MiB of decoded data                                  |
-| `max_redirects`      | 5                                                      |
-| `redirect_policy`    | `.any`; `.https_only` and `.same_origin` are available |
-| `use_env_proxy`      | true                                                   |
+`client.fetch(env, request)` runs one request to the end. Use it in command-line tools. It takes your program's `std.Env`, which supplies the proxy variables and the certificate roots.
 
-`Response` owns its body and header lists; call `deinit()`. `outcome == .ok` means a response arrived, including non-2xx statuses. `ok()` additionally requires 2xx. `header(name)` searches final response headers case-insensitively.
+```otr
+import std
+import otter_http.client
 
-## Blocking calls
+pub fn main(env: std.Env) !void {
+    hs := [1]str{ "Accept: application/json" }
+    res := try client.fetch(env, .{
+        url: "https://api.open-meteo.com/v1/forecast?latitude=51.5&longitude=-0.13&current=temperature_2m",
+        headers: &hs,
+        max_body: 256 << 10,
+        redirect_policy: .https_only,
+    })
+    defer res.deinit()
 
-`fetch(env, request)` suits one-shot tools. It takes `std.Env` for proxy and certificate-root settings. Always check transport outcome and HTTP status before parsing the body.
+    if res.outcome != .ok {
+        std.io.eprintf("request failed: {} ({})\n", .{ @tag_name(res.outcome), res.reason.as_str() })
+        return error.HttpFailed
+    }
+    if !res.ok() {
+        std.io.eprintf("server answered {}\n", .{ res.status })
+        return error.HttpStatusFailed
+    }
+    std.io.printf("{} bytes of {}\n", .{ res.body.len, res.header("content-type") orelse "unknown type" })
+    std.io.println(res.body.items())
+}
+```
+
+## Requests
+
+`Request` borrows its strings for the `fetch` or `start` call only. The client copies everything it needs.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `url` | required | An `http://` or `https://` URL |
+| `method` | `.get` | `.get`, `.post`, `.put`, `.patch`, `.delete` or `.head` |
+| `headers` | none | Whole header lines such as `"Accept: application/json"`, at most 32 |
+| `body` | `""` | Sent when not empty, and always for POST, PUT and PATCH |
+| `user_agent` | `"otter-http/0.1"` | Sent unless a header line names one |
+| `timeout_ms` | 30000 | The whole exchange, redirects included. 0 means no limit |
+| `connect_timeout_ms` | 10000 | Each connection, from the host lookup to the end of the TLS handshake |
+| `max_body` | 4 MiB | Decoded bytes. A longer body is the outcome `too_large` |
+| `max_redirects` | 5 | 0 refuses any redirect |
+| `redirect_policy` | `.any` | `.https_only` requires https for the URL and every hop. `.same_origin` requires each hop to keep the scheme, host and port |
+| `ca_file` | system roots | A PEM bundle to verify the peer against |
+| `use_env_proxy` | true | False ignores `http_proxy`, `https_proxy` and `no_proxy` |
+
+`fetch` and `start` return `error.InvalidRequest` for a URL with a NUL byte, a header line without a colon, or a header the client writes itself: Host, Connection, Content-Length and Transfer-Encoding.
+
+## Responses
+
+`Response` owns its `body` and `headers` lists, so release it with `deinit()`.
+
+`outcome` tells you how the request ended. `.ok` means a response arrived, whatever its status. The other values are `.timeout`, `.too_large`, `.too_many_redirects`, `.tls`, `.resolve`, `.connect` and `.failed`, each with `status` 0. On a failure, `reason` holds the underlying error name.
+
+`ok()` is true for outcome `.ok` with a 2xx status. `header(name)` returns the first header of that name from the final response, matched without regard to case.
 
 ## Event-loop integration
 
-`Client.init(env)` creates an owned client. Watch `fd()` in your app loop, call `drive()` when readable, then drain `next_done()` and `take(id)`. Each taken response becomes the caller's resource.
+A `Client` runs any number of requests at once without threads. Its `fd()` becomes readable whenever a request has work, whether a socket is ready or a time limit passed.
 
-`cancel(id)` suppresses a running request's completion. IDs are generational; stale IDs do not name a replacement transfer. `deinit()` cancels requests still held by the client.
+```otr
+import std
+import otter_http.client
 
-Socket transfers use readiness events without worker threads. Request startup is partly blocking: `start` performs blocking DNS resolution before returning.
+pub fn main(env: std.Env) !void {
+    var http = try client.Client.init(env)
+    defer http.deinit()
+
+    first := try http.start(.{ url: "https://example.org/a.png", max_body: 2 << 20 })
+    _ = try http.start(.{ url: "https://example.org/b.png", max_body: 2 << 20 })
+    _ = http.cancel(first)
+
+    for http.active() > 0 {
+        // An app with its own loop adds http.fd() to its epoll and calls drive() instead.
+        http.wait(-1)
+        for {
+            done := http.next_done() orelse break
+            res := http.take(done) orelse continue
+            defer res.deinit()
+            if res.ok() {
+                std.io.printf("{} bytes\n", .{ res.body.len })
+            } else {
+                std.io.eprintf("{} {}\n", .{ @tag_name(res.outcome), res.status })
+            }
+        }
+    }
+}
+```
+
+| Method | Purpose |
+| --- | --- |
+| `start(req)` | Starts a request and returns its `Id` |
+| `drive()` | Steps every request that has work, without blocking |
+| `wait(timeout_ms)` | Blocks up to `timeout_ms` for work, then drives. -1 means no limit |
+| `next_done()` | The next finished request's `Id`, or null |
+| `take(id)` | The finished request's `Response`, or null while it runs |
+| `cancel(id)` | Stops a running request or drops a finished one. A cancelled request never appears in `next_done` |
+| `active()` | The count of started, unfinished requests |
+
+An `Id` is a generational handle. `take` and `cancel` return null and false for a stale one. `deinit()` cancels whatever is still running.
+
+`start` looks the host name up before it returns, and that lookup blocks. The connection and the transfer do not. Use one `Client` from one thread at a time.
 
 ## TLS and limits
 
-Certificate verification cannot be disabled. Roots come from `SSL_CERT_FILE`, `SSL_CERT_DIR`, or the distribution bundle; native hosts may supply a CA file. gzip/deflate bodies are decoded before applying `max_body`. Redirect restrictions apply at every hop.
+You cannot turn certificate verification off. Roots come from `SSL_CERT_FILE`, `SSL_CERT_DIR` or the distribution bundle, unless the request names a `ca_file`. The client supports TLS 1.2 and 1.3.
+
+The client sends `Accept-Encoding: gzip, deflate` and decodes those bodies. `max_body` caps the decoded size. Each request uses its own connection.
 
 ## Lua
 
-`otter_http_lua` registers `otter.http` under `net`. Host setup supplies the environment before plugin loading.
+The `otter_http_lua` package in `otr/lua/` provides `otter.http` for [otter-lua](/developers/libraries/otter-lua) hosts. All three functions need the `net` capability.
 
 ```lua
 local http = require("otter.http")
-local id = http.get("https://example.org/", function(status, body, err, content_type)
-  if err == nil and status >= 200 and status < 300 then
-    -- Consume body here.
+local log = require("otter.log")
+
+local id = http.get("https://example.org/hello", function(status, body, err, content_type)
+  if err == nil and status == 200 then
+    log.info("got", content_type, #body)
   end
 end)
+
+http.request({
+  url = "https://example.org/echo",
+  method = "POST",
+  headers = { "Content-Type: application/json" },
+  body = '{"a":1}',
+  timeout_ms = 5000,
+  max_body = 65536,
+  max_redirects = 2,
+}, function(status, body, err)
+  if err then log.warn("request failed", err) end
+end)
+
+http.cancel(id)   -- true when it was running; its callback never runs
 ```
 
-`request(options, callback)` supports method, headers, body, and bounded request options. `cancel(id)` prevents its callback. Lua bodies default to 1 MiB and cap at 2 MiB; plugin unload cancels its requests. Plugins cannot disable TLS verification or choose a CA file.
+`err` is nil when a response arrived, whatever its status. Otherwise it is `"timeout"`, `"too large"`, `"too many redirects"`, `"tls"`, `"resolve"`, `"connect"` or `"failed"`, and `status` is 0.
+
+In Lua, `max_body` defaults to 1 MiB and cannot exceed 2 MiB. A request takes at most 16 header lines of 1 KiB each. Unloading or reloading a plugin cancels its requests. A plugin cannot disable verification or name a CA file.
+
+A host registers the module with `otter_http_lua.http.module(env)`. It can call `http.set_ca_file(host.module_states(), path)` to verify peers against a private CA.
 
 ## Source reference
 
-`otr/client.otr`, `otr/lua/http.otr`, `otr/API.md` in the component repository.
+`otr/client.otr`, `otr/lua/http.otr` and `otr/API.md` in the `otter-http` repository. The Lua example follows `otr/lua/tests/http.lua`.

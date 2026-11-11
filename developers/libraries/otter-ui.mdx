@@ -1,20 +1,148 @@
 ---
 title: "otter-ui"
 sidebarTitle: "otter-ui"
-description: "otr Surface Description frames, controls, drawing helpers, and service-aware widgets."
+description: "The Otter Shell UI toolkit in otr: Surface Description frames, controls, drawing helpers, bar widgets, and Lua UIs."
 ---
 
-`otter-ui` supplies native Surface Description layout, input, controls, and reusable bar widgets. Import `otter_ui.ui_frame`; its frame facade exports `Node`, `Id`, `UiState`, specs, and dispatch types.
+`otter-ui` is the toolkit every Otter Shell app draws with. You describe a frame as a tree of nodes. The library lays the tree out, records drawing commands and hit regions, and reports input back to you by id. This model is called Surface Description.
 
-A node tree and `UiFrame(caps)` are frame-scoped borrowed values. Keep long-lived state in `UiState(caps)` and your app model. Images use `ImageHandle` values resolved through the frame's image store.
+The library has no root module. Import leaf modules such as `otter_ui.ui_frame`.
 
-There is no `@import("otter_ui")` root API. Import other packages directly when you need geometry, render resources, themes, or Wayland types.
+## Packages
 
-## Optional integrations
+| Package | Path | Contents |
+| --- | --- | --- |
+| `otter_ui` | `otr/` | Frames, nodes, layout, input dispatch, drawing helpers, popups, scroll views and the settings window shell. It calls no desktop service. |
+| `otter_ui_widgets` | `widgets-otr/` | The bar widgets, one folder per widget, with the service clients they read. |
+| `otter_ui_volume` | `otr/volume/` | Connects the volume widget to PipeWire. Only apps that add it link PipeWire. |
+| `otter_ui_lua` | `otr/lua/` | The `otter.ui`, `otter.ui.style` and `otter.ui.draw` Lua modules, and the sink that replays Lua frames. |
+| `otter_ui_widgets_lua` | `widgets-otr/lua/` | The `otter.ui.widgets` and `otter.ui.art` Lua modules. |
 
-`otter_ui_lua` provides `otter.ui`, `otter.ui.style`, `otter.ui.draw`, and `otter.ui.widgets`; it does not make the whole native object model callable from Lua. The host-side `SdSink(caps)` replays Lua SD frames into native UI commands.
+```toml
+[dependencies]
+otter_geo = { path = "../../otter-geo/otr" }
+otter_render = { path = "../../otter-render/otr" }
+otter_theme = { path = "../../otter-theme/otr" }
+otter_ui = { path = "../../otter-ui/otr" }
+```
 
-`otter_ui_volume` connects the volume widget to `otter_desktop_pipewire`. Ordinary `otter_ui` users do not have to link PipeWire or LuaJIT.
+## The frame modules
+
+| Module | Holds |
+| --- | --- |
+| `otter_ui.ui_frame` | `UiState(caps)` and `UiFrame(caps)`. |
+| `otter_ui.ui_frame_spec` | `Node`, `LayoutSpec` and the spec struct of each control. |
+| `otter_ui.ui_frame_types` | `Id`, `Capacities`, `FrameOptions`, and the dispatch and hit types. |
+
+A `UiState` lives as long as your surface. A `UiFrame` and the node tree you render into it live for one frame. Your own model holds the values the controls show.
+
+```otr
+import std
+import std.mem
+import otter_geo.rect as geo
+import otter_render.font
+import otter_render.image
+import otter_render.quad_renderer
+import otter_render.scale
+import otter_render.surface
+import otter_theme.loader
+import otter_ui.style
+import otter_ui.ui_frame
+import otter_ui.ui_frame_spec
+import otter_ui.ui_frame_types
+
+const Id = ui_frame_types.Id
+const Node = ui_frame_spec.Node
+
+const ids = struct {
+    pub const root = Id.named_comptime("hello.root")
+    pub const title = Id.named_comptime("hello.title")
+    pub const save = Id.named_comptime("hello.save")
+}
+
+const caps = ui_frame_types.Capacities{ elements: 16, hit_regions: 4, overlays: 1 }
+const UiState = ui_frame.UiState(caps)
+
+pub fn main(env: std.Env) !void {
+    theme := loader.load_theme(env, mem.heap)
+    defer theme.deinit()
+    styles := style.resolve(&theme)
+    var f = try font.Font.init(mem.heap, env.io, .{ font_family: theme.globals.font_family.as_str() })
+    defer f.deinit()
+    var images = image.ImageStore.init(mem.heap)
+    defer images.deinit()
+    var target = surface.Surface.init_owned(mem.heap, 320, 120, scale.Scale.one)
+    defer target.deinit()
+
+    var ui = UiState.init()
+    viewport := geo.Rect{ x: 0, y: 0, width: 320, height: 120 }
+    {
+        var frame = ui.begin(.{ viewport: viewport, font: &mut f, alloc: mem.heap, images: &mut images, theme: &theme, styles: &styles })
+        frame.clear(theme.colors.background)
+
+        var rows = [2]Node{
+            Node.label(ids.title, "Unsaved changes", styles.title_size(), null),
+            Node.button(ids.save, "Save"),
+        }
+        root := Node.column(ids.root, .{ width: .fill, height: .fill, padding: geo.Padding.uniform(16), gap: 8 }, &mut rows)
+        _ = try frame.render(&root, viewport)
+        try frame.finish()
+    }
+
+    var txt = quad_renderer.TextContext{ font: &mut f }
+    ui.rasterize(&mut target, &mut txt, &images, null, true)
+
+    press := ui.dispatch(.button_press{ .{ point: geo.Point{ x: 40, y: 60 }, button: 1 } })
+    if press.id.eql(ids.save) {
+        std.io.println("save pressed")
+    }
+    ui.release_icons(&mut images)
+}
+```
+
+[Surface Description](/developers/libraries/otter-ui/surface-description) explains each step. The starter templates in otter-examples build a complete app around this loop.
+
+## Lua
+
+Lua draws through the global `sd` table. It records a frame that the host replays into a native `UiFrame`, so layout, hit testing and rasterizing stay native.
+
+```lua
+local host = require("otter.host")
+local theme = require("otter.theme")
+
+local clicks = 0
+
+return {
+  measure = function(max_w, max_h)
+    return math.min(132, max_w), max_h
+  end,
+  draw = function(w, h)
+    local t = theme.get()
+    local size = math.min(14, h)
+    sd.begin(w, h)
+    sd.rect(0, 2, w, h - 4, theme.alpha(t.colors.accent, 0x28), t.layout.control_radius)
+    sd.hit(1)
+    sd.text(8, math.floor((h - size) / 2) - 1, "Clicked " .. clicks, size, t.colors.accent)
+    sd.finish()
+  end,
+  event = function(kind, id)
+    if kind == "click" and id == 1 then
+      clicks = clicks + 1
+      host.redraw()
+    end
+  end,
+}
+```
+
+This is a bar widget plugin. The bar calls `measure` for its size, `draw` to describe it, and `event` for input on its hit areas. `sd.hit(id)` tags the node before it with an action id. Colors are `0xRRGGBBAA`.
+
+| Lua module | Purpose |
+| --- | --- |
+| `sd` | Frame calls: `begin`, `rect`, `outline`, `text`, `icon`, `row`, `col`, `clip`, `hit`, `finish`. |
+| `otter.ui` | Ids, icon names, and list and grid math. |
+| `otter.ui.style` | The resolved style roles of a theme. |
+| `otter.ui.draw` | Geometry and color math of the native drawing helpers. |
+| `otter.ui.widgets` | The native bar widgets' drawing, geometry and formatting rules. |
 
 ## Reference pages
 
@@ -27,4 +155,4 @@ There is no `@import("otter_ui")` root API. Import other packages directly when 
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml` and `otr/API.md` in the component repository. The examples follow `otr/ui/demo.otr`, `otr/ui/draw.otr` and `otr/plugins/examples-counter/init.lua` in otter-examples.

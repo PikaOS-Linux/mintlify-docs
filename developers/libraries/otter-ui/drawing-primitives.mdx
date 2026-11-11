@@ -1,34 +1,90 @@
 ---
 title: "Drawing primitives"
 sidebarTitle: "Drawing primitives"
-description: "Leaf-module drawing helpers and pure Lua geometry helpers in otr."
+description: "Stateless drawing helpers in otter_ui.drawing for apps that record their own command lists."
 ---
 
-Native drawing helpers live under `otter_ui.drawing.<module>`, not a `drawing.zig` root import.
+Most apps describe their UI with [nodes](/developers/libraries/otter-ui/nodes) and never call these. The helpers in `otter_ui.drawing` are for code that records commands itself: custom widgets, popups, and surfaces drawn outside a node tree. The node renderer uses the same helpers, so both paths look alike.
 
-| Module               | Purpose                                     |
-| -------------------- | ------------------------------------------- |
-| `core`               | Basic bounds and drawing support            |
-| `text`               | Truncation, wrapping, text placement        |
-| `frame`              | Borders, panels, baselines                  |
-| `input`              | Input boxes and related geometry            |
-| `controls`           | Buttons, toggles, progress controls         |
-| `select`, `dropdown` | Select/dropdown drawing and hit geometry    |
-| `color_picker`       | HSV, picker geometry, password/auth helpers |
+Each helper is a plain function. It takes a command list, the geometry, a style value and, where it measures text, a font. Nothing is stored between calls.
 
-Helpers emit into borrowed command lists. Pass a font explicitly where measurement is needed; there is no implicit widget-owned font pointer. Names use `snake_case`.
+```otr
+fn draw_card(cmds: &mut command_list.DefaultCommandList, f: &mut font.Font, title: str, percent: u8) void {
+    card := geo.Rect{ x: 8, y: 8, width: 240, height: 64 }
+    frame.rounded_fill(cmds, card, color.Color.surface, 4, 0b1111)
+    frame.rounded_border(cmds, card, color.Color.muted, 1, 4, 0b1111)
 
-## Text lifetimes
+    text.text_truncated(cmds, f, title, 20, 18, 14, color.Color.text, 216, scale.Scale.one)
+    controls.progress_bar(cmds, geo.Rect{ x: 20, y: 48, width: 216, height: 8 }, percent, color.Color.hl_med, color.Color.active, 4, 2)
 
-`TruncatedText(cap)` stores a bounded result value. Read its `text(original)` with the original input: fitting text returns the input, while truncated text returns the stored shortened result. Keep the returned view within the relevant lifetime.
+    cut := text.truncate_text(64, f, title, 14, 80, scale.Scale.one, false)
+    std.io.println(cut.text(title))
+}
+```
 
-Use the frame's measurement methods when a frame already owns the font loan. Do not pass a second mutable borrow of the same font beside that frame.
+`cmds` is any otter-render command list. Inside a `UiFrame`, its `cmds()` method lends the frame's own list.
+
+## Modules
+
+| Module | Helpers |
+| --- | --- |
+| `drawing.core` | `border`, `panel`, `focus_ring`, `control`, `selected_pill`, `list_row`, `wrapped_text`, `wrapped_text_height` |
+| `drawing.frame` | `rounded_fill`, `rounded_border`, `surface_panel`, `joined_surface_panel`, `control_frame`, and the text baseline functions |
+| `drawing.text` | `truncate_text`, `text_truncated`, `text_truncated_weight` |
+| `drawing.input` | `input_box`, `wrapping_input_box`, and their scroll and click-to-cursor functions |
+| `drawing.controls` | `progress_bar`, `icon_button`, `toggle`, `checkbox`, `color_swatch`, `dropdown`, `tab_bar`, `scrollbar` |
+| `drawing.select`, `drawing.dropdown` | Dropdown overlay drawing, hit testing and scrolling |
+| `drawing.color_picker` | The HSV color picker popup, its hit testing and updates, and `auth_status_line` |
+| `drawing.password` | `mask_utf8` and `password_input_box` |
+
+Each control helper takes a small style struct, such as `ToggleStyle` or `DropdownStyle`, with the colors and radius to draw with. Fill it from your `StyleSet`.
+
+## Truncated text
+
+`text.text_truncated` draws a string cut to a width, with an ellipsis. `text.truncate_text` returns the cut without drawing it, as a `TruncatedText(capacity)`.
+
+```otr
+cut := text.truncate_text(64, f, title, 14, 80, scale.Scale.one, false)
+std.io.println(cut.text(title))
+```
+
+Call `cut.text(original)` with the string you passed in. It returns the original when the text fits and the shortened copy otherwise. `cut.truncated` says which.
+
+Inside a `UiFrame`, measure with its `measure_text(text, font_size)` method instead of passing the font again. The frame already holds the font's borrow.
+
+## Joined corners
+
+Controls that sit against each other share a square edge. `drawing.frame.exposed_corners(joined_edges)` turns a mask of joined edges into the corners that stay rounded, and `joined_surface_panel` draws a panel that way.
+
+## Text baselines
+
+`drawing.frame.text_baseline_y(center_y, font_size)` gives the y at which text is centered on a line. `text_baseline_in_rect(font, rect, font_size, factor)` does the same for a rectangle, using the font's metrics when you pass one. Use these so that your text lines up with the built-in controls.
 
 ## Lua
 
-`otter.ui.draw` exposes pure geometry/color operations, not the entire native drawing command list. It includes baselines, joined corners, input/dropdown/color-picker hit calculations, HSV conversion, and password masking. Option indices are one-based in Lua.
+`otter.ui.draw` has the geometry and color math of these helpers as pure functions. A Lua widget draws with `sd` and uses them to match native layout. It needs no capability.
 
-`otter.ui.style.resolve(theme_table, profile)` returns resolved style tables from `otter.theme.get()` data. These read-only helpers need no capability. Visible Lua drawing still goes through `sd.*`.
+```lua
+local draw = require("otter.ui.draw")
+
+local y = draw.text_baseline_y(row_y + math.floor(row_h / 2), 13)
+local corners = draw.exposed_corners(draw.joined.left + draw.joined.top)
+local index = draw.dropdown_hit(x, y, w, h, #options, scroll, px, py)   -- or nil
+local h, s, v = draw.rgba_to_hsv(0x48D7B0FF)
+local bullets = draw.mask("secret")
+```
+
+Colors are `0xRRGGBBAA`, and option indices start at 1.
+
+`otter.ui.style` gives a Lua widget the same resolved style roles the native controls use:
+
+```lua
+local theme = require("otter.theme")
+local style = require("otter.ui.style")
+
+local st = style.resolve(theme.get())
+sd.rect(x, y, w, h, st.button.background, st.button.radius)
+```
 
 ## Source reference
 

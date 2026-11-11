@@ -4,23 +4,74 @@ sidebarTitle: "otter-config-types"
 description: "Shared otr configuration schemas and field metadata for Otter Shell apps."
 ---
 
-`otter-config-types` defines defaulted application schemas without opening services or drawing UI. Import an application leaf module, for example `otter_config_types.bar` or `otter_config_types.term`.
+`otter-config-types` defines every app's config struct in one place. Apps parse these structs with [otter-conf](/developers/libraries/otter-conf), and `otter-settings` builds its pages from the same types. The package opens no services and draws nothing.
 
-Colors come from `otter_geo.color`. Text fields use `otter_conf.text.Text`; configs containing owned text have `deinit()`. Plain numeric/color-only configs remain copyable values.
+The package name is `otter_config_types`. Import one module per app, such as `otter_config_types.bar` or `otter_config_types.osd`. Each module exports `Config` and `file_name`.
 
-`otter_config_types.fields` exposes `is_known_field`, `field_needs_quoting`, and `get_enum_field_names` for editors.
+```toml
+[dependencies]
+otter_config_types = { path = "../../otter-config-types/otr" }
+```
+
+```otr
+import std
+import std.mem
+import otter_conf.app_file
+import otter_config_types.fields
+import otter_config_types.osd
+import otter_theme.loader as theme_loader
+
+pub fn main(env: std.Env) void {
+    cfg := app_file.load_or_create(osd.Config, mem.heap, env, osd.file_name, "otter-osd configuration")
+    theme := theme_loader.load_theme(env, mem.heap)
+    defer theme.deinit()
+
+    // The file's value, else the theme value the schema names for the field.
+    background := fields.resolve(&cfg, "background_color", &theme)
+    radius := fields.resolve(&cfg, "border_radius", &theme)
+    std.io.printf("{} at {}, radius {}\n", .{ background.to_hex_string()[0..], @tag_name(cfg.position), radius })
+}
+```
+
+Colors are `otter_geo.color.Color`. Text fields are `otter_conf.text.Text`, and a config that owns text has a `deinit()`. `osd.Config` holds only numbers, enums and colors, so it is a plain value without one.
+
+`otter_config_types.fields` holds the metadata the settings editor reads and the theme fallback of each `?Color` and `?u16` field. See [Patterns](/developers/libraries/otter-config-types/patterns).
 
 ## Lua schema access
 
-The separate `otter_config_types_lua` package exposes `otter.config.schema`, not `otter.config`. It requires no capability because it performs no I/O.
+The `otter_config_types_lua` package in `otr/lua/` exposes `otter.config.schema`. It does no I/O, so it needs no capability.
 
-- `apps()` lists the 22 schema names.
-- `file(app)` returns the config file name or greeter's system path.
-- `defaults(app)` returns a nested defaults table.
-- `parse(app, text)` returns the typed table or `nil, error_name`.
-- `field(app, key)` returns quoting and enum metadata, or nil.
+| Function | Returns |
+| --- | --- |
+| `apps()` | The 22 app names it serves, `"assist"` through `"wallpaper"` |
+| `file(app)` | The app's config file name, or an absolute path for the greeter's system config |
+| `defaults(app)` | The compiled-in config as a table |
+| `parse(app, text)` | `text` parsed over the defaults as a table, or `nil` and the parse error's name |
+| `field(app, key)` | `{ quoted, enums }` for a flat key, or nil for an unknown key |
 
-File reads, watches, and typed writes belong to `otter_conf_lua`.
+```lua
+local config = require("otter.config.schema")
+local fs = require("otter.fs")
+local log = require("otter.log")
+
+local d = config.defaults("bar")
+log.info("defaults", d.clock.time_format, d.general.position, d.volume.scroll_step)
+
+local path = fs.roots()[1] .. "/" .. config.file("bar")
+local c, err = config.parse("bar", fs.read(path))
+if not c then
+  log.info("parse failed", err)
+else
+  log.info("parsed", c.general.position, c.clock.text_color, c.button[1].name)
+end
+
+local f = config.field("bar", "general_position")
+log.info("field", tostring(f.quoted), table.concat(f.enums, ","))
+```
+
+The tables mirror the structs. Sections are subtables, `Dynamic` lists are arrays of entry tables, enum values are tag names and colors are `#RRGGBBAA` strings. An unset optional is nil. An unknown app name raises an error.
+
+File reads, watches and typed writes belong to `otter.config` from [otter-conf](/developers/libraries/otter-conf/loading-api#lua).
 
 ## Reference pages
 
@@ -29,4 +80,4 @@ File reads, watches, and typed writes belong to `otter_conf_lua`.
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml`, `otr/API.md` and `otr/` in the `otter-config-types` repository. The Lua example follows `otr/lua/tests/config_reader/init.lua`.

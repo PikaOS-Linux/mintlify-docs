@@ -1,94 +1,420 @@
 ---
 title: "Lua bindings and capabilities"
 sidebarTitle: "Bindings and capabilities"
-description: "Use native services through checked Lua modules and narrowly scoped permissions."
+description: "Call native services from Lua through otter.* modules, grant capabilities, and register a module from otr."
 ---
 
-Lua plugins call native services through `require("otter.…")`. The host decides which binding modules exist. A capability permits access to a module or operation; it does not install that module in every host.
+Lua plugins call native services through `require("otter.<name>")`. Each module is otr code in a library's `*_lua` package. The host app decides which modules exist by registering them when it starts. A capability permits an operation in a module that the host registered. It does not add a module to a host that left it out.
 
 ## Built-in modules
 
-The plugin host supplies these modules:
+Every plugin host supplies these five modules:
 
-| Module          | API                                                                                                               | Permission                                                        |
-| --------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `otter.timer`   | `after(ms, callback)`, `every(ms, callback)`, `cancel(handle)`, `now_ms()`                                        | None                                                              |
-| `otter.process` | `spawn(argv, on_exit)`, `launch(argv)`, `kill(handle)`                                                            | `spawn` for spawn/launch                                          |
-| `otter.fs`      | `read(path)`, `list(path)`, `watch(dir, callback [, options])`, `unwatch(handle)`, `roots()`, `write(path, data)` | A granted `fs:` or `fs-write:` root; writing requires `fs-write:` |
-| `otter.log`     | `debug(...)`, `info(...)`, `warn(...)`, `error(...)`                                                              | None                                                              |
-| `otter.host`    | `redraw()`, `quit()`, `name()`, `env(name)`                                                                       | `env:<NAME>` or `env:<PREFIX>*` for environment reads             |
+| Module          | Functions                                                                                                         | Capability                                               |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `otter.timer`   | `after(ms, f)`, `every(ms, f)`, `cancel(handle)`, `now_ms()`                                                      | None                                                     |
+| `otter.process` | `spawn(argv, on_exit)`, `launch(argv)`, `kill(handle)`                                                            | `spawn` for `spawn` and `launch`                         |
+| `otter.fs`      | `read(path)`, `list(path)`, `watch(dir, f [, options])`, `unwatch(handle)`, `roots()`, `write(path, data)`        | An `fs:` or `fs-write:` root. `write` needs `fs-write:`  |
+| `otter.log`     | `debug(...)`, `info(...)`, `warn(...)`, `error(...)`                                                              | None                                                     |
+| `otter.host`    | `redraw()`, `quit()`, `name()`, `env(name)`                                                                       | `env:<NAME>` or `env:<PREFIX>*` for `env`                |
 
-Timer callbacks receive the expiration count. `spawn` invokes `on_exit(code, stdout, stderr)`, where a signal termination uses a negative signal number. `launch` starts a detached process without captured output. `argv` is a string list, executed with PATH lookup **without a shell**.
+### Timers and processes
 
-File-watch callbacks receive `(name, change)`. Pass `{ name = "entry" }` to filter to one directory entry. File reads/listing and writes report failures as `nil, message` where applicable.
+`after` and `every` return a handle, and the callback receives the expiration count. `now_ms()` reads a monotonic clock.
+
+`spawn` runs `argv`, a list of strings, with `PATH` lookup and without a shell. It calls `on_exit(code, stdout, stderr)` when the program ends. `code` is the exit status, or minus the signal number when a signal ended the program. `launch` starts a detached program and captures no output.
+
+This is the refresh loop of `cmd-watch` in `otter-lua/examples/`:
+
+```lua
+local process = require("otter.process")
+local timer = require("otter.timer")
+local host = require("otter.host")
+local log = require("otter.log")
+
+local command = { "date", "+%H:%M" }
+local label = "…"
+local running = false
+
+local function refresh()
+  if running then return end
+  running = true
+  process.spawn(command, function(code, out, err)
+    running = false
+    local line = out:match("[^\n]*") or ""
+    if code ~= 0 then
+      log.warn("command failed", code, err)
+      line = "!" .. code
+    end
+    if line ~= label then
+      label = line
+      host.redraw()   -- only a changed label costs a frame
+    end
+  end)
+end
+
+refresh()
+timer.every(5000, refresh)
+```
+
+### Files
+
+`read` and `list` return `nil, message` on failure. `write` returns `true`, or `nil, message`. `roots()` lists the granted roots. A watch callback receives `(name, change)`. Pass `{ name = "entry" }` as the third argument to `watch` to hear about one directory entry only.
+
+`file-watch` in `otter-lua/examples/` declares `capabilities = ["fs:~/.config/otter-shell"]` and logs changes to that directory:
+
+```lua
+local fs = require("otter.fs")
+local log = require("otter.log")
+
+local root = fs.roots()[1]
+
+for _, name in ipairs(fs.list(root) or {}) do
+  log.info("present", name)
+end
+
+fs.watch(root, function(name, change)
+  if change ~= "delete" and name:match("%.conf$") then
+    local text, err = fs.read(root .. "/" .. name)
+    log.info(change, name, text and (text:match("[^\n]*") or "") or err)
+  else
+    log.info(change, name)
+  end
+end)
+```
+
+### Host and environment
+
+`host.redraw()` asks the host to measure and draw the widget again. `host.name()` returns the name the plugin was loaded as. `host.env(name)` returns the variable's value or `nil`, and raises without a matching `env:` capability. `disk-free` in `otter-shell-plugins` declares `capabilities = ["env:OTTER_DISK_FREE_PATH"]` and falls back when the grant is missing:
+
+```lua
+local ok, env_path = pcall(host.env, "OTTER_DISK_FREE_PATH")
+local path = (ok and env_path or "/"):sub(1, 255)
+```
 
 ## Request only what you need
 
-In `plugin.toml`:
+A plugin declares capabilities in `plugin.toml`:
 
 ```toml
 capabilities = ["spawn", "fs:$XDG_CONFIG_HOME/my-plugin", "env:OTTER_MY_PLUGIN_*"]
 ```
 
-In `$XDG_CONFIG_HOME/otter-shell/plugins.conf`:
+You narrow them in `$XDG_CONFIG_HOME/otter-shell/plugins.conf`:
 
 ```conf
 my-plugin_enabled = true
 my-plugin_capabilities = "fs:$XDG_CONFIG_HOME/my-plugin, env:OTTER_MY_PLUGIN_*"
 ```
 
-This policy withholds `spawn`, even though the plugin requests it. A gated operation raises if permission is missing. Removing the capabilities line allows all declared capabilities; setting it to an empty string grants none.
+A plugin receives the capabilities its manifest declares that the allow-list also permits. The policy above withholds `spawn` although the plugin requests it. A function that needs a missing capability raises `otter.x.name: capability 'cap' not granted` when the plugin calls it. A module that needs a capability as a whole fails the `require`.
 
-Policy accepts exact capability names, `*`, and supported prefixes such as `fs:*` and `env:OTTER_*`. An `fs:<root>` policy entry permits requested readable roots at or beneath it. An `fs-write:<root>` grant also permits reading within that root.
+Without a `_capabilities` line the allow-list is `*`, which permits everything the manifest declares. An empty value permits nothing. Every `_capabilities` line adds to the list, and the last `_enabled` line wins.
 
-Filesystem roots can start with `~/` or `$XDG_RUNTIME_DIR`, `$XDG_CACHE_HOME`, `$XDG_CONFIG_HOME`, `$XDG_DATA_HOME`, or `$XDG_STATE_HOME`. Unset/relative XDG values fall back to their home-directory defaults, except the runtime directory, which has no fallback. Roots are canonicalized. Directory roots must exist; a single-file root can name a missing file when its parent exists.
+An allow-list entry is an exact name, `*`, or a prefix ending in `*` such as `fs:*` and `env:OTTER_*`. An `fs:<root>` entry permits that root and any root beneath it. An `fs-write:<root>` grant also permits reading within that root.
 
-<Warning>`spawn` allows external programs to run with the host user's OS permissions. Lua filesystem and environment allow-lists do not confine child processes. Grant it only to plugins you trust.</Warning>
+Filesystem roots can start with `~/` or with `$XDG_RUNTIME_DIR`, `$XDG_CACHE_HOME`, `$XDG_CONFIG_HOME`, `$XDG_DATA_HOME`, or `$XDG_STATE_HOME`. An unset or relative XDG value falls back to its default under the home directory. The runtime directory has no default, so the host does not grant a root that uses it while it is unset. The host stores roots in canonical form with symlinks resolved. It grants a directory root only when the directory exists. A root can name a single file, and that file may be missing as long as its directory exists.
 
-## Bounded file and process work
+<Warning>`spawn` lets a plugin run external programs with your user's OS permissions. The filesystem and environment allow-lists do not confine those child processes. Grant `spawn` only to plugins you trust.</Warning>
 
-Per plugin instance, built-ins allow up to 64 timers, 16 programs, and 16 file watches. Captured process output is bounded to 1 MiB per stream. `fs.read` returns at most 4 MiB; `fs.write` accepts at most 1 MiB.
+## Limits on file and process work
 
-File paths must be absolute or start with `~/`. The implementation canonicalizes them and checks opened descriptors through `/proc/self/fd` against the granted roots. Writes use a temporary file beside the target and rename it into place. New files use mode `0600`; replacements retain the existing regular file's mode. Non-regular targets, including symlinks, are refused.
+Each plugin instance can hold 64 timers, 16 running programs, and 16 file watches. The host captures at most 1 MiB from each output stream of a program. `fs.read` returns at most 4 MiB, and `fs.write` accepts at most 1 MiB.
 
-## Native library bindings
+File paths must be absolute or start with `~/`. The host makes each path canonical and checks the opened descriptor through `/proc/self/fd` against the granted roots, so a symlink swapped in after the check cannot leave the root. `fs.write` writes a temporary file beside the target and renames it into place. It creates new files with mode `0600` and keeps the mode of a regular file it replaces. It refuses any target that is not a regular file, including a symlink.
 
-Available library modules depend on what the host registers. Examples include:
+## Library modules
 
-| Module                  | Examples                                                            | Gated actions                                                                             |
-| ----------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `otter.theme`           | `get`, `color`, `surface`, `presets`, `subscribe`                   | `use_preset` needs `theme-write`                                                          |
-| `otter.desktop.sysinfo` | `memory`, `cpu`, `temperature`, `disk`, `load`, `uptime`, `sensors` | These reads need no capability                                                            |
-| `otter.desktop.logind`  | `idle_inhibited`, `subscribe`                                       | `suspend`, `reboot`, `poweroff` need `power`; inhibitor take/release needs `idle-inhibit` |
-| `otter.desktop.volume`  | `sinks`, `sources`, defaults, `subscribe`                           | Volume, mute, default-device, and scroll actions need `audio`                             |
-| `otter.desktop.apps`    | `list`, `find`, `search`, `actions`, `subscribe`                    | `launch` needs `spawn`                                                                    |
-| `otter.ui.widgets`      | Shared widget metrics, measurement, drawing, and formatting         | Host registration required                                                                |
+These modules come from the libraries' `*_lua` packages. A plugin can require one only in a host that registers it.
 
-For theme-aware widgets, read resolved colors and metrics rather than branching on theme names. With `otter.theme` registered:
+| Package                 | Modules                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `otter_theme_lua`       | `otter.theme`                                                                                              |
+| `otter_desktop_lua`     | `otter.desktop.apps`, `battery`, `bluetooth`, `brightness`, `falcond`, `icons`, `logind`, `monitor`, `mpris`, `network`, `notifications`, `power_profiles`, `screensaver`, `scx`, `sysinfo`, `tray`, `udisks`, `volume`, `xdg_open` |
+| `otter_wayland_lua`     | `otter.wayland`                                                                                            |
+| `otter_ui_lua`          | `otter.ui`, `otter.ui.style`, `otter.ui.draw`                                                              |
+| `otter_ui_widgets_lua`  | `otter.ui.widgets`, `otter.ui.art`                                                                         |
+| `otter_tools_core_lua`  | `otter.tools.calc`, `calendar`, `color`, `duration`, `emoji`, `search`, `weather`                          |
+| `otter_http_lua`        | `otter.http`                                                                                               |
+| `otter_crypto_lua`      | `otter.crypto`                                                                                             |
+| `otter_cue_lua`         | `otter.cue`                                                                                                |
+| `otter_conf_lua`        | `otter.config`                                                                                             |
+| `otter_config_types_lua` | `otter.config.schema`                                                                                     |
+| `otter_render_lua`      | `otter.render`                                                                                             |
+| `otter_vte_lua`         | `otter.vte`                                                                                                |
+
+otter-bar also registers `otter.bar` for its own widgets.
+
+The table below lists the modules that the examples on this page use, with the capability each function needs:
+
+| Module                         | No capability                                                                                           | Needs a capability                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `otter.theme`                  | `get`, `color`, `surface`, `alpha`, `contrast`, `presets`, `preset`, `generation`, `subscribe`, `unsubscribe` | `use_preset` needs `theme-write`                                                           |
+| `otter.desktop.sysinfo`        | `memory`, `cpu`, `temperature`, `disk`, `load`, `uptime`, `sensors`                                     | None                                                                                             |
+| `otter.desktop.volume`         | `sinks`, `sources`, `default_sink`, `default_source`, `subscribe`                                       | `set_volume`, `set_mute`, `toggle_mute`, `set_default`, and `scroll` need `audio`                |
+| `otter.desktop.logind`         | `idle_inhibited`, `subscribe`                                                                           | `suspend`, `reboot`, and `poweroff` need `power`. `inhibit_idle` and `release_idle` need `idle-inhibit` |
+| `otter.desktop.power_profiles` | `active`, `profiles`, `subscribe`                                                                       | `set` needs `power`                                                                              |
+| `otter.desktop.apps`           | `list`, `find`, `search`, `actions`, `subscribe`                                                        | `launch` needs `spawn`                                                                           |
+| `otter.desktop.notifications`  | None                                                                                                    | `send`, `close`, and `subscribe` need `notifications`                                            |
+| `otter.wayland`                | `outputs`, `toplevels`, `workspaces`, `workspace_view`, `active_on_output`, `subscribe`, `unsubscribe`  | `activate`, `close`, `set_workspace`, and `activate_workspace` need `wayland-actions`. `clipboard` and `set_clipboard` need `clipboard` |
+| `otter.http`                   | None                                                                                                    | `get`, `request`, and `cancel` need `net`                                                        |
+| `otter.tools.calc`             | `eval`                                                                                                  | None                                                                                             |
+| `otter.ui.widgets`             | `now`, `text_width`, `draw`, `measure`, `mpris_scrolling`, `icon_exists`                                | None                                                                                             |
+
+### Theme
+
+`theme.get()` returns the resolved theme as plain tables: `colors`, `layout`, `spacing`, `globals`, and `tokens`. Colors are `0xRRGGBBAA` integers that `sd.*` accepts. `subscribe(f)` calls `f(generation)` after the theme files change and the new theme has loaded. A broken theme edit keeps the previous theme and calls no subscriber.
+
+This is from `examples-counter` in `otter-examples/otr/plugins/`:
 
 ```lua
-local theme = require("otter.theme")
 local host = require("otter.host")
+local theme = require("otter.theme")
+
 theme.subscribe(function() host.redraw() end)
+
+local function draw(w, h, label)
+  local t = theme.get()
+  local size = math.min(14, h)
+  sd.begin(w, h)
+  sd.rect(0, 2, w, h - 4, theme.alpha(t.colors.accent, 0x28), t.layout.control_radius)
+  sd.text(8, math.floor((h - size) / 2) - 1, label, size, t.colors.accent)
+  sd.finish()
+end
 ```
 
-Read `theme.get()` when drawing. A failed theme reload retains the previous valid theme and does not notify subscribers. `theme.use_preset(name, on_done)` requires `theme-write`; it writes asynchronously and reports `(ok, reason)` to its callback.
+Read colors and metrics from `theme.get()` when you draw, so the widget follows any palette. `theme.use_preset(name, on_done)` writes the user's theme files on a worker thread and then calls `on_done(ok, reason)`.
 
-## Write a native binding
+### System information
 
-Native libraries expose `binding.Module` from their `otr/lua/` tree. The host passes its module list to `plugins.Host.init`. Use `binding.Open.add(name, function, capability)` to gate operations. `Module.cap` can gate an entire module. Duplicate module names and names colliding with built-ins are rejected.
+`otter.desktop.sysinfo` is read-only. `cpu()` returns the busy percent since the previous call, and `load()` returns the one, five, and fifteen minute averages. `memory()` and `disk(path)` return tables of byte counts with a `percent` field. The bar's `cpu_load` plugin polls it on a timer:
 
-Keep native resources in per-instance generational handle tables. Lua receives checked integer handles, not raw pointers. Implement `Module.release(instance)` to release subscriptions and resources on reload or unload.
+```lua
+local host = require("otter.host")
+local timer = require("otter.timer")
+local si = require("otter.desktop.sysinfo")
 
-Callbacks must be delivered through the host loop:
+local pct = math.floor(si.cpu() + 0.5)
+timer.every(3000, function()
+    local p = math.floor(si.cpu() + 0.5)
+    if p ~= pct then pct = p; host.redraw() end
+end)
 
-1. Keep a Lua callback with `binding.keep_callback`.
-2. Register native descriptors through `binding.watch` where needed.
-3. Post scalar callback arguments with `binding.post` on the host thread.
-4. Let the plugin host deliver the batch in a guarded call.
+local function tooltip()
+    local one, five, fifteen = si.load()
+    return { { text = string.format("CPU Usage: %d%%\nLoad: %.2f, %.2f, %.2f", pct, one, five, fifteen) } }
+end
+```
 
-Never call Lua directly from a C callback or worker thread. Events accept up to six scalar arguments. Read and validate arguments before acquiring resources. Do not keep a pending `defer` across a LuaJIT call that can raise; Lua error unwinding skips native cleanup.
+### Audio
 
-UI-script `host.Ui` has no plugin event loop. Although hosts can register modules with `Ui.open_with`, bindings that post events need `plugins.Host` integration.
+`default_sink()` returns one table with `id`, `name`, `description`, `percent`, `muted`, and `default`, or `nil`. The bar's `volume` plugin declares `capabilities = ["audio"]`, reads the sink again on each change, and handles input like this:
 
-Source references: `otter-lua/otr/services.otr`, `caps.otr`, `binding.otr`, and `handles.otr`; native exports live in each library's `otr/lua/` directory.
+```lua
+local host = require("otter.host")
+local vol = require("otter.desktop.volume")
+
+local step = 5
+local sink = vol.default_sink()
+vol.subscribe(function() sink = vol.default_sink(); host.redraw() end)
+
+local function event(kind)
+    if kind == "middle_click" then
+        local s = sink
+        if s then vol.toggle_mute(s.id) end
+    elseif kind == "scroll_up" then vol.scroll(true, step)
+    elseif kind == "scroll_down" then vol.scroll(false, step) end
+end
+```
+
+`scroll(up, step)` raises or lowers the default sink by `step` percent.
+
+### Windows and workspaces
+
+`otter.wayland` opens its own Wayland connection on first use. `toplevels()` returns one table per window with `app_id`, `title`, `activated`, `minimized`, and `outputs`. `subscribe(f)` calls `f()` after windows or workspaces change and returns a handle for `unsubscribe`. The bar's `active_window` plugin finds the focused window this way:
+
+```lua
+local host = require("otter.host")
+local wl = require("otter.wayland")
+
+local active
+local function read()
+    for _, tl in ipairs(wl.toplevels()) do
+        if tl.activated then return tl end
+    end
+    return nil
+end
+
+active = read()
+wl.subscribe(function()
+    active = read()
+    host.redraw()
+end)
+```
+
+### HTTP
+
+`otter.http` sends asynchronous HTTP and HTTPS requests and answers through callbacks on the host loop. Every function needs `net`. This example follows the module's own documentation in `otter-http/otr/lua/http.otr`:
+
+```lua
+local http = require("otter.http")
+local log = require("otter.log")
+
+local id = http.get("https://api.open-meteo.com/v1/forecast", function(status, body, err, content_type)
+  if err then log.warn("weather", err) return end
+  if status == 200 then
+    log.info("received", #body, content_type)
+  end
+end)
+
+http.request({
+  url = "https://example.org/api",
+  method = "POST",
+  headers = { "Content-Type: application/json" },
+  body = "{}",
+  timeout_ms = 5000,
+  max_body = 65536,
+}, function(status, body, err) end)
+
+http.cancel(id)
+```
+
+`err` is `nil` when a response arrived, whatever its status. Otherwise it is `"timeout"`, `"too large"`, `"too many redirects"`, `"tls"`, `"resolve"`, `"connect"`, or `"failed"`, with `status` 0 and an empty `body`. The body cap `max_body` defaults to 1 MiB and cannot exceed 2 MiB. The client always verifies peers. The host cancels a plugin's requests when it unloads or reloads the plugin.
+
+### Bar widgets
+
+`otter.ui.widgets` draws the bar's native widgets from a view table, so a Lua widget matches the native one. `otter.bar` exists only in otter-bar. It gives a widget its `otter-bar.conf` section with `config(name)` and opens native popups with `popup("calendar")` or `popup("volume")`. This shortened version of the bar's `clock` plugin uses both:
+
+```lua
+local w = require("otter.ui.widgets")
+local host = require("otter.host")
+local bar = require("otter.bar")
+
+local c = bar.config("clock")
+local now = w.now()
+local view = { color = c.text_color, spacer_color = c.spacer_color, background = c.background_color, twelve = c.twelve }
+
+return {
+    measure = function(max_w, max_h)
+        return max_h * 3, max_h
+    end,
+    draw = function(wd, h)
+        sd.begin(wd, h)
+        view.hour, view.minute = now.hour, now.minute
+        w.draw("clock", 0, 0, h, view, nil)
+        sd.finish()
+    end,
+    event = function(kind)
+        if kind == "click" then bar.popup("calendar") end
+    end,
+}
+```
+
+## Write a binding in otr
+
+A binding module is a `binding.Module` value. Its `open` function fills the module table through `Open.add(name, function, capability)`. An empty capability string means the function needs none. This is the whole of `otter-tools-core/otr/lua/calc.otr`, the source of `otter.tools.calc`:
+
+```otr
+import otter_lua.binding
+import otter_lua.lj
+import otter_tools_core.calc
+import push
+
+fn calc_eval(L: ?*lj.State) i32 {
+    t := lj.string_at(L, 1) orelse return binding.raise(L, "otter.tools.calc.eval: expr must be a string")
+    v := calc.eval(t) catch |e| return push.fail(L, @error_name(e))
+    push.number(L, v)
+    return 1
+}
+
+fn open(L: ?*lj.State, o: &binding.Open) void {
+    _ = L
+    o.add("eval", calc_eval, "")
+}
+
+pub fn module() binding.Module {
+    return .{ name: "otter.tools.calc", open: open }
+}
+```
+
+A plugin in a host that registers the module then calls it:
+
+```lua
+local calc = require("otter.tools.calc")
+
+local value, err = calc.eval("2 * (3 + 4)")
+```
+
+`eval` returns the number, or `nil` and the error name.
+
+The host app passes its modules to `plugins.Host.init`, which accepts at most 32. otter-bar builds its list in `otter-bar/otr/lua_host.otr`. This excerpt shortens the 23-entry list:
+
+```otr
+var mods = [23]binding.Module{
+    lua_ui.module(), lua_widgets.module(), lua_style.module(), lua_draw.module(), lua_theme.module(self.env),
+    // ...
+}
+h := plugins.Host.init(&mods, .{ runtime: .{ cap_bytes: 16 << 20, jit: self.jit }, home: self.env.get_env("HOME") orelse "", log_stderr: true }) catch |e| {
+    lg.warn("Lua widget host unavailable: {s}", .{ @error_name(e) })
+    return false
+}
+```
+
+`Host.init` fails with `DuplicateModule` when two modules share a name or a module takes a built-in's name. Set `Module.cap` to require a capability for the whole module. The value `fs` means any `fs:` root.
+
+### State and callbacks
+
+A module that keeps a connection, subscriptions, or handles stores them in per-host state, never in a process global. `binding.Slot(S, name)` declares that state. The host creates one `S` for each registered module, calls its `release` for every unloaded or replaced plugin instance, and drops it when the host ends.
+
+`otter-desktop/otr/lua/dbus_power_profiles.otr` declares its slot and registers a subscription like this:
+
+```otr
+const S = dbus_common.Service(power_profiles.PowerProfiles)
+
+const state = binding.Slot(S, "otter.desktop.power_profiles")
+
+fn lua_subscribe(L: ?*lj.State) i32 {
+    cb := binding.keep_callback(L, 1)
+    inst := binding.instance() orelse return 0
+    added := state.with(fn[inst, cb](s: &mut S) bool {
+        _ = s.ensure(open_svc, on_fd)
+        return s.subs.add(inst, cb)
+    }) orelse false
+    if !added {
+        binding.drop_callback(L, cb)
+        return binding.raise(L, "subscribe: too many subscribers")
+    }
+    return 0
+}
+
+fn open(L: ?*lj.State, o: &binding.Open) void {
+    _ = L
+    o.add("active", lua_active, "")
+    o.add("profiles", lua_profiles, "")
+    o.add("set", lua_set, "power")
+    o.add("subscribe", lua_subscribe, "")
+}
+
+pub fn module() binding.Module {
+    return .{ name: state.name, open: open, state: state.spec(null) }
+}
+```
+
+Callbacks reach Lua through the host loop in four steps:
+
+1. `binding.keep_callback(L, index)` stores the Lua function for the running plugin instance and returns its id.
+2. `binding.watch(fd, dispatch, datum)` adds the module's descriptor to the host's epoll. The host runs `dispatch` on its loop when the descriptor is readable.
+3. `binding.post(instance, callback, single, args)` queues the callback with up to six scalar arguments: nil, boolean, number, or string.
+4. The host delivers each plugin's queued events in one guarded call.
+
+Never call Lua from a C callback or a worker thread. A library with its own thread wakes the loop through a descriptor it registered with `watch`.
+
+Binding code follows three rules. It holds no `defer`, because a Lua error skips otr cleanup, and the compiler rejects a pending `defer` across the LuaJIT calls that `lj.otr` lists as raising. It reads and checks every argument before it takes a resource, and returns what it took before it raises. It never raises inside a `RefCell` or `Slot` closure.
+
+Objects that Lua holds live in a `handles.Table(T)` owned by the instance. Lua receives a checked integer handle, so a stale, invented, or foreign handle raises a Lua error.
+
+UI scripts load bindings in two ways. `runtime.Options.bindings` installs eager `otter.<name>` tables, as the [UI script page](/developers/lua/ui-scripts#the-native-side) shows. `host.Ui.open_with` accepts `binding.Module` lists, but a `Ui` has no event loop, so modules that post callbacks need `plugins.Host`.
+
+The otr language pages cover the syntax used here. Start with [otr quickstart](/otr/quickstart) and [C interop](/otr/c-interop).
+
+Source references: `otter-lua/otr/services/`, `caps.otr`, `policy.otr`, `binding.otr`, and `handles.otr`. Each library's bindings live in its `otr/lua/` directory, and otter-ui's widget bindings live in `widgets-otr/lua/`.

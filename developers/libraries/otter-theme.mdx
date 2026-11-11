@@ -4,17 +4,64 @@ sidebarTitle: "otter-theme"
 description: "Semantic otr theme values, 11 color presets, loading, and graph watching."
 ---
 
-`otter-theme` provides `Theme` values through `otter_theme.theme` and loaders through `otter_theme.loader`. A theme owns its text fields, so call `deinit()` or clone it explicitly for another owner.
+`otter-theme` is the visual system every Otter Shell app draws with. A `Theme` has four independent layers: `colors`, `layout`, `spacing` and `globals`. Apps read semantic roles and metrics from it and never branch on a palette or layout name.
 
-Themes contain `colors`, `layout`, `spacing`, and `globals`. Render applications consume semantic roles and metrics instead of branching on theme names.
+The package name is `otter_theme`. Import `otter_theme.theme` for the types and `otter_theme.loader` to load them.
 
-There are 11 color presets. The `bar_islands` global controls Islands styling; Islands is not a twelfth preset.
+```toml
+[dependencies]
+otter_theme = { path = "../../otter-theme/otr" }
+```
+
+```otr
+import std
+import std.mem
+import otter_theme.loader
+
+pub fn main(env: std.Env) void {
+    t := loader.load_theme(env, mem.heap)
+    defer t.deinit()
+
+    window := t.surface_color(t.colors.surface)
+    std.io.printf("{} {} {}\n", .{ window.to_hex_string()[0..], t.spacing.row_height, t.label_size() })
+    std.io.printf("{} at {} px\n", .{ t.globals.font_family.as_str(), t.globals.font_size })
+}
+```
+
+A `Theme` owns its text fields, so release it with `deinit()`. `clone(alloc)` gives another owner an independent copy.
+
+| Module | Purpose |
+| --- | --- |
+| `theme` | `Theme`, `Colors`, `Layout`, `Spacing`, `Globals` and the semantic methods |
+| `presets` | The 11 built-in color palettes |
+| `profiles` | The `current` and `bank` layouts and the three spacing scales |
+| `loader` | Read `theme.conf` and its layer files |
+| `theme_watcher` | Hot reload for the theme and its layer files |
+| `color_contrast` | WCAG relative luminance and contrast ratio |
+| `syntax` | Code colors derived from the color roles |
+
+There are 11 color presets. Islands is the `bar_islands` global and works with any of them.
 
 ## Lua
 
-The separate `otter_theme_lua` package exposes `otter.theme`. Reads such as `get`, `color`, `surface`, `alpha`, `contrast`, `presets`, and `generation` need no capability. `subscribe` reports successful changes. `use_preset` requires `theme-write`.
+The `otter_theme_lua` package in `otr/lua/` exposes `otter.theme` to [otter-lua](/developers/libraries/otter-lua) hosts. Reads need no capability. `use_preset` needs `theme-write`.
 
-The host installs the environment/root before loading plugins and registers the module. Broken theme edits keep the previous valid snapshot and do not notify subscribers.
+```lua
+local theme = require("otter.theme")
+local host = require("otter.host")
+
+local t = theme.get()
+theme.subscribe(function()
+  t = theme.get()
+  host.redraw()
+end)
+
+local accent = theme.color("accent")
+local panel = theme.surface(t.colors.surface)
+local padding = t.spacing.tiny
+```
+
+`subscribe` calls your function after a change that loaded. A broken edit keeps the previous theme and calls nobody.
 
 ## Reference pages
 
@@ -23,4 +70,4 @@ The host installs the environment/root before loading plugins and registers the 
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml`, `otr/API.md` and `otr/` in the `otter-theme` repository. The Lua example follows `otter-bar/otr/plugins/brightness/init.lua`.

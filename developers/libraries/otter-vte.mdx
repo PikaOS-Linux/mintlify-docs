@@ -1,18 +1,49 @@
 ---
 title: "otter-vte"
 sidebarTitle: "otter-vte"
-description: "otr terminal command storage, glyph operations, snapshots, and cell rendering."
+description: "Terminal rendering in otr: growable command lists, powerline and block glyphs, snapshots, and the cell renderer."
 ---
 
-`otter-vte` is the reusable terminal rendering boundary. It depends on geometry and rendering, not a terminal application's UI. Import `otter_vte.command_list`, `ops`, `cell_glyphs`, `cell_renderer`, `renderer`, or `snapshot`.
+`otter-vte` holds the terminal rendering that otter-term uses, packaged so that other apps can draw terminal output the same way. It turns a grid of cells into drawing commands and rasterizes them with otter-render. It does not own a PTY and does not parse escape sequences. Your app supplies the cells.
 
-The cell renderer accepts explicit cell/selection/host interfaces and a borrowed draw context. It does not reach through arbitrary application pointers.
+The package is `otter_vte`. It has no root module. Import `otter_vte.command_list`, `ops`, `cell_glyphs`, `cells`, `cell_renderer`, `renderer` or `snapshot`.
 
-`DynamicCommandList` and `Renderer` are owned resources initialized with an allocator. Image-free terminal raster paths use `renderer.no_images`.
+```toml
+[dependencies]
+otter_geo = { path = "../../otter-geo/otr" }
+otter_render = { path = "../../otter-render/otr" }
+otter_vte = { path = "../../otter-vte/otr" }
+```
+
+## How the modules fit
+
+| Module | Role |
+| --- | --- |
+| `cells` | The `Cell` view, `Rgb`, `StyleFlags` and the `CellVisitor` interface. |
+| `snapshot` | Walks a terminal snapshot stored as column slices and visits each cell. |
+| `cell_renderer` | A visitor that turns cells into background runs, text runs and glyph operations. |
+| `command_list` | `DynamicCommandList`, a command list that grows with the grid. |
+| `ops`, `cell_glyphs` | Powerline shapes, block rectangles and the geometry of box, block and braille glyphs. |
+| `renderer` | `Renderer`, which owns the lists and operation buffers for one terminal view. |
+
+A frame goes through three steps. Prepare the `Renderer` for the grid size, visit the cells with a `CellRenderer` draw context, then rasterize the layers onto a surface. [Cell renderer](/developers/libraries/otter-vte/cell-renderer) shows the whole sequence.
 
 ## Lua
 
-`otter_vte_lua` exposes `otter.vte`: glyph rectangles, powerline classification, batching checks, and bounded plugin-owned pixel canvases. These operations stay inside the process, so they require no capability. They do not create a terminal session or PTY.
+The `otter_vte_lua` package provides `otter.vte`. It gives a Lua widget the same glyph geometry and powerline shapes, drawn onto canvases the plugin owns. Nothing here acts on the system, so it needs no capability. It does not create a terminal session.
+
+```lua
+local vte = require("otter.vte")
+
+local rects, alpha = vte.glyph(0x2584, 0, 0, 8, 16)   -- nil when the font draws it
+local kind, dir = vte.powerline(0xe0b4)               -- "round", "right"
+
+local c = vte.canvas(64, 32, 2)                       -- logical size, scale
+vte.clear(c, 0xff000000)
+vte.draw_powerline(c, "triangle", "right", 0, 0, 8, 16, 0xffff0000, 0xff000000)
+local argb = vte.pixel(c, 3, 10)                      -- a physical pixel
+vte.free(c)
+```
 
 ## Reference pages
 
@@ -22,4 +53,4 @@ The cell renderer accepts explicit cell/selection/host interfaces and a borrowed
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml`, `otr/API.md` and `otr/api_check.otr` in the component repository. otter-term's `otr/render.otr` is the main consumer.

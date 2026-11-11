@@ -1,0 +1,237 @@
+---
+title: "Ownership and borrowing"
+description: "How otr keeps safe code memory safe: resources, moves, borrowed references and ref structs."
+---
+
+Every rule on this page is checked inside one function body, using only the signatures of the functions it calls. No rule needs whole-program analysis, and you never write a lifetime annotation.
+
+Diagnostics name the rule they enforce, such as `(spec O3)` or `(spec B4)`. The codes on this page match those. [Compiler errors](/otr/compiler-errors) lists them with fixes.
+
+## The mechanisms
+
+| Mechanism | Covers | Run-time cost |
+| --- | --- | --- |
+| Owned values with checked cleanup | Single ownership, leaks, double free | None |
+| Borrowed references `&T`, `&mut T`, ref structs | Temporary access, iterators, views | None |
+| [Regions](/otr/memory/regions-pools-and-cells#regions) `&r T` | Graphs, trees, per-request allocation | None. Freed in bulk |
+| [Generational handles](/otr/memory/regions-pools-and-cells#pools-and-handles) | Shared objects freed one at a time | One integer compare per access |
+| [Closure capture rules](/otr/memory/closures) | Callbacks, tasks, comparators | None |
+| [Send and Sync](/otr/concurrency#send-and-sync) | Data races | None |
+| [Run-time checks](/otr/memory/runtime-checks-and-unsafe) | Bounds, null, overflow | A branch each |
+| [`unsafe`](/otr/memory/runtime-checks-and-unsafe#unsafe-code) | FFI, raw pointers | Reviewer's attention |
+
+## Copy types and moves
+
+A type is copyable if it holds no resource and no `&mut`. Numbers, bools, enums, and structs made of them are copyable. Copyable values are copied on assignment and when passed by value.
+
+Every other value is moved. After a move, the old binding is gone:
+
+```otr
+fn consume(xs: list.List(i64)) void {
+    xs.deinit()
+}
+
+pub fn main() void {
+    var nums = list.List(i64).init(std.mem.heap)
+    consume(nums)
+    nums.push(1)
+}
+```
+
+```text
+bad_move.otr:11:5: error: use of 'nums' after it was moved (spec O4)
+```
+
+At a point where two branches join, a binding must be moved on all incoming paths or on none.
+
+## Resources
+
+A type is a resource if it declares `deinit(self: Self)` taking itself by value, or if it has a field or union variant whose type is a resource.
+
+On every path from a resource's creation to the end of its scope, you must consume it exactly once. Consuming means one of:
+
+- moving it, by assignment, by passing it by value, or by returning it
+- calling a method that takes `self` by value, such as `deinit` or `close`
+- a `defer` or `errdefer` that does one of these
+
+The compiler never inserts a cleanup call. A missing one is error O3, and the diagnostic suggests the `defer` to add.
+
+```otr
+fn load_numbers(path: str) !list.List(i64) {
+    text := try fs.read_file(std.mem.heap, path)
+    defer text.deinit()                    // consumed on every exit path
+
+    var out = list.List(i64).init(std.mem.heap)
+    errdefer out.deinit()                  // consumed on error paths
+
+    var lines = text.split("\n")
+    for line in lines {
+        if line.len == 0 { continue }
+        out.push(try std.fmt.parse_int(i64, line, 10))
+    }
+    return out                             // moved to the caller on success
+}
+```
+
+Here is a resource type of your own. Its `deinit` must consume its own resource fields:
+
+```otr
+const Temp = struct {
+    path: string.String
+
+    pub fn create(name: str) fs.Error!Temp {
+        path := string.String.from_fmt(std.mem.heap, "{}/{}", .{ fs.temp_dir(), name })
+        errdefer path.deinit()
+        try fs.write_file(std.mem.heap, path.as_str(), "")
+        return .{ path: path }
+    }
+
+    pub fn deinit(self: Temp) void {
+        fs.delete_file(std.mem.heap, self.path.as_str()) catch {}
+        self.path.deinit()
+    }
+}
+
+pub fn main() !void {
+    tmp := try Temp.create("otr-docs-demo")
+    defer tmp.deinit()
+}
+```
+
+More rules follow from single ownership:
+
+- You cannot move a resource field out of a struct (O5). Use `std.mem.replace(&mut s.field, new_value)` or `std.mem.take` to get it out.
+- You cannot assign over a live resource (O6). Consume the old value first: `x.deinit(); x = new_value`.
+- A container's `deinit` deinitialises its elements when the element type is a resource (O8).
+- A panic ends the process and runs no cleanup (O7), so consumption is only checked on normal and error-return paths.
+
+## Borrowed references
+
+`&T` is a shared borrow. While it lives, the value it refers to cannot change.
+
+`&mut T` is an exclusive borrow. While it lives, the value can only be reached through it.
+
+`[]T` and `[]mut T` are the slice forms of the same two borrows.
+
+```otr
+fn sum(xs: []i64) i64 {
+    var total: i64 = 0
+    for x in xs { total += x }
+    return total
+}
+
+fn bump(x: &mut i32) void {
+    x.* += 1
+}
+
+var n: i32 = 10
+bump(&mut n)
+```
+
+To take `&mut p`, `p` must be a `var`, or be reached through `&mut` at every step. A `[]T` held in a `var` stays read-only.
+
+### How long a borrow lasts
+
+A borrow lasts from its creation to the last use of the reference, or of anything derived from it. The compiler computes this on the control-flow graph, so a reference you stop using no longer blocks anything.
+
+While a shared borrow of `p` lives, you can read `p` but not write, move, or exclusively borrow it (B4). While an exclusive borrow of `p` lives, you cannot use `p` at all except through that borrow (B5).
+
+```otr
+pub fn main() void {
+    var nums = list.List(i64).init(std.mem.heap)
+    defer nums.deinit()
+    nums.push(1)
+    first := &nums.items()[0]
+    nums.push(2)
+    std.io.printf("{}\n", .{ first.* })
+}
+```
+
+```text
+bad_borrow.otr:9:5: error: cannot borrow 'nums' mutably while it is borrowed as shared on line 8 (spec B4)
+```
+
+`push` might reallocate the list's storage, which would leave `first` dangling. Move the `push` above the borrow, or read the value out before pushing, and the program compiles.
+
+Borrows of different fields of a struct do not conflict (B6). Borrows of elements of the same array or slice always conflict, whatever the indices. `std.mem.split_at_mut` gives you two disjoint halves of one slice.
+
+### References are second-class
+
+A borrowed reference lives in locals, parameters and return values. It cannot be stored in a struct field, a global, a container element or a region object, and it cannot be passed to `io.spawn` (B8).
+
+This restriction is what removes lifetime annotations. Storing references is what forces lifetime parameters in Rust. otr forbids it, and gives you [ref structs](#ref-structs), [regions](/otr/memory/regions-pools-and-cells#regions) and [handles](/otr/memory/regions-pools-and-cells#pools-and-handles) for the cases that need it.
+
+`&static T` and `[]static T` are the exception. They refer to data that lives for the whole program, so you can store them anywhere. Compile-time constants and string literals produce them.
+
+### Returning references
+
+A function can return a reference built from its reference parameters or from static data (B7). It cannot return a reference to one of its locals:
+
+```otr
+fn dangling() &i64 {
+    x: i64 = 5
+    return &x
+}
+```
+
+```text
+bad_ret.otr:3:5: error: returns a reference to 'x', which does not outlive the call (spec B7)
+```
+
+At each call site, the result is treated as borrowing from every argument passed to a reference parameter. So after this call, `users` and `id` stay borrowed for as long as you use `v`:
+
+```otr
+pub fn get(self: &Map, key: &K) ?&V { ... }
+
+v := users.get(&id) orelse return error.NotFound
+users.remove(&id)          // error B4 if `v` is used after this line
+```
+
+The compiler narrows this by type (B7c). An argument's borrow reaches the result only if the result's type could point into what the argument refers to. `word(text, &mut pos) str` leaves `pos` free after the call, because a `str` cannot point into a `usize`.
+
+## Ref structs
+
+A `ref struct` may have borrowed references as fields. In return, the whole value follows the rules of a reference: it is second-class, and its borrows are the union of its fields' borrows.
+
+```otr
+const Tokenizer = ref struct {
+    src: str
+    pos: usize
+
+    pub fn next(self: &mut Tokenizer) ?Token { ... }
+}
+```
+
+Iterators, parsers over input text and views are ref structs. So is `Future(T)`. A `ref union` is the same idea for a union whose variants borrow, such as a decoded message that borrows the bytes it came from.
+
+A ref struct that holds only shared references is copyable.
+
+## Allocation
+
+`Allocator` is an interface value from `std.mem`. It is copyable and storable. `std.mem.heap` is the general-purpose, thread-safe allocator.
+
+Containers take their allocator at construction and keep it:
+
+```otr
+var buf = list.List(u8).init(std.mem.heap)
+defer buf.deinit()
+```
+
+You do not pass the allocator to every call, so you cannot free with the wrong one.
+
+Scoped allocators such as arenas and fixed buffers are [regions](/otr/memory/regions-pools-and-cells#regions), not `Allocator`s, so the compiler can check how long their memory lives.
+
+## Choosing a tool
+
+| You need | Use |
+| --- | --- |
+| A value with one owner | A plain value, moved or passed by reference |
+| Temporary access to someone else's value | `&T` or `&mut T` |
+| An iterator or view over borrowed data | A `ref struct` |
+| A tree or graph, or many allocations with one lifetime | A [region](/otr/memory/regions-pools-and-cells#regions) |
+| Long-lived objects that refer to each other and are freed one at a time | A [`Pool` and handles](/otr/memory/regions-pools-and-cells#pools-and-handles) |
+| A value on the heap with one owner | `box.Box(T)` |
+| Shared ownership across threads | `arc.Arc(T)` |
+| Mutation through a shared reference | [`Cell` or `RefCell`](/otr/memory/regions-pools-and-cells#interior-mutability) |
+
+The safety rules are stated as a formal system in `docs/safety-formal.md` in the otr repository. A reference checker for that system is fuzzed against the compiler, and the repository's `proofs/` directory holds Lean proofs for the core calculus.

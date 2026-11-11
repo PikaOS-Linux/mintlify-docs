@@ -1,10 +1,12 @@
 ---
 title: "Command list"
 sidebarTitle: "Command list"
-description: "Bounded drawing commands, image lookup, text loans, and damage-aware rasterization."
+description: "Record bounded drawing commands and rasterize them with scissor clipping and damage culling."
 ---
 
-Import `otter_render.command_list`. `DefaultCommandList` is `CommandList(2048, 32 * 1024)`: 2048 commands and 32 KiB of string storage.
+Import `otter_render.command_list`. A `CommandList(N, M)` holds up to `N` commands and `M` bytes of string storage inline, so recording a frame allocates nothing. `DefaultCommandList` is `CommandList(2048, 32 * 1024)`.
+
+## Record a frame
 
 ```otr
 import otter_geo.color
@@ -12,29 +14,76 @@ import otter_geo.rect
 import otter_render.command_list
 import otter_render.scale
 
-pub fn main() void {
-    var cmds = command_list.DefaultCommandList.init()
-    cmds.set_scale(scale.Scale.one)
-    cmds.solid_rect(rect.Rect{ x: 0, y: 0, width: 100, height: 40 }, color.Color.black)
-    _ = cmds.overflowed()
+fn record(cmds: &mut command_list.DefaultCommandList, factor: scale.Scale) bool {
+    cmds.reset()
+    cmds.set_scale(factor)
+    cmds.clear(color.Color.clear)
+    cmds.rounded_solid_rect(rect.Rect{ x: 0, y: 0, width: 300, height: 40 }, color.Color.surface, 4, 0b1111)
+    cmds.rounded_rect_outline(rect.Rect{ x: 0, y: 0, width: 300, height: 40 }, color.Color.muted, 4, 1, 0b1111)
+
+    cmds.scissor_push(rect.Rect{ x: 8, y: 0, width: 284, height: 40 })
+    cmds.text(rect.Point{ x: 8, y: 12 }, "Battery: 85%", 14, color.Color.text)
+    cmds.scissor_pop()
+
+    return !cmds.overflowed()
 }
 ```
 
+All coordinates are logical. `set_scale` tells the rasterizer how to convert them to device pixels.
+
+A command that does not fit is dropped, and `overflowed()` returns true for the rest of the frame. `reset()` clears the list for the next frame.
+
 ## Commands
 
-Use `solid_rect`, `blend_rect`, `rect_outline`, `rounded_solid_rect`, `rounded_blend_rect`, `rounded_rect_outline`, `circle`, `text`, `text_styled`, `image`, `sprite`, `graph`, and `clear` as needed.
+| Method | Draws |
+| --- | --- |
+| `clear(c)` | Fills the whole target. |
+| `solid_rect`, `blend_rect` | An opaque or alpha-blended rectangle. |
+| `rect_outline(rect, c, thickness)` | A rectangle border. |
+| `rounded_solid_rect`, `rounded_blend_rect`, `rounded_rect_outline` | Rounded rectangles with a `radius` and a `corners` mask. |
+| `circle(circ, c)` | A filled circle. |
+| `text`, `text_strong`, `text_styled` | A string at a position. `text_styled` takes an `italic` flag. |
+| `image`, `image_fill`, `image_circle_fill` | An image from an `ImageHandle`. |
+| `sprite(dst, handle, src, options)` | A region of an image, with `SpriteOptions` for flip, alpha, pixelated scaling and rounding. |
+| `graph(rect, values, max_value, fill, line)` | A filled line graph of `u16` samples. |
+| `stroke(points, width, c, dash)` | An anti-aliased polyline of at most `max_stroke_points` points. A `dash` above zero makes it dashed. |
+| `scissor_push(rect)`, `scissor_pop()` | A clip rectangle for the commands between them. |
 
-`scissor_push` / `scissor_pop` bound nested drawing. Balance pushes and pops. `reset` prepares the list for another frame; `overflowed` reports capacity loss.
+The `corners` mask is a `u4`. Bit 0 is top left, bit 1 is top right, bit 2 is bottom left and bit 3 is bottom right. `0b1111` rounds all four. A radius of zero takes the same path as a plain rectangle.
 
-Image commands store generational `ImageHandle` values. Put image pixels in an `ImageStore` or another `ImageSource`; stale handles draw nothing.
+Every `scissor_push` needs a matching `scissor_pop`. The rasterizer nests clips up to `quad_renderer.max_scissor_depth`, which is 8.
 
-## Rasterization
+`command_slice()` lends the recorded commands. Each is a `Command` union, and `command_list.tag_of(cmd)` gives its `Tag`. `get_string(ref)` returns the text a `TextCmd` refers to.
 
-`quad_renderer.rasterize` takes the command-list type, borrowed list, mutable surface, optional mutable `TextContext`, an `ImageSource`, optional damage rectangles, and a full-damage flag.
+## Rasterize
 
-`TextContext` lends `Font`, optional `TextSystem`, and optional `ShapeScratch` for that call. The command list does not store those pointers.
+Import `otter_render.quad_renderer`.
 
-Pass logical damage and scale consistently. Keep render-culling damage separate from submit-only damage when moving existing pixels.
+```otr
+var txt = quad_renderer.TextContext{ font: &mut f, system: &mut shaper, scratch: &mut scratch }
+quad_renderer.rasterize(command_list.DefaultCommandList, &cmds, &mut target, &mut txt, &images, null, true)
+```
+
+`rasterize` takes these arguments in order:
+
+1. The command list type, then a borrow of the list.
+2. The target `Surface`.
+3. An optional `TextContext`. Pass `null` to skip text commands.
+4. An `image.ImageSource`, normally an `ImageStore`. A stale handle draws nothing.
+5. An optional slice of damage rectangles and a `full_damage` flag.
+
+`TextContext` carries a `&mut Font` and, optionally, a `TextSystem` and `ShapeScratch`. With both set, text goes through the shaper. See [Fonts and text](/developers/libraries/otter-render/fonts-and-text).
+
+### Damage
+
+With `full_damage` set to `true`, the rasterizer draws every command. With it set to `false` and a damage slice given, it draws only the commands that intersect the bounding box of the rectangles. An empty slice draws nothing.
+
+```otr
+dirty := [1]rect.Rect{ rect.Rect{ x: 0, y: 0, width: 120, height: 40 } }
+quad_renderer.rasterize(command_list.DefaultCommandList, &cmds, &mut target, &mut txt, &images, &dirty, false)
+```
+
+Damage rectangles are logical, like the commands.
 
 ## Source reference
 

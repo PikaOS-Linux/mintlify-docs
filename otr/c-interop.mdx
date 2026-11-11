@@ -1,0 +1,238 @@
+---
+title: "C interop"
+description: "Import C headers, mark functions safe, pass callbacks, own C objects, and build libraries for C."
+---
+
+otr reads C headers through the libclang that ships with the toolchain. You do not write bindings by hand.
+
+## Import a header
+
+```otr
+import std
+import c "stdlib.h" as stdlib
+
+pub fn main() void {
+    n := unsafe { stdlib.atoi("42".ptr) }
+    std.io.printf("{}\n", .{ n })
+}
+```
+
+`import c "header.h" as name` translates the header, and everything it includes, into a module whose declarations are all public.
+
+An imported C function is `unsafe` to call by default, because the compiler cannot know what the function does with its pointers.
+
+Link the library with `-l <lib>`, give include directories with `-I <dir>`, or let pkg-config supply both with `--pkg-config <lib>`. In a package, put these in the `[c]` table of [`otr.toml`](/otr/packages-and-builds#c-inputs).
+
+```bash
+otr build app.otr --pkg-config xkbcommon
+otr build app.otr -I vendor/include -L vendor/lib -l foo
+```
+
+The header is searched for as `#include "header.h"` would be from the importing file: that file's directory, then the `-I` directories, then the system include directories.
+
+## Mark functions safe
+
+An import can list the functions that safe code may call. Listing a function is a promise, reviewed like an `unsafe` block, that no call can break memory safety.
+
+```otr
+import std
+import c "math.h" as m safe { sqrt, floor }
+import c "string.h" as cstring safe { strlen(s: [:0]u8) }
+import c "time.h" as ctime safe { clock_gettime(clock_id, tp: &out timespec) }
+
+pub fn main() void {
+    std.io.printf("{} {}\n", .{ m.sqrt(2.25), m.floor(-1.5) })   // 1.5 -2
+    std.io.printf("{}\n", .{ cstring.strlen("hello") })          // 5
+
+    var ts: ctime.timespec
+    _ = ctime.clock_gettime(ctime.CLOCK_MONOTONIC, &out ts)
+}
+```
+
+No `unsafe` appears in `main`. The claim that each function is safe sits at the import, once per function instead of once per call.
+
+A safe function cannot take a raw pointer, so an entry for a function with pointer parameters restates them as the references, slices or C strings they are. Parameters match by position. A name alone keeps the translated type, and `name: T` gives it type `T`.
+
+| C parameter | You may restate it as |
+| --- | --- |
+| `const T *` | `&T`, `?&T`, `[:0]T`, `?[:0]T` |
+| `T *` | The above, plus `&mut T`, `?&mut T`, `&out T`, `[:0]mut T` |
+| A pointer followed by a `size_t` length | One slice: `[]T`, `[]mut T` or `[]out T` |
+| `void *` followed by a length | `[]u8` and its forms |
+| `T *` to a C object | `ffi.Ref(T)` |
+
+A restated parameter changes only how otr sees the argument. C receives the same thing, so it costs nothing at run time.
+
+```otr
+import c "unistd.h" as unistd safe {
+    getpid
+    write(fd, bytes: []u8)
+    access(name: ?[:0]u8, kind)
+}
+import c "sys/random.h" as random safe { getrandom(buf: []out u8, flags) }
+
+var key: [32]u8
+_ = random.getrandom(&out key, 0)        // fills an uninitialised buffer
+_ = unistd.write(1, "written by C\n")
+```
+
+If a header later gains or reorders parameters, the import fails to compile instead of silently keeping a claim about a different signature.
+
+### Macros and struct slices
+
+Two more lists can follow an import.
+
+`macros { "int32_t MAX(int32_t a, int32_t b)" }` gives a function-like macro a C prototype. It becomes a function that C expands as it would in a C program.
+
+`slices { drmModeConnector.modes: count_modes }` reads a C struct's pointer and count fields as one slice.
+
+## How C declarations translate
+
+| C | otr |
+| --- | --- |
+| `char`, `unsigned char`, `signed char` | `u8`, `u8`, `i8` |
+| `short`, `int`, `long`, `long long` | `i16`, `i32`, `i64`, `i64` |
+| `float`, `double`, `_Bool` | `f32`, `f64`, `bool` |
+| `size_t`, `ssize_t`, `intptr_t`, `uintptr_t` | `usize`, `isize`, `isize`, `usize` |
+| `void *` | `?*anyopaque` |
+| `struct S *` | `?*S` |
+| other `T *` | `?[*]T` |
+| `T[N]` | `[N]T` |
+| `R (*)(A, B)` | `?fn(A, B) R` |
+| `struct S { ... }` | `extern struct`, named `struct_S` and `S` |
+| `enum E { A, B = 5 }` | An open enum `enum_E`, plus a constant per enumerator |
+| `typedef T Name;` | `pub const Name = T` |
+| `#define N 42` | `pub const N = 42` |
+| `extern T v;` | `pub extern var v: T` |
+
+Bitfields become fields of a `packed struct`. A `static inline` function defined in a header gets a real symbol through a small generated shim, so helpers such as wayland-client's `wl_*_add_listener` are callable. Release builds inline them as C would.
+
+What otr cannot express is left out, with a `// skipped name: reason` comment in the generated module. That covers functions without a prototype, `long double`, `_Complex`, `_Atomic`, variable-length arrays, and macros that are not a single literal.
+
+## Declare functions by hand
+
+You can declare a C function without a header:
+
+```otr
+extern fn getcwd(buf: []mut u8) ?[*]const u8
+safe extern fn sqrt(x: f64) f64
+extern fn printf(format: [*]const u8, ...) i32
+```
+
+A slice parameter of an `extern fn` reaches C as two arguments, the pointer and then the length. `safe extern fn` declares a function that safe code may call, under the same promise as an import's `safe` list.
+
+`extern var name: T` declares a C global, and `extern threadlocal var name: T` a C thread-local. Reading or writing either needs `unsafe`.
+
+## Callbacks
+
+A C library calls back while your program is inside one of its calls, such as `wl_display_dispatch` or `g_main_loop_run`. C's usual answer is a `void *user_data` pointer to your state. That would force the state to stay pinned and to outlive every registration.
+
+otr uses `std.ffi.Context` instead. You lend your state for the length of the dispatch call, and each callback borrows it:
+
+```otr
+const App = struct {
+    ticks: cell.Cell(i32)
+}
+
+const events = ffi.Context(App).init()
+
+// An ordinary safe function with the C signature. It ignores C's user_data.
+fn on_tick(data: ?*anyopaque, n: i32) i32 {
+    _ = data
+    return events.with(fn[n](app: &App) i32 {
+        app.ticks.set(app.ticks.get() + 1)
+        return n
+    }) orelse -1
+}
+
+pub fn main() void {
+    var app = App{ ticks: cell.Cell(i32).init(0) }
+    sum := events.lend(&app, fn[&app]() i32 {
+        return unsafe { lib.run_ticks(on_tick, 3) }      // callbacks run in here
+    })
+    std.io.printf("{} {}\n", .{ sum, app.ticks.get() })
+}
+```
+
+No pointer to the state is stored anywhere, so the state may move between dispatches.
+
+The loan is shared, because C may call back during another callback. Callbacks change state through `cell.Cell` or `cell.RefCell`.
+
+`with` gets null while nothing is lent on its thread. `expect` panics instead, for a callback that cannot do without the state.
+
+A plain function or a captureless closure with a matching signature can be handed to C as a function pointer.
+
+## Own a C object
+
+`std.ffi.Owned(T, free)` is a resource that owns a C object and gives it back in `deinit`:
+
+```otr
+const File = ffi.Owned(io.FILE, raw.fclose)
+
+f := unsafe { File.adopt(p) }
+defer f.deinit()
+```
+
+You make one with `unsafe` `adopt` from the pointer C returned. `get` lends it as an `ffi.Ref(T)`, a reference that cannot outlive the owner. Both hold only the pointer, so C receives them as the bare pointer.
+
+With this, the borrow checker enforces C's ownership rules. You cannot use the object after freeing it, and you cannot forget to free it.
+
+## C that unwinds
+
+C that may unwind past its callers, as LuaJIT's `lua_error` does, is declared `unwind extern fn` or listed in an import's `unwinds { lua_error, lua_call }`.
+
+Unwinding pops a frame without running its defers. So a call that may unwind is a compile error while a `defer` is pending in the caller.
+
+## Generated bindings
+
+Two tools in the otr repository generate safe bindings, so that programs using them need no `unsafe`.
+
+`tools/wayland/scanner.otr` turns Wayland protocol XML into client bindings. Each interface is a resource that owns its proxy, requests are methods over typed arguments, and `set_listener` delivers events to functions named after them.
+
+`tools/gir/gir.otr` generates bindings from GObject-Introspection files. The repository's `examples/harfbuzz` shapes text through HarfBuzz with no `unsafe`.
+
+## Build a library for C
+
+`--lib static` writes `lib<name>.a`, and `--lib shared` writes `lib<name>.so`. `--emit-h` also writes a C header.
+
+```otr
+/// Adds two numbers.
+export fn add(a: i32, b: i32) i32 {
+    return a + b
+}
+
+/// Sums a slice; C passes a pointer and a length.
+export fn sum(xs: []i64) i64 {
+    var total: i64 = 0
+    for x in xs { total += x }
+    return total
+}
+```
+
+```bash
+otr build mathlib.otr --lib static --emit-h mathlib.h
+```
+
+The generated header:
+
+```c
+/**
+ * Adds two numbers.
+ */
+int32_t add(int32_t a, int32_t b);
+
+/**
+ * Sums a slice; C passes a pointer and a length.
+ */
+int64_t sum(const int64_t *xs, size_t xs_len);
+```
+
+A library has no `main`. Its interface is its `export fn`s, and a file with none is an error.
+
+Each export needs a C signature. Integers map to `<stdint.h>` types, `&T` to `const T *`, `&mut T` to `T *`, a slice to a pointer and a `size_t` length, and `[:0]u8` to `const char *`. `///` doc comments become C comments.
+
+A static library hides everything except its exports, its runtime included. Several otr libraries therefore link into one program without clashing, each with its own run-time state.
+
+A shared library needs a glibc target, because the bundled musl is static only.
+
+A panic in a library calls `abort()`, so the host's crash handling sees it.

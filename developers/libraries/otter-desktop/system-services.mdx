@@ -1,41 +1,129 @@
 ---
 title: "System services"
 sidebarTitle: "System services"
-description: "otr system monitoring, brightness, and optional PipeWire package APIs."
+description: "System metrics, the process monitor, brightness, Falcond status, and the PipeWire package."
 ---
 
-## System state
+## System metrics
 
-Import `otter_desktop.sys.sysinfo`, `monitor`, `brightness`, or `falcond`.
+`otter_desktop.monitor.sysinfo.SysInfo` reads memory, CPU, disk, load and temperature from the kernel. `otter_desktop.brightness.brightness.Brightness` controls backlights and keyboard LEDs through sysfs.
 
-`Monitor.refresh(env)` loads the application catalog when needed; `refresh_loaded` reuses it. Process/catalog storage grows with observed data rather than a fixed maximum process table.
+```otr
+import std
+import otter_desktop.brightness.brightness
+import otter_desktop.monitor.sysinfo
 
-Brightness operations cover panels, keyboard LEDs, and supported DDC paths. I/O and child reaping are explicit inputs to operations that use external helpers.
+pub fn main() !void {
+    var info = sysinfo.SysInfo.init()
+    mem := info.memory_info()
+    std.io.printf("memory {d:.1}/{d:.1} GiB\n", .{ mem.used_gib(), mem.total_gib() })
+    std.io.printf("cpu {}%\n", .{ try info.cpu_usage() })
+    if info.cpu_temperature() |t| {
+        std.io.printf("cpu {} C\n", .{ t })
+    }
+    disk := try info.root_disk_info()
+    std.io.printf("/ {d:.1} GiB free\n", .{ disk.free_gib() })
 
-## PipeWire package
+    var lights = brightness.Brightness.init()
+    defer lights.deinit()
+    try lights.enumerate()
+    if lights.primary() |panel| {
+        std.io.printf("{} at {}%\n", .{ panel.display_name(), panel.brightness() })
+        _ = panel.adjust_brightness(-5)
+    }
+}
+```
 
-Audio/video modules are in `otter_desktop_pipewire`, not the main `otter_desktop` package.
+`SysInfo` caches its readings. `poll()` refreshes them when its interval has passed and returns whether it did, and `generation()` changes on each refresh. `init_with_interval(ms)` sets the interval.
 
-- `pipewire`: device/default state and controls.
-- `playback`: one-shot or streamed floating-point audio.
-- `capture`: capture support used by transcription.
-- `video_source`: exported video frames.
+`enumerate_temp_sensors()` finds the hwmon sensors, and `temp_sensors_view()` lists them for a sensor menu.
 
-C glue translates callbacks into records processed by the otr owner. Resources may move with their owner; they are not arbitrary shared mutable handles. Playback deinitialization drains queued audio according to the stream contract.
+### Process monitor
 
-The package uses vendored static PipeWire by default. `-D pipewire=system` selects the system library.
+`otter_desktop.monitor.monitor.Monitor` is the model behind otter-monitor: processes, applications, cores, GPUs, disks, network interfaces and a sample history. `refresh(env)` loads the desktop catalog when needed, and `refresh_loaded()` reuses it. Its storage grows with the number of processes it sees.
+
+### Brightness
+
+`enumerate()` finds every panel backlight and keyboard LED. `primary()` returns the primary device, and `devices_view()` lists them all. A `BacklightDevice` has `brightness()`, `set_brightness(pct)` and `adjust_brightness(delta)`, all in percent. `open_for_output(io, connector_name)` selects the backlight that belongs to one output.
+
+### Falcond
+
+`otter_desktop.falcond.falcond.Falcond` watches the Falcond status file with inotify. It follows the service pattern: `poll_fd()`, `process()`, `generation()` and `status_view()`.
+
+## PipeWire
+
+Audio and video are in the `otter_desktop_pipewire` package.
+
+| Module | Purpose |
+| --- | --- |
+| `pipewire` | Sinks and sources, the defaults, volume and mute. |
+| `playback` | Plays `f32` samples, in one call or as a stream. |
+| `stream_sink` | The output stream that the media players write to. |
+| `capture` | Microphone capture, used by transcription. |
+| `video_source` | A video source that you fill with frames. Needs `-D pipewire_video=true`. |
+
+```otr
+import std
+import std.mem
+import otter_desktop_pipewire.pipewire
+
+pub fn main() !void {
+    var audio = try pipewire.PipeWire.init(mem.heap)
+    defer audio.deinit()
+    audio.start_monitoring()
+    _ = audio.process()
+
+    if audio.default_sink() |sink| {
+        std.io.printf("{}%\n", .{ sink.volume_percent() })
+    }
+    try audio.increase_sink_volume(0.05)
+    try audio.toggle_sink_mute()
+}
+```
+
+`PipeWire` follows the service pattern, with `poll_fd()`, `process()` and `generation()`. `sinks_view()` and `sources_view()` list devices. `set_node_volume`, `set_node_mute` and `set_default_sink` act on one device by node id.
+
+`playback.play_f32(samples, sample_rate, channels)` plays a buffer and returns when it has finished. `F32MonoStream` takes samples in chunks through `write`, and `finish` waits for the queue to drain.
+
+### Static and system builds
+
+The package links a static PipeWire by default, built from the vendored tree in `vendor/pipewire` by `otr/pipewire/deps.sh`. That build runs through a Zig build file in `otr/pipewire/zig/`, so the `deps` step needs Zig installed. Pass `-D pipewire=system` to link the system `libpipewire-0.3` instead.
 
 ## Lua
 
-| Module                     | Reads                                                                    | Actions      |
-| -------------------------- | ------------------------------------------------------------------------ | ------------ |
-| `otter.desktop.sysinfo`    | Memory, CPU, temperatures, disks, load, uptime, sensors                  | None         |
-| `otter.desktop.monitor`    | Refreshed processes, applications, cores, GPUs, disks, networks, history | None         |
-| `otter.desktop.brightness` | Devices and current levels                                               | `brightness` |
-| `otter.desktop.volume`     | Sinks, sources, defaults, subscriptions                                  | `audio`      |
+| Module | Reads | Action capability |
+| --- | --- | --- |
+| `otter.desktop.sysinfo` | `memory()`, `cpu()`, `temperature()`, `disk(path)`, `load()`, `uptime()`, `sensors()` | none |
+| `otter.desktop.monitor` | Processes, applications, cores, GPUs, disks, networks, history | none |
+| `otter.desktop.brightness` | `devices()`, `get()`, `ddc_displays()` | `brightness` for `set`, `adjust`, `adjust_ddc` |
+| `otter.desktop.volume` | `sinks()`, `sources()`, `default_sink()`, `default_source()`, `subscribe(f)` | `audio` for `set_volume`, `set_mute`, `toggle_mute`, `set_default`, `scroll` |
 
-The host provides its environment when registering native-service modules. Volume opens PipeWire lazily; it is not implied by importing native UI primitives.
+The bar's memory widget polls `sysinfo` on a timer and redraws only when the number changes:
+
+```lua
+local host = require("otter.host")
+local timer = require("otter.timer")
+local si = require("otter.desktop.sysinfo")
+
+local function read() return math.floor(si.memory().percent + 0.5) end
+local pct = read()
+timer.every(3000, function()
+  local p = read()
+  if p ~= pct then pct = p; host.redraw() end
+end)
+```
+
+Volume control needs the `audio` capability:
+
+```lua
+local volume = require("otter.desktop.volume")
+
+local sink = volume.default_sink()
+if sink then
+  volume.set_volume(sink.id, math.min(sink.percent + 5, 100))
+end
+```
 
 ## Source reference
 
-`otr/sys/`, `otr/pipewire/otr.toml`, `otr/pipewire/playback.otr`, `otr/lua/` in the component repository.
+`otr/monitor/sysinfo.otr`, `otr/monitor/monitor.otr`, `otr/brightness/brightness.otr`, `otr/falcond/falcond.otr`, `otr/pipewire/` and `otr/lua/` in the component repository. The memory widget is `otr/plugins/memory/init.lua` in otter-bar.

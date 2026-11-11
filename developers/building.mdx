@@ -1,109 +1,188 @@
 ---
 title: "Build Otter Shell from source"
 sidebarTitle: "Building"
-description: "Build the v0.13.12 release with otr 0.2.5, package-root build runners, and pinned native dependencies."
+description: "Build Otter Shell packages with the otr toolchain, per-package build runners, and release flags."
 ---
 
-Otter Shell v0.13.12 uses otr 0.2.5 for native applications and libraries. Each component has its own repository and `otr/build.otr` runner. Run it from the component's repository root, not from its `otr/` directory.
+Every Otter Shell package is its own repository. Its otr sources, its `otr.toml` manifest, and its build runner `build.otr` live in the package's `otr/` folder. You run the runner from the package root with `otr run otr/build.otr -- <step>`.
 
 ## Prerequisites
 
-- Install **otr 0.2.5**. The packaging pin is `otter-zenith/otr-toolchain.pin`.
-- Keep sibling library repositories at the versions pinned in `otter-zenith`. Package manifests in `otr/otr.toml` refer to sibling packages.
-- Install system development headers required by the component. Common dependencies include Wayland, Fontconfig, FreeType, and xkbcommon. `otter-zenith/debian/control` contains the complete packaging build dependencies.
-- Keep **Zig 0.17.0** available for the intentional Zig dependencies below and differential test baselines. Zig is not the primary application build tool.
-- Use an isolated headless compositor for visual E2E tests. Do not capture your running desktop session.
+- Install otr. See [Install otr](/otr/installation). Packaging builds with otr 0.2.6, the release named in `otter-zenith/otr-toolchain.pin`.
+- Clone the workspace with its submodules. Package manifests refer to sibling packages by relative path, so the checkouts must sit side by side.
+- Install the development headers of the C libraries a package imports. `otter-zenith/debian/control` lists the full set that packaging uses.
+- Install Zig 0.17.0 if you build `otter-term`, `otter-pkg`, or anything that links PipeWire. Their `deps` steps build a C library through a Zig wrapper. See [Libraries built in deps](#libraries-built-in-deps).
 
-For common development headers on PikaOS:
+```bash
+git clone --recurse-submodules https://git.pika-os.com/otter-shell/otter-shell.git
+cd otter-shell
+```
+
+On PikaOS, these headers cover most packages:
 
 ```bash
 pikman install libwayland-dev libfontconfig-dev libfreetype-dev libxkbcommon-dev
 ```
 
-Additional dependencies vary: PAM headers for authentication, FFmpeg/DRM/EGL/GLES headers for recording, and libapt-pkg headers for the package manager. The browser has a separate engine build.
+Some packages need more. Authentication needs PAM headers, `otter-rec` and `otter-media` need the libav headers, and `otter-pkg` needs libapt-pkg headers.
 
-## Build a component
+## The package manifest
 
-For example, from a workspace containing `otter-bar` and its sibling libraries:
+`otr/otr.toml` names the package, its dependencies, and its build options. This is the bar's manifest with the dependency list shortened:
+
+```toml otter-bar/otr/otr.toml
+[package]
+name = "otter_bar"
+version = "0.13.44"
+otr_min = "0.0.0"
+
+[build]
+pie = false
+
+[dependencies]
+otter_geo = { path = "../../otter-geo/otr" }
+otter_utils = { path = "../../otter-utils/otr" }
+otter_conf = { path = "../../otter-conf/otr" }
+otter_theme = { path = "../../otter-theme/otr" }
+otter_render = { path = "../../otter-render/otr" }
+otter_wayland = { path = "../../otter-wayland/otr" }
+otter_ui = { path = "../../otter-ui/otr" }
+otter_ui_lua = { path = "../../otter-ui/otr/lua" }
+otter_lua = { path = "../../otter-lua/otr" }
+
+[options]
+enable_dbus = true
+enable_pipewire = true
+enable_pam = false
+```
+
+The package name is the import root, so code in the bar writes `import otter_utils.log`. Each key under `[options]` sets a default that the libraries read at compile time. [Packages and builds](/otr/packages-and-builds) documents every manifest table.
+
+## Run a build step
+
+The runner is an otr program. It imports `otter_utils.build_steps`, which holds the helpers every runner uses: running a command, calling `otr` with a build mode, building shared C libraries, and resolving the install target.
 
 ```bash
 cd otter-bar
 
-otr run otr/build.otr --release-fast -- deps
-otr run otr/build.otr --release-fast -- check
-otr run otr/build.otr --release-fast -- test
-otr run otr/build.otr --release-fast -- install
+otr run otr/build.otr -- deps
+otr run otr/build.otr -- check
+otr run otr/build.otr -- test
+otr run otr/build.otr -- install
+otr run otr/build.otr -- run
 ```
 
-The bar installs to `otr-out/bin/otter-bar` by default. Its `run` step builds and starts it:
+| Step | What it does |
+| --- | --- |
+| `deps` | Builds the C libraries the package links, such as LuaJIT, FreeType and HarfBuzz, or the static PipeWire |
+| `check` | Runs `otr check` on every module and program, then `otr fmt --check` |
+| `test` | Runs the unit tests |
+| `e2e` | Runs `otr/tests/e2e.sh` in a private headless sway session |
+| `bench` | Runs the package's benchmarks, where it has them |
+| `install` | Builds the release binary and installs it under a prefix |
+| `run` | Builds the app with `--release-fast` and starts it |
+
+The doc comment at the top of each `otr/build.otr` lists the steps that package offers. The bar adds `e2e-lua-quiet` and `e2e-tray`, and `otter-examples` adds `app`, `run-lua`, and visual fixture steps.
+
+Most runners run `deps` at the start of every step, so the first `check` or `test` also builds the C libraries. The scripts are stamped and skip work that is already done.
+
+Pass arguments to the app after a second `--`:
 
 ```bash
-otr run otr/build.otr --release-fast -- run
+cd otter-osd
+otr run otr/build.otr -- run -- volume-up 5
 ```
 
-<Note>Step names and output directories vary by package. Read the header of that package's `otr/build.otr` before using an optional step. A step marked as having no otr counterpart does not verify that feature.</Note>
+The `OTR` environment variable names the compiler a runner calls. It defaults to `otr` on `PATH`.
 
-## Verification
+## Release flags
 
-The bar's runner exposes these additional steps:
+otr has three build modes. A build without a mode flag is a debug build. `--release` optimizes and keeps every safety check. `--release-fast` optimizes and lets integer overflow wrap. `install` and `run` build with `--release-fast`, and most `test` steps run the tests in both debug and `--release-fast`.
+
+Use `--release-fast` for anything you measure or ship. Add `--cpu x86_64_v3` to match the packaged binaries:
 
 ```bash
-# Run from otter-bar/, not otter-bar/otr/.
-otr run otr/build.otr --release-fast -- e2e
-otr run otr/build.otr --release-fast -- bench
+otr build otr/main.otr --release-fast --cpu x86_64_v3 -o /tmp/otter-bar
 ```
 
-`check` runs package type checks and formatter checks. `test` runs the package's test modules; some runners test both debug and release-fast modes. `e2e` exercises integration behavior in an isolated environment. `bench` runs that package's performance suite. Installation builds use release-fast.
+That command builds one program by hand with the flags the `install` step uses.
 
-Some legacy E2E and benchmark runners still expect the old Zig source tree as a comparison baseline. A clean otr checkout no longer contains those root Zig build files; use the required preserved historical tree or frozen artifacts rather than treating the step as ready to run. Any Zig comparison builds must use `-Doptimize=ReleaseFast`.
+## Install prefix and CPU level
 
-The bar's standalone `e2e-lua-quiet` test checks Lua widget rendering without a Zig baseline. Passing `--release-fast` to `otr run` builds the runner in release mode; the runner determines its child test modes.
-
-## CPU target and installation prefix
-
-Packaging targets `x86_64_v3` through `OTR_CPU`. For the bar:
+`install` takes `--cpu` and `--prefix`:
 
 ```bash
-OTR_CPU=x86_64_v3 otr run otr/build.otr --release-fast -- install
+otr run otr/build.otr -- install --cpu x86_64_v3 --prefix /tmp/otter
 ```
 
-To stage a package without writing into the live system:
+The bar lands in `/tmp/otter/bin/otter-bar`, with its example Lua widgets in `/tmp/otter/share/otter-shell/plugins/`.
+
+| Setting | Source | Default |
+| --- | --- | --- |
+| CPU level | `--cpu`, then `OTR_CPU` | `baseline` |
+| Prefix | `--prefix` | `otr-out` (a few runners use `otr/out`) |
+| Staging root | `DESTDIR`, prepended to the prefix | empty |
+
+To stage a package tree without writing into the live system:
 
 ```bash
-DESTDIR="$PWD/stage" otr run otr/build.otr --release-fast -- install --prefix /usr --cpu x86_64_v3
+DESTDIR="$PWD/stage" otr run otr/build.otr -- install --prefix /usr --cpu x86_64_v3
 ```
 
-This puts the bar under `stage/usr/bin/`. Prefix handling and supported flags belong to the package runner; old Zig `-D...` options are not interchangeable with otr runner arguments.
+This writes the bar to `stage/usr/bin/otter-bar`.
 
-Otter libraries are **statically linked** into the released otr applications. You do not install a shared `libotter-*-0` runtime library set for them. System libraries and packaged external engines can still be dynamic dependencies.
+Each app links its Otter libraries statically. System libraries such as Fontconfig and xkbcommon stay dynamic.
 
-## Intentional Zig dependencies
+## Build options
 
-| Dependency                        | Why Zig remains                                                               |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `otter-term/vt/`                  | Builds `libotter_vt.a` for the terminal engine boundary                       |
-| `otter-pkg/zapt/`                 | Builds `libotter_zapt.a` for the APT boundary                                 |
-| `otter-assistant/zhl/`            | Builds `libotter_zhl.a` for the highlighting boundary                         |
-| `otter-desktop/otr/pipewire/zig/` | Builds the vendored static PipeWire dependency                                |
-| Browser `zig-maint` trees         | Browser and its pinned Zig libraries use a separate WPE WebKit packaging path |
+Options come from the `[options]` table of the app's manifest. D-Bus, PipeWire, and PAM support are options: `enable_dbus`, `enable_pipewire`, and `enable_pam`. Change a default in the manifest, or pass `-D` when you build by hand:
 
-Run the component's `deps` step rather than rebuilding those boundaries by hand. Dependency steps also prepare native libraries such as LuaJIT and rendering dependencies. Packaging can supply an offline dependency tree through `OTTER_VENDOR`.
+```bash
+otr build otr/main.otr --release-fast -D enable_dbus=false -o /tmp/otter-app
+```
 
-## Packaging with otter-zenith
+## Libraries built in deps
 
-[otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) assembles tagged source trees from `pins.json`, checks the otr toolchain pin, and builds PikaOS packages:
+otr compiles the C sources a manifest lists. The `deps` step fetches or builds the libraries that live outside the package, so the otr build finds their sources or a static archive.
+
+| Library | Owner | Built with |
+| --- | --- | --- |
+| FreeType, HarfBuzz, libpng, zlib | `otter-render/otr/c-deps/fetch.sh` | Fetched sources that otr compiles |
+| LuaJIT | `otter-lua/vendor/fetch-luajit.sh` | LuaJIT's own build, at a pinned commit |
+| Static PipeWire | `otter-desktop/otr/pipewire/deps.sh` | Zig 0.17 |
+| `libotter_vt.a` | `otter-term/vt/` | Zig 0.17 |
+| `libotter_zapt.a` | `otter-pkg/otr/zapt_deps.sh` | Zig 0.17 |
+
+A package never calls another package's script directly. Its runner calls `build_steps.dep(.render)`, `build_steps.dep(.pipewire)`, or `build_steps.dep(.zapt)`, which runs the owner's script under a lock. Packaging sets `OTTER_VENDOR` to a directory of pre-fetched sources so the build stays offline.
+
+`otter-bench` and `otter-browser` are Zig 0.17 projects with their own `build.zig`. Follow the instructions in their repositories.
+
+## Verify a change
+
+```bash
+otr run otr/build.otr -- check
+otr run otr/build.otr -- test
+otr run otr/build.otr -- e2e
+otr run otr/build.otr -- bench
+```
+
+Wayland end-to-end tests start their own headless sway with a private `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`. Never point them, or a capture tool, at your running session. [Testing and tools](/otr/testing-and-tools) covers `otr test`, `otr fmt`, and the other toolchain commands the runners call.
+
+## Package with otter-zenith
+
+[otter-zenith](https://git.pika-os.com/otter-shell/otter-zenith) clones the tagged sources named in `pins.json`, checks the compiler against `otr-toolchain.pin`, and builds the PikaOS packages:
 
 ```bash
 cd otter-zenith
 ./main.sh
 ```
 
-`debian/rules` runs each selected component's `deps` step, then its `install` step, from that component's root. It passes `DESTDIR`, `/usr` as prefix, and `OTR_CPU=x86_64_v3`. The browser instead uses `zig-maint/otter-browser/scripts/packaging-zenith.sh` to build its engine and stage its files.
+`debian/rules` runs each selected package's `deps` step, then its `install` step with `DESTDIR`, `--prefix /usr`, and `--cpu x86_64_v3`. The browser builds through its own packaging script.
 
-End users install those packages with `pikman install otter-shell`; they need neither compiler.
+End users install the result with `pikman install otter-shell`. They need no compiler.
 
 ## Repository workflow
 
-The workspace root is a thin Git repository with package submodules. Code changes belong in the affected component's repository. Root commits record workspace documentation, tools, or submodule pins; they do not replace component commits.
+The workspace root is a thin Git repository of package submodules. Commit code in the package's own repository. A root commit records workspace documentation, tools, or submodule pins.
 
-Native application sources live in `otr/`, alongside `otr/build.otr` and `otr/otr.toml`. Retained `.zig` sources are not the primary v0.13.12 build entry point. See [Creating an app](/developers/creating-an-app) for the native application workflow.
+To start an app of your own, continue with [Creating an app](/developers/creating-an-app).

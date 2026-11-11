@@ -6,37 +6,112 @@ description: "Nested structs, custom values, indexed fields, and imports in otr 
 
 ## Nested fields
 
-The parser recursively flattens public nested struct fields. A section `clock` containing `time_format` becomes `clock_time_format`. Define defaults at every level.
+The parser flattens `pub` nested struct fields. A field `clock` whose struct has `time_format` is the key `clock_time_format`. Give every level its defaults.
 
 ## Custom values
 
-A custom value type provides public `parse(s: str)` returning an error union and `to_str(self)` returning a NUL-padded fixed byte array. `otter_geo.color.Color` implements this contract.
+A custom value type has two public functions. `parse(s: str)` returns an error union of the type. `to_str(self)` returns a fixed byte array, padded with NUL bytes. `otter_geo.color.Color` follows this contract, so a `Color` or `?Color` field reads `"#7aa2f7"` or a palette name.
 
-Set `strict_custom_values` when an invalid custom value must fail instead of keeping the default.
+An invalid custom value keeps the field's default. Set `strict_custom_values` in `LoadOptions` to fail the load instead.
 
 ## Indexed entries
 
-Import `otter_conf.dynamic`. `Dynamic(Elem, prefix)` represents indexed entries such as `button_0_name` and `button_0_command`.
+`otter_conf.dynamic.Dynamic(Elem, prefix)` is a list of `Elem` addressed by index. The parser collects every key of the form `prefix`, `prefix_<N>` or `prefix_<N>_<field>` into it. The serializer writes the entries back in index order.
 
-- `init(alloc)` creates its owned list.
-- `len()` and `slice()` expose entries.
-- `deinit()` releases entries and their owned fields.
-- Indices are bounded to `0..4095` by `support.max_dynamic_entries`.
+```otr
+import std
+import std.mem
+import otter_conf.dynamic
+import otter_conf.loader
+import otter_conf.support
+import otter_conf.text
 
-Elements containing owned text need their own consuming `deinit`, like top-level configs.
+const Bind = struct {
+    pub mods: u32 = 0
+    pub key: text.Text = text.Text.of("")
+    pub action: text.Text = text.Text.of("")
+
+    pub fn deinit(self: Bind) void {
+        support.free_config(Bind, self)
+    }
+}
+
+const Config = struct {
+    pub name: text.Text = text.Text.of("")
+    pub binds: dynamic.Dynamic(Bind, "bind") = .{}
+
+    pub fn deinit(self: Config) void {
+        support.free_config(Config, self)
+    }
+}
+
+pub fn main() !void {
+    content :=
+    \\name = "test"
+    \\bind_0_mods = 1
+    \\bind_0_key = "Return"
+    \\bind_0_action = "spawn kitty"
+    \\bind_1_mods = 4
+    \\bind_1_key = "q"
+    \\bind_1_action = "killclient"
+    cfg := try loader.load_from_slice(Config, mem.heap, content)
+    defer cfg.deinit()
+
+    for bind in cfg.binds.slice() {
+        std.io.printf("{} runs {}\n", .{ bind.key.as_str(), bind.action.as_str() })
+    }
+}
+```
+
+`len()` and `slice()` read the entries. Indices run from 0 to 4095, the limit in `support.max_dynamic_entries`. An element that owns text declares its own `deinit`, as `Bind` does.
+
+`prefix_<N> = "..."` sets a whole entry from one string. This form needs an `Elem` with a `parse` function, or one whose only field is a `Text`. A bare `prefix = "..."` line appends an entry the same way.
 
 ## Imports
 
-Import resolution is opt-in through `loader.load_with_imports` or `otter_conf.imports`. A plain `load` does not resolve imported files.
+A line `import = "other.conf"` pulls in another file. Imports are opt in. `loader.load` reads one file and ignores them, and `loader.load_with_imports` resolves them.
 
-`imports.resolve` returns merged content and owned paths. `resolve_with_limit` applies a merged-output size bound. Nesting is capped at 128 levels.
+```otr
+fn load_main() !void {
+    res := try loader.load_with_imports(Config, mem.heap, "/home/user/.config/otter-shell/main.conf", .{})
+    defer res.deinit()
+    for p in res.paths.items() {
+        std.io.println(p.as_str())
+    }
+    std.io.println(res.config.name.as_str())
+}
+```
 
-Watch all returned paths, not only the root file. Keep import path ownership separate from the config when moving values out of a load result.
+Imported files load first. For ordinary fields the last value wins, so the root file overrides its imports. `Dynamic` fields append in load order.
 
-## Schema-free reads
+`paths` holds the canonical path of every file read, imports first and the root last. Watch all of them. See [Hot reload](/developers/libraries/otter-conf/hot-reload).
 
-`parser.entries(alloc, content)` returns typed key/value records for readers without a schema. This differs from parsing a config: your caller decides how to interpret and retain each entry.
+`otter_conf.imports` is the layer underneath. `resolve(alloc, path)` returns the merged text and the paths, and `resolve_with_limit` caps the merged size. Nesting stops at 128 levels with `error.ImportTooDeep`, and a cycle is `error.CircularImport`.
+
+## Reading without a schema
+
+`otter_conf.entries.entries(alloc, content)` returns every `key = value` pair in file order, typed by its syntax. A `Value` is `text`, `word`, `boolean`, `number` or `list`. A bare word other than `true` or `false`, such as an enum tag, is a `word`.
+
+```otr
+import otter_conf.entries
+
+fn dump() !void {
+    found := try entries.entries(mem.heap, "name = \"bar\"\nheight = 32\nposition = top\n")
+    defer found.deinit()
+    for entry in found.items() {
+        switch entry.value {
+            .text |s| => std.io.printf("{} is the string {}\n", .{ entry.key.as_str(), s.as_str() })
+            .word |s| => std.io.printf("{} is the word {}\n", .{ entry.key.as_str(), s.as_str() })
+            .number |n| => std.io.printf("{} is {}\n", .{ entry.key.as_str(), n })
+            .boolean |b| => std.io.printf("{} is {}\n", .{ entry.key.as_str(), b })
+            .list |items| => std.io.printf("{} has {} items\n", .{ entry.key.as_str(), items.len })
+        }
+    }
+}
+```
+
+The Lua `otter.config.read` function is built on this module.
 
 ## Source reference
 
-`otr/dynamic.otr`, `otr/imports.otr`, `otr/parser.otr`, `otr/support.otr` in the component repository.
+`otr/dynamic.otr`, `otr/imports.otr`, `otr/entries.otr` and `otr/support.otr` in the `otter-conf` repository. The `Dynamic` example comes from `otr/parser_test.otr`.

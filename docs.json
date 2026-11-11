@@ -306,6 +306,60 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "otr",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": [
+              "otr/overview",
+              "otr/installation",
+              "otr/quickstart",
+              "otr/coming-from-other-languages"
+            ]
+          },
+          {
+            "group": "Language",
+            "pages": [
+              "otr/language/basics",
+              "otr/language/types",
+              "otr/language/comptime-and-generics"
+            ]
+          },
+          {
+            "group": "Memory safety",
+            "pages": [
+              "otr/memory/ownership-and-borrowing",
+              "otr/memory/regions-pools-and-cells",
+              "otr/memory/closures",
+              "otr/memory/runtime-checks-and-unsafe"
+            ]
+          },
+          {
+            "group": "Systems programming",
+            "pages": [
+              "otr/concurrency",
+              "otr/simd-and-data-layout",
+              "otr/c-interop"
+            ]
+          },
+          {
+            "group": "Tooling",
+            "pages": [
+              "otr/packages-and-builds",
+              "otr/testing-and-tools",
+              "otr/standard-library"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "otr/cli-reference",
+              "otr/compiler-errors"
+            ]
+          }
+        ]
       }
     ]
   },

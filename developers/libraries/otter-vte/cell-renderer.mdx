@@ -1,35 +1,201 @@
 ---
 title: "Cell renderer"
 sidebarTitle: "Cell renderer"
-description: "Explicit otr cell interfaces, snapshot walking, and layered terminal rasterization."
+description: "Turn terminal cells into layered drawing commands with CellRenderer, snapshot walking, and the terminal Renderer."
 ---
 
-## Cell contract
+## Cells
 
-Import `otter_vte.cell_renderer`. `Cell` is a concrete borrowed view containing codepoints, optional RGB colors, width, and `StyleFlags`.
+Import `otter_vte.cells`. A `Cell` is a borrowed view of one grid cell: its `codepoints`, optional `fg` and `bg` colors as `Rgb`, a `width` in columns, `StyleFlags`, and an optional `underline_color`. A missing color means the terminal default.
 
-`CellRenderer(App, Sel, hooks)` requires explicit interfaces:
+Anything that consumes cells implements `CellVisitor`, which has one method: `visit(self: &mut Self, row: u16, col: u16, cell: Cell)`.
 
-- `App` implements `CellHost`: hovered URL state, blink visibility, text measurement.
-- `Sel` implements `SelectionRange.contains`.
-- `Hooks` supplies Kitty-placeholder classification and selection behavior.
+## Cell renderer
 
-`DrawContext` receives mutable visual hashes, column count, font size, selection colors, and borrowed output lists. Profiling counters and blink observations return through that context instead of writing arbitrary application fields.
+Import `otter_vte.cell_renderer`. `CellRenderer(App, Sel, hooks)` builds the renderer type for your app at compile time. It takes three things:
+
+- `App` implements `CellHost`: `url_cell_hovered(row, col)`, `blink_visible()` and `measure_text(text)`.
+- `Sel` implements `SelectionRange`: `contains(row, col)`.
+- `hooks` is a `Hooks` value with `is_kitty_placeholder`, a function that spots Kitty image placeholder cells, and `selection_bg`.
+
+The resulting type has `DrawContext(profile)`, a `CellVisitor` that emits a full frame, and `DrawCellsContext`, which emits backgrounds only.
+
+```otr
+import std
+import std.list
+import std.mem
+import otter_render.color
+import otter_render.font
+import otter_render.quad_renderer
+import otter_render.scale
+import otter_render.surface
+import otter_vte.cell_renderer
+import otter_vte.cells
+import otter_vte.renderer
+
+const Selection = struct {
+    start_row: u16
+    end_row: u16
+
+    pub fn contains(self: &Selection, row: u16, col: u16) bool {
+        return row >= self.start_row and row <= self.end_row
+    }
+}
+
+const Host = struct {
+    blink_on: bool
+
+    pub fn url_cell_hovered(self: &Host, row: u16, col: u16) bool {
+        return false
+    }
+
+    pub fn blink_visible(self: &Host) bool {
+        return self.blink_on
+    }
+
+    pub fn measure_text(self: &mut Host, text: str) u16 {
+        return 0
+    }
+}
+
+fn is_placeholder(cell: cells.Cell) bool {
+    return cell.codepoints.len > 0 and cell.codepoints[0] == 0x10eeee
+}
+
+const Cells = cell_renderer.CellRenderer(Host, Selection, cell_renderer.Hooks{ is_kitty_placeholder: is_placeholder, selection_bg: color.Color.white })
+
+fn frame(target: &mut surface.Surface, f: &mut font.Font) void {
+    var r = renderer.Renderer.init(mem.heap)
+    defer r.deinit()
+    r.prepare(.{ cols: 80, rows: 24, scale: 1 })
+    r.configure(scale.Scale.one)
+    r.clear_base(color.Color.black)
+
+    var host = Host{ blink_on: true }
+    var visual = list.List(u64).init(mem.heap)
+    defer visual.deinit()
+    for _ in 0..80 * 24 {
+        visual.push(0)
+    }
+    var letter = [1]u32{ 'a' }
+    cell := cells.Cell{ codepoints: &letter, fg: null, bg: cells.Rgb{ r: 40, g: 44, b: 52 }, width: 1 }
+    {
+        var ctx = Cells.DrawContext(false){
+            bg_cmds: &mut r.bg_cmds,
+            text_cmds: &mut r.text_cmds,
+            powerline_ops: &mut r.powerline_ops,
+            block_ops: &mut r.block_ops,
+            app: &mut host,
+            visual: visual.items_mut(),
+            cols: 80,
+            font_size: 12,
+            selection_background: color.Color.white,
+            url_foreground: color.Color.blue,
+            default_fg: color.Color.white,
+            default_bg: color.Color.black,
+            cell_width: 8,
+            cell_height: 16,
+            baseline_offset: 12,
+            origin_x: 0,
+            origin_y: 0,
+            selection: null,
+            selection_row_ends: null,
+            damage_rects: null,
+            full_damage: true,
+            batch_text_runs: true,
+        }
+        ctx.visit(0, 0, cell)
+        ctx.flush()
+    }
+
+    r.rasterize_base(target, null, true)
+    r.rasterize_background(target, null, true)
+    r.draw_cell_ops(target, null, true)
+    var txt = quad_renderer.TextContext{ font: f }
+    r.rasterize_text(target, &mut txt, null, true)
+    if r.dropped() {
+        std.io.println("terminal frame lost commands")
+    }
+    r.reset()
+}
+
+pub fn main(env: std.Env) !void {
+    var target = surface.Surface.init_owned(mem.heap, 640, 384, scale.Scale.one)
+    defer target.deinit()
+    var f = try font.Font.init(mem.heap, env.io, .{ font_family: "monospace" })
+    defer f.deinit()
+    frame(&mut target, &mut f)
+}
+```
+
+A frame has these steps:
+
+1. `prepare` sizes the lists for the grid, and `configure` sets the scale.
+2. `clear_base`, `fill_base` and `fill_background` record the window background and padding.
+3. A `DrawContext` borrows the renderer's lists and your host. Call `visit` for each cell, then `flush` to emit the runs still open.
+4. `rasterize_base`, `rasterize_background`, `draw_cell_ops` and `rasterize_text` draw the layers in that order.
+5. `dropped()` reports lost commands. `reset()` clears the lists for the next frame.
+
+The draw context is in its own block so that its borrows of the renderer end before rasterization starts.
+
+### Draw context fields
+
+| Field | Meaning |
+| --- | --- |
+| `visual` | One hash per cell, `cols` wide in row order. The context writes the hash of what it drew, and a terminal compares frames with it to find damage. |
+| `cols`, `cell_width`, `cell_height`, `baseline_offset`, `origin_x`, `origin_y` | Grid geometry in logical units. |
+| `font_size`, `default_fg`, `default_bg`, `selection_background`, `url_foreground` | Text size and colors. |
+| `selection`, `selection_row_ends` | The current selection, or `null`. |
+| `damage_rects`, `full_damage` | Limits output to cells that touch the damage. |
+| `batch_text_runs` | Joins neighboring cells of one color into one text command. `text_run_batching_safe(cell_width, physical_advance, scale)` tells you whether the font's advance allows it. |
+
+After the walk, `ctx.saw_blink` says whether any cell blinks. With `DrawContext(true)`, `ctx.profile_counters` holds cell and run counts.
 
 ## Snapshot walking
 
-`otter_vte.snapshot.Rows` borrows column slices from a terminal snapshot. `snapshot.walk` gathers graphemes into caller-kept storage, then visits cells through `CellVisitor`.
+`otter_vte.snapshot.Rows` describes a terminal snapshot as parallel column slices: per row `row_y` and `row_start`, and per cell `col`, `attrs`, `cp`, `fg`, `bg`, `ul` and grapheme offsets. Your terminal backend fills them.
 
-The terminal app constructs this view from its terminal backend. `otter-vte` renders snapshots; it does not own the PTY or parse terminal escape sequences.
+`snapshot.walk(V, rows, &mut graphemes, &mut visitor)` visits every cell in row order. `graphemes` is a `List(u32)` that you keep between frames. The walk gathers multi-codepoint graphemes into it.
 
-## Layered renderer
+```otr
+import std.list
+import otter_vte.cells
+import otter_vte.snapshot
 
-`renderer.Renderer.init(alloc)` owns base, background, and text command lists, powerline/block operations, and rounded-mask cache.
+const Counter = struct {
+    wide: usize = 0
 
-Call `prepare`, `configure(Scale)`, then emit cells. Base/background raster helpers accept explicit surfaces and damage. Text is rasterized directly with `quad_renderer.rasterize` and caller-owned text resources.
+    pub fn visit(self: &mut Counter, row: u16, col: u16, cell: cells.Cell) void {
+        if cell.width > 1 {
+            self.wide += 1
+        }
+    }
+}
 
-Keep the snapshot and mutable renderer in separate borrowed arguments during the walk. Do not retain borrowed cell text after visiting it.
+fn count_wide(rows: snapshot.Rows, graphemes: &mut list.List(u32)) usize {
+    var counter = Counter{}
+    snapshot.walk(Counter, rows, graphemes, &mut counter)
+    return counter.wide
+}
+```
+
+Pass a `DrawContext` as the visitor to render the snapshot:
+
+```otr
+snapshot.walk(Cells.DrawContext(false), rows, &mut graphemes, &mut ctx)
+ctx.flush()
+```
+
+`rows.row_dirty(y)` tells you whether a row changed since the backend last cleared its dirty bits.
+
+## Renderer
+
+`renderer.Renderer.init(alloc)` owns what one terminal view draws per frame: the `base_cmds`, `bg_cmds` and `text_cmds` command lists, the `powerline_ops` and `block_ops` buffers, and a `round_masks` cache.
+
+`prepare` takes `PrepareOptions`. `cols`, `rows` and `scale` are required. `pane_count` multiplies the rows for split views, and `cells` overrides the cell count.
+
+The renderer stores no font. `rasterize_text` takes a `quad_renderer.TextContext` that you build for the call, so the same font can serve several views.
 
 ## Source reference
 
-`otr/cell_renderer.otr`, `otr/snapshot.otr`, `otr/renderer.otr` in the component repository.
+`otr/cells.otr`, `otr/cell_renderer.otr`, `otr/snapshot.otr`, `otr/renderer.otr` in the component repository. `otr/tests/vt/golden.otr` renders real terminal snapshots through this path.

@@ -1,0 +1,151 @@
+---
+title: "Testing and tools"
+description: "Test blocks, the check command, the formatter, generated documentation and the language server."
+---
+
+## Tests
+
+A test is a `test "name" { ... }` block at the top level of a module, next to the code it checks. `otr test <file>` compiles and runs the file's tests.
+
+```otr
+import std
+
+fn add(a: i32, b: i32) i32 {
+    return a + b
+}
+
+test "addition" {
+    try std.testing.expect_equal(i32, 5, add(2, 3))
+}
+
+test "slices compare by contents" {
+    try std.testing.expect_equal_slices(u8, "abc", "abc")
+}
+```
+
+```bash
+otr test t.otr
+```
+
+```text
+test "addition" ... ok
+test "slices compare by contents" ... ok
+2 passed, 0 failed
+```
+
+A test body can use `try`. A test fails when it returns an error or panics, and the other tests still run.
+
+### Assertions
+
+| Function | Fails when |
+| --- | --- |
+| `testing.expect(ok)` | `ok` is false |
+| `testing.expect_equal(T, expected, actual)` | The values differ |
+| `testing.expect_equal_slices(T, expected, actual)` | Lengths or contents differ |
+| `testing.expect_error(expected, result)` | `result` is not that error |
+
+`testing.failing_allocator` is an allocator that always fails, for testing allocation-failure paths. `std.testing_allocator.CountingAllocator` counts allocations and can inject faults.
+
+`testing.hex(N, digits)` builds a byte array from hex text, for test vectors.
+
+### Temporary files
+
+`otr test` runs the tests with `TMPDIR` set to a fresh, empty directory under `.otr-cache/tmp`. `fs.temp_dir()` returns it.
+
+`testing.runtime_dir()` returns a private directory with a short path, which leaves room for Unix socket names.
+
+Both directories are removed after a run that passes. After a failing run that left files behind, they are kept and named on stderr.
+
+### Build modes and SIMD variants
+
+`otr test` takes the same flags as `otr build`. Tests run in debug mode by default.
+
+```bash
+otr test lib.otr --release
+otr test lib.otr --release-fast
+```
+
+In a release mode, each test that reaches SIMD code runs once per CPU variant the host supports. See [Testing every variant](/otr/simd-and-data-layout#testing-every-variant).
+
+Run both debug and release-fast in CI. Debug catches integer overflow that release-fast would wrap.
+
+## Check
+
+`otr check <file>` runs type and safety analysis without generating code.
+
+```bash
+otr check app.otr
+```
+
+A file with no `main` is checked as a module: its public constants, every function where it is written, and its test blocks.
+
+`otr check --package [dir]` checks every module of the package in `dir`, with their tests. It covers every `.otr` file under the directory, except hidden directories and directories with an `otr.toml` of their own.
+
+```bash
+otr check --package .
+```
+
+`otr build` is lazy and compiles only what the program reaches. `check` is not: it also checks the public declarations of every module the root package loads. Run it in CI to catch errors in code nothing calls yet.
+
+## Format
+
+`otr fmt` formats files in place. `--check` reports unformatted files and changes nothing.
+
+```bash
+otr fmt src/*.otr
+otr fmt --check src/*.otr
+```
+
+The formatter has no options.
+
+## Generated documentation
+
+`otr doc <file>...` prints each module's public declarations as Markdown: the module's doc comment, then every `pub` declaration's signature with its `///` comment. The public fields, functions and constants of a type are nested under it.
+
+```bash
+otr doc rect.otr
+```
+
+```markdown
+# `rect`
+
+## `const Rect = struct`
+
+### `w: i64`
+
+### `h: i64`
+
+### `fn area(self: &Rect) i64`
+```
+
+You can run it on the standard library's own sources to read any module's API. They are in the otr repository under `src/std/std/`:
+
+```bash
+otr doc src/std/std/list.otr
+```
+
+## Language server
+
+`otr lsp` runs the language server on stdin and stdout. Configure your editor to start that command for `.otr` files.
+
+The server shares the compiler's analysis, so its diagnostics are the compiler's. It reads the manifest above each open document and keeps check results between edits.
+
+## Inspecting the compiler's view
+
+Three commands show intermediate results:
+
+| Command | Output |
+| --- | --- |
+| `otr parse [--tree] <file>...` | Syntax errors, or the syntax tree with `--tree` |
+| `otr mir <file>` | The analysed mid-level IR that the safety checks run on |
+| `otr build --emit-ir <path>` | The lowered IR handed to the backends, as text |
+
+## A CI recipe
+
+```bash
+otr fmt --check $(git ls-files '*.otr')
+otr check --package .
+otr test src/lib.otr
+otr test src/lib.otr --release-fast
+otr build src/main.otr -o app --release
+```

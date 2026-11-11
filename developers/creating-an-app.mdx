@@ -1,150 +1,380 @@
 ---
 title: "Create an Otter Shell app"
 sidebarTitle: "Creating an app"
-description: "Start with a native otr app, a Lua-driven Wayland UI, or a Lua plugin template."
+description: "Build a small otr app on the shared libraries, then describe the same UI in Lua."
 ---
 
-Otter Shell v0.13.12 uses native otr applications with optional LuaJIT views and extensions. Start from `otter-examples/otr/`. The Zig build files and `.so` plugin ABI are unsupported.
+An Otter Shell app is an otr program that links the shared libraries. It describes its UI as a Surface Description tree each frame, and `otter-ui` lays the tree out and draws it. The same app can hand its UI to a Lua script through `otter-lua`.
+
+This page walks through the starter templates in `otter-examples/otr/`. If you are new to the language, read the [otr quickstart](/otr/quickstart) first.
 
 ## Choose a starter
 
-| You want                    | Starter                                             | Main files                                |
-| --------------------------- | --------------------------------------------------- | ----------------------------------------- |
-| Native Wayland app          | `otter-examples/otr/`                               | `main.otr`, `ui/demo.otr`, `shell/`       |
-| Wayland app with a Lua UI   | `otter-examples/otr/lua-ui/`                        | `main.otr`, `view.otr`, `ui/examples.lua` |
-| Widget or launcher provider | `opf new bar-widget` or `opf new launcher-provider` | `plugin.toml`, `init.lua`                 |
-| Headless Lua service or app | `opf new plugin` or `opf new app`                   | `plugin.toml`, `init.lua`                 |
+| You want | Starter | Main files |
+| --- | --- | --- |
+| A native Wayland app | `otter-examples/otr/` | `main.otr`, `ui/demo.otr`, `shell/` |
+| A Wayland app with a Lua UI | `otter-examples/otr/lua-ui/` | `main.otr`, `view.otr`, `ui/examples.lua` |
+| A bar widget or launcher provider | `opf new bar-widget` or `opf new launcher-provider` | `plugin.toml`, `init.lua` |
 
-The native and Lua-UI templates share a demo card and native Wayland shells. Both support an XDG toplevel window and a layer-shell overlay. The standalone `otter-lua run` app host uses a headless backend; use the Lua-UI starter for a visible Wayland app.
+The native and Lua templates draw the same demo card and share the same Wayland shells. Each runs as an XDG toplevel window or as a layer-shell overlay. For plugins, continue with [Writing plugins](/developers/plugins).
 
-For plugins, continue with [Writing plugins](/developers/plugins).
-
-## 1. Prepare the workspace
-
-You need the otr toolchain on `PATH`. The examples expect sibling library checkouts with their `otr/` trees:
+## 1. Get the workspace
 
 ```bash
 git clone --recurse-submodules https://git.pika-os.com/otter-shell/otter-shell.git
 cd otter-shell/otter-examples
 ```
 
-The example's `otr/otr.toml` declares local path dependencies on `otter_geo`, `otter_utils`, `otter_theme`, `otter_render`, `otter_wayland`, and `otter_ui`. Preserve that layout while learning. If you move the starter, update its manifest paths.
+You need the otr toolchain on `PATH`. See [Install otr](/otr/installation). Run every command on this page from the `otter-examples` repository root.
 
-The build wrapper fetches required C dependencies before its steps. The example README describes toolchain and system dependencies. Running a window requires a Wayland session; the layer variant also requires `zwlr_layer_shell_v1`. Tests and fixtures can run without your desktop session.
+## 2. Read the manifest
 
-## 2. Build a release app
+`otr/otr.toml` names the package and points at the libraries it uses:
 
-From the `otter-examples` repository root:
+```toml otr/otr.toml
+[package]
+name = "otter_examples"
+version = "0.0.1"
+otr_min = "0.0.0"
 
-```bash
-otr run otr/build.otr --release-fast -- check
-otr run otr/build.otr --release-fast -- app
+[dependencies]
+otter_geo = { path = "../../otter-geo/otr" }
+otter_utils = { path = "../../otter-utils/otr" }
+otter_theme = { path = "../../otter-theme/otr" }
+otter_render = { path = "../../otter-render/otr" }
+otter_wayland = { path = "../../otter-wayland/otr" }
+otter_wayland_render = { path = "../../otter-wayland/otr/render" }
+otter_ui = { path = "../../otter-ui/otr" }
+
+[options]
+enable_dbus = false
+enable_pipewire = false
+enable_pam = false
+enable_render_jpeg = false
+enable_render_wide_image_formats = false
 ```
 
-`app` builds `.build/otter-examples` and `.build/otter-examples-lua` with `--release-fast`. `check` checks the package roots and formatting.
+Dependencies are paths to sibling checkouts. If you copy the starter somewhere else, update those paths. The `[options]` table turns off what the card does not use, so the binary links no D-Bus, PipeWire, PAM, JPEG, or WebP code. [Packages and builds](/otr/packages-and-builds) describes the manifest format.
 
-To try the native window or overlay:
-
-```bash
-otr run otr/build.otr --release-fast -- run -- window
-otr run otr/build.otr --release-fast -- run -- layer
-```
-
-For the Lua view:
+## 3. Build and run
 
 ```bash
-otr run otr/build.otr --release-fast -- run-lua -- window
-otr run otr/build.otr --release-fast -- run-lua -- layer
+otr run otr/build.otr -- check
+otr run otr/build.otr -- test
+otr run otr/build.otr -- run -- window
+otr run otr/build.otr -- run -- layer
 ```
 
-The wrapper runs those applications in release-fast mode. The Lua commands select the starter's own UI directory, so you do not need to install `examples.lua` into your user data directory first.
+`check` type-checks every program and checks formatting. `test` runs the unit tests in debug and `--release-fast`. `run` builds the app with `--release-fast` and starts it.
 
-## 3. Keep the shell separate from the view
+`window` opens an XDG toplevel. `layer` opens a layer-shell overlay pinned to the top right, and needs a compositor with `zwlr_layer_shell_v1`. The first step you run fetches and builds the C dependencies once.
 
-| File                         | Responsibility                                                                            |
-| ---------------------------- | ----------------------------------------------------------------------------------------- |
-| `otr/shell/core.otr`         | Wayland connection, seat, theme reload, damage, frame callbacks, and shared view dispatch |
-| `otr/shell/xdg_app.otr`      | XDG toplevel configure, resize, close, and debug overlays                                 |
-| `otr/shell/layer_app.otr`    | Layer-shell configure, scale, and dismissal                                               |
-| `otr/ui/demo.otr`            | Native view state, ids, Surface Description tree, and pointer handling                    |
-| `otr/ui/draw.otr`            | Paint, damaged-rectangle repair, rasterization, and surface submission                    |
-| `otr/lua-ui/view.otr`        | Lua host state, bindings, frame replay, and script-watch integration                      |
-| `otr/lua-ui/ui/examples.lua` | Lua version of the demo card                                                              |
+## 4. Follow main.otr
 
-Choose the lifecycle you need:
+The entry point parses the mode, creates the view, and hands it to a shell:
 
-- **XDG toplevel** for a normal window, such as an editor or Settings.
-- **Layer shell** for edge-anchored panels, popups, and overlays, when supported by the compositor.
-- **Session lock** for lock surfaces; use the lock app and shared Wayland lock wrapper as references, not an ordinary overlay.
-- **No surface** for a service or CLI.
+```otr otr/main.otr
+import std
+import std.io
+import otter_ui.ui_frame_types
+import shell.layer_app
+import shell.xdg_app
+import ui.demo
 
-Otter Shell does not ship a default compositor. Do not make a compositor-specific interface a requirement unless your application needs it.
+pub fn main(env: std.Env) !void {
+    var mode = Mode.window
+    if env.arg_count() > 1 {
+        mode = Mode.parse(env.arg(1)) orelse {
+            io.eprintf("{}", .{ usage })
+            return error.UnknownMode
+        }
+    } else {
+        io.eprintf("{}", .{ usage })
+    }
+    var d = demo.Demo.init(false, false)
+    switch mode {
+        .layer => try layer_app.run(env, &mut d)
+        .window => {
+            var opts = xdg_app.Options{}
+            for i in 2..env.arg_count() {
+                if ui_frame_types.debug_overlay_mode_from_arg(env.arg(i)) |m| {
+                    opts.debug_overlay_mode = m
+                }
+            }
+            try xdg_app.run(env, &mut d, opts)
+        }
+    }
+}
+```
 
-## 4. Change the UI
+`Mode` is a two-variant enum with a `parse` function, and `usage` is the help text. Both are defined above `main` in the same file.
 
-### Native view
+`import shell.layer_app` and `import ui.demo` are modules of the app's own package, imported by path. `import otter_ui.ui_frame_types` is a module of a dependency, imported through the package name from the manifest. `std.Env` carries the arguments, the environment variables, and the I/O handle that library calls take.
 
-The native starter describes its card through `otter-ui` Surface Description. Start in `otr/ui/demo.otr`:
+The files divide the work this way:
 
-1. Add a stable id in `ids` for each new interactive element.
-2. Add its node to the view tree, following neighboring controls' theme styles.
-3. Handle its press in `Demo.on_press`.
-4. Return damage for content that changed, or the appropriate existing input/full result.
+| File | Responsibility |
+| --- | --- |
+| `otr/ui/demo.otr` | The card: ids, capacities, state, the Surface Description tree, pointer handling |
+| `otr/ui/draw.otr` | Paint: emit the tree, repair damaged rectangles, rasterize, attach the buffer |
+| `otr/shell/core.otr` | Wayland connection, seat, theme and hot reload, damage, frame callbacks |
+| `otr/shell/xdg_app.otr` | XDG toplevel lifecycle: configure, resize, close, debug overlays |
+| `otr/shell/layer_app.otr` | Layer-shell lifecycle: configure, scale, dismiss |
+| `otr/shell/theme_reload.otr` | The transactional theme swap |
 
-Keep hit-region capacity large enough for your controls. The shell already handles hover/press damage and pointer cursor changes. Do not build a second hit-test registry.
+`ui/demo.otr` knows nothing of Wayland. `shell/` is the Wayland glue. It forwards pointer events to the view and sets the cursor shape from the hit under the pointer.
 
-See [otter-ui](/developers/libraries/otter-ui) for the native frame boundary.
+## 5. Describe the UI
 
-### Lua view
+`ui/demo.otr` declares an id for each element and the capacities of the frame:
 
-The script returns `{ frame = function(state), action = function(id) }`. It records `sd.*` nodes; the native `LuaView` owns replay and routes tagged actions.
+```otr otr/ui/demo.otr
+pub const ids = struct {
+    pub const card = Id.named_comptime("demo.card")
+    pub const counter = Id.named_comptime("demo.counter")
+    pub const increment = Id.named_comptime("demo.increment")
+}
 
-`view.otr`'s `push_state` defines the script's available state: card geometry, compact mode, title, hover/active ids, and resolved colors and metrics. The starter-specific `otter.examples` binding exposes native text measurement and baseline placement.
+pub const caps = ui_frame_types.Capacities{
+    elements: 96,
+    hit_regions: 24,
+    overlays: 1,
+    focus_scopes: 2,
+    semantics: 48,
+    scroll_states: 0,
+    text_states: 2,
+}
+pub const UiState = ui_frame.UiState(caps)
+pub const UiFrame = ui_frame.UiFrame(caps)
+```
 
-Add a hit id, draw its control, then handle the id in `action`. Script globals reset on reload. A failed candidate script retains the last valid card. See [UI scripts](/developers/lua/ui-scripts) for the complete contract, paths, and policy.
+The listing shows three of the card's ids. `UiState` and `UiFrame` are generic over the capacities, so the frame's storage has a fixed size.
 
-## 5. Apply shared theme and configuration
+Each frame, `Demo.render` builds a tree of `Node` values and renders it into a rectangle. A button is a node with `button` content and a `button` hit:
 
-Use semantic theme colors, dimensions, and control styles rather than checking profile names. Both templates already integrate the shared theme and imported-file watcher. Keep their transactional reload: a broken theme edit must retain the previous valid theme and font.
+```otr otr/ui/demo.otr
+fn plain_button(id: Id, label: str, height: Size, styles: StyleSet) Node {
+    return .{
+        id: id,
+        layout: .{ width: .fill, height: .fixed{ height } },
+        content: .button{ .{ text: label, font_size: styles.globals.font_size, radius: styles.button.radius } },
+        hit: .button,
+    }
+}
+```
 
-Application configuration belongs under `$XDG_CONFIG_HOME/otter-shell/`, defaulting to `~/.config/otter-shell/`. Use `otter-conf` for the shared flat key-value format. If Settings should expose a feature, add its configuration and controls there too; study `otter-settings/otr/tabs.otr` and its editor modules.
+Colors, radius, and hover and press states come from the resolved theme in `StyleSet`. The card never checks which theme profile is active.
 
-Lua code belongs in data directories, not config directories:
+Input goes through the same state. A press dispatches to `UiState`, which returns the id under the pointer:
 
-- Plugins: `$XDG_DATA_HOME/otter-shell/plugins/<id>/`.
-- UI scripts: `$XDG_DATA_HOME/otter-shell/ui/`.
-- Plugin policy: `$XDG_CONFIG_HOME/otter-shell/plugins.conf`.
-- Native/Lua UI choice: `$XDG_CONFIG_HOME/otter-shell/ui.conf`.
+```otr otr/ui/demo.otr
+pub fn on_press(self: &mut Demo, ui: &mut UiState, p: Point) PressResult {
+    press := ui.dispatch(.button_press{ .{ point: p, button: 1 } })
+    if press.id.eql(ids.profile_input) {
+        self.focused_input = true
+    }
+    if press.id.eql(ids.increment) {
+        self.counter +%= 1
+        self.refresh_counter_text()
+        return .damage{ ids.counter }
+    }
+    return if press.id.eql(Id.none) { .none } else { .input }
+}
+```
 
-The default data home is `~/.local/share`. Native hosts choose which bindings and capabilities to expose to Lua. See [Bindings and capabilities](/developers/lua/bindings).
+The return value tells the shell what to repaint. `.damage{ id }` names the element whose content changed. `.input` means only hover, press, or focus state changed. `.none` means the press hit nothing. The shell damages the old and new hovered and pressed elements itself.
 
-## 6. Verify without touching your desktop
+See [otter-ui](/developers/libraries/otter-ui) and [Surface Description](/developers/libraries/otter-ui/surface-description) for the node types and the frame API.
 
-The starter provides static checks, tests, direct-render fixtures, and isolated headless integration tests:
+## 6. Add a button
+
+Add a reset button to the card. All three edits are in `ui/demo.otr`.
+
+Add an id inside `ids`:
+
+```otr
+pub const reset = Id.named_comptime("demo.reset")
+```
+
+Each hit target takes a slot in `caps.hit_regions`. Raise that number when you add more targets than it holds.
+
+In `Demo.render`, add one element to `main_content` and raise its array length by one:
+
+```otr
+plain_button(ids.reset, "Reset counter", styles.button.height, styles),
+```
+
+The main column clips its children. Lower the gap or shorten other rows if the new button must fit in the 640x420 card.
+
+In `Demo.on_press`, add a branch beside the increment branch:
+
+```otr
+if press.id.eql(ids.reset) {
+    self.counter = 0
+    self.refresh_counter_text()
+    return .damage{ ids.counter }
+}
+```
+
+Run `otr run otr/build.otr -- run -- window` again. The new button shows hover and press feedback, and a click sets the counter back to zero.
+
+## 7. Move the UI to Lua
+
+The Lua template keeps the shells and replaces the card with a script. It is a second package, so the native template never links LuaJIT:
+
+```toml otr/lua-ui/otr.toml
+[package]
+name = "otter_examples_lua_ui"
+version = "0.0.1"
+otr_min = "0.0.0"
+
+[dependencies]
+otter_examples = { path = ".." }
+otter_geo = { path = "../../../otter-geo/otr" }
+otter_render = { path = "../../../otter-render/otr" }
+otter_theme = { path = "../../../otter-theme/otr" }
+otter_ui = { path = "../../../otter-ui/otr" }
+otter_ui_lua = { path = "../../../otter-ui/otr/lua" }
+otter_lua = { path = "../../../otter-lua/otr" }
+```
+
+Its `main.otr` loads the theme and font, opens the Lua view, and runs the same shell. This excerpt follows the argument parsing:
+
+```otr otr/lua-ui/main.otr
+t := loader.load_theme(env, mem.heap)
+defer t.deinit()
+f := try font.Font.init(mem.heap, env.io, .{ font_family: t.globals.font_family.as_str() })
+var v = view.LuaView.open(env, ui_dir, f, true) catch |e| {
+    io.eprintf("otter-examples-lua: no usable {}: {}\n", .{ view.script_name, @error_name(e) })
+    return e
+}
+defer v.deinit()
+if layer {
+    try layer_app.run(env, &mut v)
+} else {
+    try xdg_app.run(env, &mut v, opts)
+}
+```
+
+`LuaView` in `view.otr` implements the same view contract as `Demo`: `render`, `on_motion`, `on_press`, `on_release`, `watch_fd`, `on_watch`, and `on_theme`. It finds the script, runs it sandboxed under a heap cap and a watchdog, records the frame, and reloads the script when you save the file.
+
+The script returns a table with two functions. This listing keeps the state and the returned table and leaves out the drawing helpers:
+
+```lua otr/lua-ui/ui/examples.lua
+local INPUT, INCREMENT = 5, 10
+
+local counter = 0
+local focused = false
+
+return {
+  frame = function(s)
+    if not s.w then
+      sd.begin(1, 1)
+      sd.finish()
+      return
+    end
+    sd.begin(s.w, s.h)
+    sd.col(s.x, s.y, 0)
+    card(s)
+    sd.finish()
+    sd.finish()
+  end,
+  action = function(id)
+    if id == INPUT then
+      focused = true
+    elseif id == INCREMENT then
+      counter = counter + 1
+    end
+  end,
+}
+```
+
+`card(s)` is the script's own function that draws the panels, rows, and buttons with `sd.rect`, `sd.outline`, `sd.text`, and `sd.clip`. `s` is the state the host passes each frame: the card's origin and size (`x`, `y`, `w`, `h`), `compact`, `title`, the hovered and pressed hit ids (`hover`, `active`), and the resolved theme colors and metrics. `push_state` in `view.otr` lists every key.
+
+A control gets a hit id from `sd.hit`, and a click on it calls `action` with that id. This is the script's button helper, shortened to its drawing calls:
+
+```lua otr/lua-ui/ui/examples.lua
+local function button(s, id, x, y, w, h, bottom, t, size, radius)
+  local bg = s.button_bg
+  if s.active == id then
+    bg = s.button_pressed
+  elseif s.hover == id then
+    bg = s.button_hover
+  end
+  sd.rect(x, y, w, h, bg, radius)
+  sd.outline(x, y, w, h, s.button_border, radius, 1)
+  local tw = ex.measure(t, size)
+  sd.text(x + math.floor((w - tw) / 2), ex.baseline_in(y, h, size) - size, t, size, s.button_text)
+  hit(id, x, y, w, h, bottom)
+end
+```
+
+`ex` is `otter.examples`, a binding this starter registers. `measure(text, size)` measures with the host's font, and `baseline_in(y, height, size)` returns the baseline `otter-ui` centers text on. `hit` is a helper in the script that draws an invisible rectangle and tags it with `sd.hit(id)`.
+
+Run the Lua template and edit the script while the window is open:
 
 ```bash
-otr run otr/build.otr --release-fast -- check
-otr run otr/build.otr --release-fast -- test
-otr run otr/build.otr --release-fast -- visual-test
-otr run otr/build.otr --release-fast -- e2e
-otr run otr/build.otr --release-fast -- headless-smoke
+otr run otr/build.otr -- run-lua -- window
+otr run otr/build.otr -- run-lua -- layer
 ```
 
-`test` runs both debug and release-fast tests. Release applications and visual fixtures use `--release-fast`. The E2E starts private headless Sway sessions with isolated runtime, home, config, and D-Bus state. It compares native and Lua templates and checks input, damage, and reload behavior. Do not point capture tools at your real Wayland session.
+`run-lua` points the host at `otr/lua-ui/ui`, so you do not need to install the script first. A saved edit reloads the card. A script with a syntax error, a runtime error, or a frame that never finishes keeps the previous card on screen and logs the reason.
 
-Review generated visual evidence in `otr/out/visual/` and `otr/out/headless/`. Golden fixtures live in `otr/testdata/visual/`. Review changed pixels before updating baselines.
+To add the reset button here, pick an unused hit id such as `RESET = 11`, draw it with `button(...)` below the counter, and handle it in `action`:
 
-For native window debugging, pass `--inspect` or `--metrics` after `window`, or press **Ctrl+Shift+I** to cycle overlays. These overlays intentionally force full-surface repaint on input.
+```lua
+elseif id == RESET then
+  counter = 0
+```
 
-## 7. Install the application
+After a click, the host repaints the whole card because it cannot know what the script changed. Hovers still repaint only the controls under the pointer.
 
-The starter's install step writes release-fast binaries under `otr/out/bin/` and `examples.lua` under `otr/out/share/otter-shell/ui/`:
+The host looks for `examples.lua` in `--ui-dir DIR`, then `$OTTER_UI_DIR`, then `$XDG_DATA_HOME/otter-shell/ui/`, then `otter-shell/ui/` under each `$XDG_DATA_DIRS` entry. See [UI scripts](/developers/lua/ui-scripts) for the full contract and [Bindings and capabilities](/developers/lua/bindings) for the modules a script can use.
+
+## 8. Pick a shell
+
+| You are building | Use | Start from |
+| --- | --- | --- |
+| A launcher, popup, or OSD | Layer shell | `shell/layer_app.otr` |
+| A settings window, editor, or other normal window | XDG toplevel | `shell/xdg_app.otr` |
+
+Both shells drive the view through `shell/core.otr`. Copy the one that fits. Otter Shell ships no user-session compositor, so require a compositor-specific protocol only when your app needs it.
+
+## 9. Use the theme and configuration
+
+Both templates load the shared theme and watch it with `otter-theme`'s `ThemeWatcher`. A new theme and font replace the old ones only when both load. A broken edit keeps the last valid theme.
+
+Read colors and metrics from the resolved styles. Do not branch on the name of a theme profile or palette.
+
+App configuration lives in `$XDG_CONFIG_HOME/otter-shell/`, which defaults to `~/.config/otter-shell/`. Use [otter-conf](/developers/libraries/otter-conf) for the flat key-value format, and put the schema in [otter-config-types](/developers/libraries/otter-config-types) so Settings can show it.
+
+Lua code lives in data directories. User UI scripts go in `$XDG_DATA_HOME/otter-shell/ui/` and user plugins in `$XDG_DATA_HOME/otter-shell/plugins/<id>/`. The configuration directory holds only policy: `plugins.conf` and `ui.conf`.
+
+## 10. Verify without touching your desktop
 
 ```bash
-otr run otr/build.otr --release-fast -- install
+otr run otr/build.otr -- check
+otr run otr/build.otr -- test
+otr run otr/build.otr -- visual-test
+otr run otr/build.otr -- e2e
+otr run otr/build.otr -- headless-smoke
 ```
 
-For your app, add a freedesktop desktop entry and install it with your packaging:
+`visual-test` renders the fixture cases to `otr/out/visual/` and compares them with the goldens in `otr/testdata/visual/`. The fixtures render the same `ui/demo.otr` tree as the live shells. Update a golden only after you review the changed pixels.
+
+`e2e` runs both templates in private headless sway sessions with their own runtime directory, home, configuration, and D-Bus. It drives them with a virtual pointer and checks input, damage, and reload behavior. `headless-smoke` captures each template and shell to `otr/out/headless/`.
+
+In window mode, pass `--inspect` or `--metrics` to show the Surface Description inspector or a frame timing overlay. **Ctrl+Shift+I** cycles through them. With an overlay on, every input repaints the whole surface.
+
+## 11. Install the app
+
+```bash
+otr run otr/build.otr -- install --cpu x86_64_v3
+```
+
+The starter's `install` writes `--release-fast` binaries to `otr/out/bin/` and `examples.lua` to `otr/out/share/otter-shell/ui/`.
+
+For your own app, rename the binary, the app id, the UI script, and the package in `otr.toml` together. Ship a desktop entry with your packaging:
 
 ```ini
 [Desktop Entry]
@@ -155,11 +385,11 @@ Type=Application
 Categories=Utility;
 ```
 
-Install the desktop entry into an XDG applications directory and icons under `icons/hicolor/`. Rename the starter's binary, application identifiers, UI script, and package metadata consistently before distribution.
+Install the desktop entry into an XDG applications directory and the icon under `icons/hicolor/`.
 
 ## Source guides
 
 - [Native starter](https://git.pika-os.com/otter-shell/otter-examples/src/branch/main/otr/README.md)
-- [Lua-UI starter](https://git.pika-os.com/otter-shell/otter-examples/src/branch/main/otr/lua-ui/README.md)
+- [Lua UI starter](https://git.pika-os.com/otter-shell/otter-examples/src/branch/main/otr/lua-ui/README.md)
 - [Lua plugin starters](https://git.pika-os.com/otter-shell/otter-examples/src/branch/main/otr/plugins/README.md)
 - [Libraries overview](/developers/libraries)

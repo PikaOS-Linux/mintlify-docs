@@ -1,0 +1,129 @@
+---
+title: "CLI reference"
+description: "Every otr command, build option and environment variable."
+---
+
+```text
+otr <command> [options]
+```
+
+Run `otr help` to print this list from your installed version.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `otr build <file> [options]` | Compiles a program to an executable, or a library with `--lib` |
+| `otr run <file> [options] [-- args]` | Compiles and runs a program. Arguments after `--` go to it |
+| `otr test <file> [options]` | Compiles and runs the file's `test` blocks |
+| `otr check <file> [options]` | Type-checks and safety-checks a program or module without building it |
+| `otr check --package [dir]` | Checks every module of the package in `dir` (default `.`) and its tests |
+| `otr fmt [--check] <file>...` | Formats files in place. `--check` reports unformatted files |
+| `otr doc <file>...` | Prints the public declarations of modules as Markdown |
+| `otr lsp` | Runs the language server on stdin and stdout |
+| `otr parse [--tree] <file>...` | Parses files and reports syntax errors |
+| `otr mir <file>` | Prints the analysed MIR of a program |
+| `otr version` | Prints the compiler version |
+| `otr help` | Prints the command list |
+
+## Build options
+
+`build`, `run`, `test` and `check` accept these.
+
+### Output
+
+| Option | Effect |
+| --- | --- |
+| `-o <path>` | The output executable or library |
+| `--lib static` | Builds `lib<name>.a` from the file's `export fn`s |
+| `--lib shared` | Builds `lib<name>.so` from the file's `export fn`s |
+| `--emit-h <path>` | With `--lib`, also writes a C header that declares the exports |
+| `--emit-ir <path>` | Also writes the lowered IR as text |
+
+`otr run` and `otr test` refuse `--lib`.
+
+### Optimisation and target
+
+| Option | Effect |
+| --- | --- |
+| `--release` | Optimised, with all safety checks |
+| `--release-fast` | Optimised. Integer overflow wraps |
+| `--target <triple>` | Builds for `<arch>-linux[-gnu\|-musl]`, where arch is `x86_64` or `aarch64` |
+| `--cpu <cpu>` | The CPU level for ordinary code: `baseline` (default), `native`, `x86_64_v2`, `x86_64_v3`, `x86_64_v4`, `armv8-a`, `sve`, `sve2` |
+| `--pie`, `--no-pie` | Links the executable position-independent, or at a fixed address (the default) |
+
+### Packages and options
+
+| Option | Effect |
+| --- | --- |
+| `-M <name>=<path>` | Depends on the package at `<path>`, imported as `<name>` |
+| `-D <name>=<value>` | Sets the build option `<name>`. `-D <name>` means true |
+
+### C inputs and linking
+
+| Option | Effect |
+| --- | --- |
+| `-I <dir>` | Searches `<dir>` for C headers |
+| `-l <lib>` | Links against the C library `<lib>` |
+| `-L <dir>` | Searches `<dir>` for libraries |
+| `-rpath <dir>` | Lets the executable find shared libraries in `<dir>` |
+| `--pkg-config <lib>` | Compiles and links with what pkg-config gives for `<lib>` |
+| `<file>.c`, `.cpp`, `.S`, `.o`, `.a`, `.so` | Compiles and links C, C++ and assembly sources, objects and libraries |
+| `--link-arg <flag>`, `-Wl,...` | Passes a flag to the linker |
+
+### Diagnostics
+
+| Option | Effect |
+| --- | --- |
+| `--time` | Reports how long each build stage took, and peak memory |
+
+## Environment variables
+
+### When building
+
+| Variable | Effect |
+| --- | --- |
+| `OTR_CHECK_CACHE` | `off` ignores the check caches. `verify` rechecks everything and stops if a reused result was wrong |
+| `OTR_TMPDIR` | The directory for a build's temporary files, in place of `.otr-cache/tmp` |
+| `OTR_EXEC` | An emulator, such as `qemu-aarch64`, that `run` and `test` use for a program built for another architecture |
+| `OTR_CLANG`, `OTR_MOLD`, `OTR_LIBC` | Use another clang, mold or C library root in place of the bundled ones |
+| `PKG_CONFIG_PATH`, `PKG_CONFIG_LIBDIR`, `PKG_CONFIG_SYSROOT_DIR` | Read by pkg-config, and part of the build's cache key |
+
+### When running a built program
+
+| Variable | Effect |
+| --- | --- |
+| `OTR_SIMD` | Caps the SIMD variant chosen at start-up, such as `x86-64-v2` or `armv8-a` |
+| `OTR_NO_URING` | `1` makes `Io.Uring` do each request as a system call on the thread pool |
+
+## Exit status
+
+A program that panics exits with status 101. `otr test` exits with 1 when any test fails. `otr check` and `otr build` exit with 1 on a compile error.
+
+## Examples
+
+```bash
+# Run with arguments
+otr run tool.otr -- --verbose input.txt
+
+# Release build for older x86-64 machines and for AVX2 machines in one binary
+otr build app.otr -o app --release
+
+# Release build that requires AVX2 everywhere
+otr build app.otr -o app --release-fast --cpu x86_64_v3
+
+# Static AArch64 binary
+otr build app.otr -o app --release --target aarch64-linux-musl
+
+# Link a C library through pkg-config and add a C source
+otr build app.otr glue.c --pkg-config wayland-client
+
+# Depend on a sibling package and set an option
+otr build app.otr -M wayland=../otter_wayland -D with_dbus=false
+
+# A C library with a header
+otr build mathlib.otr --lib static --emit-h mathlib.h
+
+# Check a whole package, as CI would
+otr check --package .
+```

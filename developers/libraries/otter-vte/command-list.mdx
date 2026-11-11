@@ -1,28 +1,87 @@
 ---
 title: "Command list"
 sidebarTitle: "Command list"
-description: "Dynamic otr terminal drawing storage and capacity/drop semantics."
+description: "A growable command list for terminal frames, with explicit capacity and drop reporting."
 ---
 
-Import `otter_vte.command_list`. `DynamicCommandList.init(alloc)` owns growable command and text lists. Its consuming `deinit()` frees storage.
+Import `otter_vte.command_list`. `DynamicCommandList` records the same `Command` values as [otter-render's command list](/developers/libraries/otter-render/command-list), so `quad_renderer.rasterize` plays it back. The difference is storage. This list lives on the heap and grows with the terminal grid, and otter-render's list has a fixed size.
+
+```otr
+import std
+import std.mem
+import otter_geo.rect as geo
+import otter_render.color
+import otter_render.font
+import otter_render.quad_renderer
+import otter_render.scale
+import otter_render.surface
+import otter_vte.command_list
+import otter_vte.renderer
+
+pub fn main(env: std.Env) !void {
+    var target = surface.Surface.init_owned(mem.heap, 1280, 768, scale.Scale.from_int(2))
+    defer target.deinit()
+    var f = try font.Font.init(mem.heap, env.io, .{ font_family: "monospace" })
+    defer f.deinit()
+
+    var cmds = command_list.DynamicCommandList.init(mem.heap)
+    defer cmds.deinit()
+    cmds.ensure_grid_capacity(80, 24)
+    cmds.ensure_text_capacity(80, 24)
+    cmds.set_scale(target.scale_factor())
+
+    cmds.clear(color.Color.black)
+    cmds.solid_rect(geo.Rect{ x: 0, y: 0, width: 8 * 80, height: 16 }, color.Color.surface)
+    cmds.text(geo.Point{ x: 0, y: 0 }, "~/otter-shell $ ", 12, color.Color.text)
+    cmds.text_styled(geo.Point{ x: 128, y: 0 }, "otr check", 12, color.Color.green, true)
+
+    if cmds.dropped() {
+        return error.CommandsDropped
+    }
+    var txt = quad_renderer.TextContext{ font: &mut f }
+    quad_renderer.rasterize(command_list.DynamicCommandList, &cmds, &mut target, &mut txt, &renderer.no_images, null, true)
+    cmds.reset()
+}
+```
+
+`init(alloc)` returns an owned list. Consume it with `deinit()`.
 
 ## Capacity
 
-`ensure_grid_capacity`, `ensure_background_capacity`, and `ensure_text_capacity` prepare storage for the terminal geometry. Appends before initial capacity preparation drop and count commands instead of implicitly growing.
+A new list has no storage. Call the `ensure_*` methods when the grid size changes, so that recording a frame does not allocate.
 
-`reset` reuses allocated storage for the next frame. `dropped` reports lost output. Treat nonzero drops as a capacity/verification failure, not an acceptable rendering mode.
+| Method | Reserves |
+| --- | --- |
+| `ensure_text_capacity(cols, rows)` | One command per cell and the string bytes for their text. |
+| `ensure_grid_capacity(cols, rows)` | The same as `ensure_text_capacity`. |
+| `ensure_background_capacity(rows)` | A few commands per row, for background runs. |
+
+Until you call one of them, every append is dropped and counted. `dropped()` returns true when the frame lost a command or a string. After the first `ensure_*` call the list also grows on demand, so a frame larger than the reservation is still complete.
+
+`reset()` empties the list for the next frame and keeps the storage.
 
 ## Drawing
 
-Methods include `solid_rect`, `blend_rect`, `rounded_solid_rect`, `rounded_blend_rect`, `rounded_rect_outline`, `clear`, `text`, and `text_styled`. `command_slice` and `get_string` expose recorded output.
+The recording methods are `clear`, `solid_rect`, `blend_rect`, `rounded_solid_rect`, `rounded_blend_rect`, `rounded_rect_outline`, `text` and `text_styled`. They take the same arguments as their otter-render counterparts, in logical coordinates.
 
-`set_scale` takes `otter_render.scale.Scale`; `scale_factor` and `scale_q8` expose exact scale. There are no stored font or text-system pointers.
+`set_scale` takes an `otter_render.scale.Scale`. `scale_factor()` and `scale_q8()` read it back.
+
+`command_slice()` lends the recorded commands, and `get_string(ref)` returns the text of a text command:
+
+```otr
+for cmd in cmds.command_slice() {
+    switch cmd {
+        .text |t| => std.io.println(cmds.get_string(t.string_ref))
+        else => {}
+    }
+}
+```
 
 ## Rasterization
 
-Use `otter_render.quad_renderer.rasterize` with a caller-built `TextContext` for text commands and `otter_vte.renderer.no_images` as the image source. `Renderer.rasterize_text` is not part of the otr API.
+Pass the list to `otter_render.quad_renderer.rasterize` with a `TextContext` for the font. Terminal frames carry no image commands, so use `otter_vte.renderer.no_images` as the image source.
 
-Keep terminal draw buffers separate from snapshot borrows so the render walk can mutate commands without aliasing the source rows.
+A terminal view usually does not hold these lists itself. `renderer.Renderer` owns three of them, for the base, background and text layers. See [Cell renderer](/developers/libraries/otter-vte/cell-renderer).
 
 ## Source reference
 

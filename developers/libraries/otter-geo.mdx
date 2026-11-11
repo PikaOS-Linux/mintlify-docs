@@ -4,24 +4,38 @@ sidebarTitle: "otter-geo"
 description: "Integer geometry, fixed-point transforms, and colors for otr applications."
 ---
 
-`otter-geo` provides dependency-free layout and pixel value types. Import `otter_geo.rect`, `otter_geo.transform`, or `otter_geo.color`.
+`otter-geo` holds the layout and pixel value types the other libraries build on. It depends on nothing. The package name is `otter_geo`, and it has three modules: `otter_geo.rect`, `otter_geo.transform` and `otter_geo.color`.
 
-Positions are signed `i32`; geometry extents are `u16`. Colors belong to this package and do not require the renderer.
+```toml
+[dependencies]
+otter_geo = { path = "../../otter-geo/otr" }
+```
+
+Positions are signed `i32` and extents are `u16`. Every type is a plain value you copy freely.
 
 ```otr
+import std
 import otter_geo.rect as geo
+import otter_geo.color
 
-pub fn main() void {
+pub fn main() !void {
     bounds := geo.Rect{ x: 0, y: 0, width: 100, height: 40 }
-    point := geo.Point{ x: 20, y: 10 }
-    if bounds.contains_point(point) {
+    pointer := geo.Point{ x: 20, y: 10 }
+    if bounds.contains_point(pointer) {
         inner := bounds.remove_padding(geo.Padding.uniform(8)) orelse return
-        _ = inner
+        icon := inner.align_with(.{ x: 16, y: 16 }, .start, .center)
+        std.io.printf("{} {}\n", .{ icon.x, icon.y })   // 8 12
     }
+
+    accent := try color.Color.parse("#7aa2f7")
+    hover := color.Color.blend(color.Color.black, accent, 128)
+    std.io.println(hover.to_hex_string()[0..])          // #3D517CFF
 }
 ```
 
-`Transform` stores a 2×2 matrix in signed 16.16 fixed point. Use `Color.parse` for configuration colors and `Color.from_rgba` for packed RGBA literals.
+`Color` lives in this package, so config schemas and themes use colors without depending on the renderer. `Transform` is a 2x2 matrix in signed 16.16 fixed point.
+
+`otter-geo` has no Lua module. Lua drawing calls take colors as `0xRRGGBBAA` integers.
 
 ## Reference pages
 
@@ -29,4 +43,4 @@ pub fn main() void {
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml` and `otr/` in the `otter-geo` repository.

@@ -103,7 +103,7 @@ Apps that normalize config add missing defaults and remove unknown fields at sta
 
 ## Lua plugins and surface scripts
 
-Bar widgets and launcher providers use hosted Lua plugins. The Zig `.so` ABI is unsupported. Put a plugin's `plugin.toml` and `init.lua` in a directory named after its ID. Hosts search these roots in order; the first matching plugin ID wins:
+Bar widgets and launcher providers use hosted Lua plugins. Put a plugin's `plugin.toml` and `init.lua` in a directory named after its ID. Hosts search these roots in order; the first matching plugin ID wins:
 
 1. Colon-separated roots in `$OTTER_PLUGIN_PATH`
 2. `$XDG_DATA_HOME/otter-shell/plugins/` (default `~/.local/share/otter-shell/plugins/`)

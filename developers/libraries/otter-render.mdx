@@ -1,24 +1,97 @@
 ---
 title: "otter-render"
 sidebarTitle: "otter-render"
-description: "otr CPU rendering with owned surfaces, image handles, fonts, and command lists."
+description: "CPU rendering in otr: owned surfaces, command lists, fonts, text shaping, and images."
 ---
 
-`otter-render` records drawing commands and rasterizes them on the CPU. Import leaf modules such as `otter_render.surface`, `otter_render.command_list`, and `otter_render.quad_renderer`.
+`otter-render` records drawing commands and rasterizes them on the CPU. The package is `otter_render`. It has no root module, so you import the leaf module you need, such as `otter_render.surface` or `otter_render.command_list`.
 
-## Rendering boundary
+```toml
+[dependencies]
+otter_geo = { path = "../../otter-geo/otr" }
+otter_render = { path = "../../otter-render/otr" }
+```
 
-- `Surface` owns pixels or a mapped pixel region.
-- `CommandList(N, M)` owns bounded commands and string storage.
-- `ImageHandle` identifies an image in an `ImageSource`; it is not a pointer.
-- `TextContext` lends the font and optional shaping resources during rasterization.
-- `Scale` carries exact Q8 scale independently of the integer ceiling.
+## A frame from start to finish
 
-Fonts use FreeType and HarfBuzz. `otter_render.bidi` implements bidirectional layout without itijah.
+A frame has four parts. A `Surface` owns the pixels. A `CommandList` records what to draw. An `ImageStore` owns decoded images and hands out handles. A `TextContext` lends the font and shaper to the rasterizer for one call.
+
+```otr
+import std
+import std.mem
+import otter_geo.color
+import otter_geo.rect
+import otter_render.command_list
+import otter_render.font
+import otter_render.image
+import otter_render.quad_renderer
+import otter_render.scale
+import otter_render.surface
+import otter_render.text
+
+pub fn main(env: std.Env) !void {
+    var target = surface.Surface.init_owned(mem.heap, 600, 80, scale.Scale.from_int(2))
+    defer target.deinit()
+
+    var f = try font.Font.init(mem.heap, env.io, .{ font_family: "Inter" })
+    defer f.deinit()
+    var shaper = try text.TextSystem.init(mem.heap, &mut f)
+    defer shaper.deinit()
+    var scratch = text.ShapeScratch.init(mem.heap)
+    defer scratch.deinit()
+
+    var images = image.ImageStore.init(mem.heap)
+    defer images.deinit()
+    icon := images.insert(try image.Image.load_from_file_at_size(mem.heap, env.io, "/usr/share/pixmaps/debian-logo.png", 24))
+
+    var cmds = command_list.DefaultCommandList.init()
+    cmds.set_scale(target.scale_factor())
+    cmds.clear(color.Color.clear)
+    cmds.rounded_solid_rect(rect.Rect{ x: 0, y: 0, width: 300, height: 40 }, color.Color.surface, 4, 0b1111)
+    cmds.image(rect.Rect{ x: 8, y: 8, width: 24, height: 24 }, icon)
+    cmds.text(rect.Point{ x: 40, y: 12 }, "Battery: 85%", 14, color.Color.text)
+
+    var txt = quad_renderer.TextContext{ font: &mut f, system: &mut shaper, scratch: &mut scratch }
+    quad_renderer.rasterize(command_list.DefaultCommandList, &cmds, &mut target, &mut txt, &images, null, true)
+}
+```
+
+Command coordinates are logical. The 600 by 80 pixel surface at scale 2 is a 300 by 40 logical canvas.
+
+The types hold no pointers to each other. A command stores an `ImageHandle`, and the rasterizer looks the image up in the `ImageSource` you pass. A stale handle draws nothing. The font, the shaper and the scratch buffer are separate values that you pass to each call that needs them.
 
 ## Lua
 
-`otter_render_lua` registers `otter.render` with no capability requirement. `measure(text, size, scale?)` measures logical text width. `image_size(bytes)` inspects encoded image dimensions. This module does not load files or expose a native command-list object to Lua; drawing uses the UI/SD bindings.
+The `otter_render_lua` package registers the `otter.render` Lua module. It needs no capability, because it reads no files and nothing leaves the process. It has two functions.
+
+```lua
+local render = require("otter.render")
+
+local width = render.measure("Battery: 85%", 16)        -- logical pixels at scale 1
+local hidpi = render.measure("Battery: 85%", 16, 1.5)   -- at a 150% output
+
+local w, h, format = render.image_size(png_bytes)
+if not w then
+  -- h is "unsupported image"
+end
+```
+
+`measure` shapes the text the way otter-ui draws it, with the Inter family as Fontconfig resolves it. `image_size` reads the header of an encoded PNG, JPEG, WebP or BMP image. Lua draws through the [otter-ui bindings](/developers/libraries/otter-ui).
+
+A host makes the module available by adding `otter_render_lua.render.module()` to the module list it passes to `otter_lua.plugins.Host.init`.
+
+## Build options
+
+Each option is declared in `otr/otr.toml` and defaults to `true`. Set one on the build of the program that uses the library, for example `otr build otr/main.otr -D enable_render_text=false`.
+
+| Option | When off |
+| --- | --- |
+| `enable_render_text` | FreeType, HarfBuzz and Fontconfig are left out. `Font.init` returns `error.TextDisabled`, and `rasterize` skips text commands. |
+| `enable_render_svg` | Every SVG load returns `error.Unsupported`. |
+| `enable_render_jpeg` | JPEG display decode fails. Statistical sampling stays available. |
+| `enable_render_wide_image_formats` | WebP and animated WebP decode fail. |
+
+PNG, BMP and ICO are always available.
 
 ## Reference pages
 
@@ -29,4 +102,4 @@ Fonts use FreeType and HarfBuzz. `otter_render.bidi` implements bidirectional la
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml`, `otr/API.md` and `otr/api_check.otr` in the component repository. `api_check.otr` calls every module the way an app does.

@@ -1,41 +1,135 @@
 ---
 title: "Presets and loading"
 sidebarTitle: "Presets and loading"
-description: "Theme loading, legacy migration, presets, ownership, and graph-aware hot reload."
+description: "Theme files, color presets, loading, ownership, and hot reload."
 ---
+
+## Theme files
+
+`~/.config/otter-shell/theme.conf` holds the globals and the paths of the three selected layer files:
+
+```conf
+colors_path = "/usr/share/otter-shell/themes/colors/otter.conf"
+layout_path = "/usr/share/otter-shell/themes/layouts/current.conf"
+spacing_path = "/usr/share/otter-shell/themes/spacing/standard.conf"
+
+font_family = "Inter"
+font_size = 16
+icon_theme = "Papirus"
+icon_coloring = true
+opacity = 100
+blur = false
+bar_islands = false
+```
+
+A relative layer path resolves beside `theme.conf`. Without a user file, the loader reads `/etc/otter-shell/theme.conf`, and without that it uses the compiled-in defaults.
 
 ## Presets
 
-Import `otter_theme.presets`. `presets` is an eleven-entry static table; `find_preset(name)` returns an optional preset value. Presets supply colors, while profiles supply broader theme structure.
+Import `otter_theme.presets`. `presets` is a table of 11 `Preset` values, each with a `name`, a `slug` and its `colors`. `find_preset(name)` matches a name or a slug without regard to case and returns `?Preset`.
+
+```otr
+import std
+import otter_theme.presets
+
+pub fn main() void {
+    for p in presets.presets {
+        std.io.printf("{} ({})\n", .{ p.name, p.slug })
+    }
+    if presets.find_preset("Nord") |nord| {
+        std.io.println(nord.colors.accent.to_hex_string()[0..])   // #88C0D0FF
+    }
+}
+```
+
+The presets are Otter Shell, Catppuccin Mocha, Latte, Frappe and Macchiato, Nord, Gruvbox Dark, Gruvbox Light, Dracula, Tokyo Night and One Dark. A preset supplies colors only. Layout and spacing come from their own layers.
 
 ## Load a theme
 
-`loader.load_theme(env, alloc)` returns a `Theme`. `load_theme_from_path` reads an explicit root. Functions that resolve HOME or XDG paths take `std.Env` explicitly.
+Functions that resolve `HOME` or `XDG_CONFIG_HOME` take a `std.Env`.
 
-`load_theme_graph` and `load_theme_graph_from_path` return the resolved theme plus owned dependency paths. `LoadedTheme.deinit()` consumes both.
+| Function | Result |
+| --- | --- |
+| `loader.load_theme(env, alloc)` | The standard theme, or the compiled-in defaults when none loads |
+| `loader.load_theme_from_path(env, alloc, path)` | The theme at an explicit `theme.conf`, or null |
+| `loader.load_theme_graph(env, alloc)` | A `LoadedTheme` with the theme and the paths of every file it read, or null |
+| `loader.load_theme_graph_from_path(env, alloc, path)` | The same for an explicit path |
+| `loader.get_theme_config_path(env, &mut buf)` | The user's `theme.conf` path |
+| `loader.get_system_theme_path(&mut buf)` | `/etc/otter-shell/theme.conf` |
 
-`get_theme_config_path(env, &mut buf)` resolves the user root, respecting an absolute `XDG_CONFIG_HOME`. `get_system_theme_path(&mut buf)` resolves the system fallback.
+`LoadedTheme.deinit()` drops the theme and the paths. Destructure it to keep the theme, as the hot-reload example does.
 
-Loading an existing layered theme is read-only. One exception is legacy flat-theme migration: `load_theme_graph_from_path` can save the old root as `<path>.legacy`, write `custom-colors.conf`, `custom-layout.conf`, and `custom-spacing.conf`, then rewrite the root to select those layers. Use a temporary fixture directory when testing legacy loads.
+Loading does not write files, with one exception. A `theme.conf` in the earlier single-file form is converted the first time it loads. The loader saves it as `theme.conf.legacy`, writes `custom-colors.conf`, `custom-layout.conf` and `custom-spacing.conf` beside it, and rewrites `theme.conf` to select those layers. Point tests that load such a file at a temporary directory.
 
-`normalize_theme_config` is a separate write operation reserved for designated Settings/Theme Gen workflows, not ordinary app startup or reload callbacks.
+`loader.normalize_theme_config(alloc, &theme, path)` rewrites a user `theme.conf` when its serialized form differs. Only `otter-settings` calls it, once at startup.
 
 ## Hot reload
 
-Use `otter_theme.theme_watcher.ThemeWatcher`:
+`otter_theme.theme_watcher.ThemeWatcher` watches `theme.conf` and the layer files it selects.
 
-1. Initialize with environment and allocator, or `init_from_path` for a fixture root.
-2. Watch `get_fd()` in the app loop.
-3. Drain changes and reload the complete graph.
-4. Retain the previous valid theme if parsing or import resolution fails.
-5. Refresh watched dependencies with the environment after a successful graph change.
+1. Create it with `ThemeWatcher.init(env, alloc)`, or `init_from_path` for a fixture. `init` returns null when the environment gives no user config path and no system theme exists.
+2. Add `get_fd()` to your descriptor loop.
+3. When it is readable, call `drain_changed()`.
+4. If it returns true, load the theme graph once.
+5. Keep the theme you have when the load fails.
+6. Call `refresh(env)` so the watcher follows the layer files the new theme selects.
 
-`ThemeWatcher` does not keep a hidden environment singleton. It watches the root and loaded layer/import paths.
+```otr
+import std
+import std.mem
+import std.runtime
+import otter_theme.loader
+import otter_theme.theme
+import otter_theme.theme_watcher
 
-## Lua preset writes
+pub fn main(env: std.Env) !void {
+    var current = loader.load_theme(env, mem.heap)
+    defer current.deinit()
 
-`otter.theme.use_preset(name, on_done)` requires `theme-write`. It queues durable writes outside the Lua watchdog budget and reports completion through the host loop. Only one preset write runs at a time. Read-only subscribers do not gain write access.
+    var w = (try theme_watcher.ThemeWatcher.init(env, mem.heap)) orelse return
+    defer w.deinit()
+
+    for {
+        var fds = [1]runtime.PollFd{
+            .{ fd: w.get_fd(), events: runtime.Poll.read, revents: 0 },
+        }
+        _ = try env.io.poll(&mut fds[0..], null)
+        if !w.drain_changed() { continue }
+
+        // A theme that fails to load keeps the one on screen.
+        loaded := loader.load_theme_graph(env, mem.heap) orelse continue
+        next, paths := loaded
+        paths.deinit()
+        mem.replace(theme.Theme, &mut current, next).deinit()
+
+        w.refresh(env) catch |e| {
+            std.io.eprintf("theme watch refresh failed: {}\n", .{ @error_name(e) })
+        }
+    }
+}
+```
+
+## Lua presets
+
+`otter.theme.presets()` lists the presets as `{ name, slug }` tables. `otter.theme.preset(name)` returns one preset's twelve colors, or nil.
+
+`otter.theme.use_preset(name, on_done)` needs the `theme-write` capability. It writes `preset-colors.conf` and points `colors_path` at it, and it keeps every other line of `theme.conf`. The writes run on a worker thread. When they finish, the module reloads the theme and calls `on_done(true)` or `on_done(false, reason)`.
+
+```lua
+local theme = require("otter.theme")
+local log = require("otter.log")
+
+local queued, why = theme.use_preset("Gruvbox Dark", function(ok, reason)
+  local t = theme.get()
+  log.info("applied", ok, reason, string.format("%08X", t.colors.accent), t.generation)
+end)
+if not queued then
+  log.info("not queued", why)
+end
+```
+
+`use_preset` returns `true` once the write is queued. It returns `false` and a reason while another preset write is running. An unknown preset name raises an error.
 
 ## Source reference
 
-`otr/presets.otr`, `otr/loader.otr`, `otr/theme_watcher.otr`, `otr/lua/theme.otr` in the component repository.
+`otr/presets.otr`, `otr/loader.otr`, `otr/theme_watcher.otr` and `otr/lua/theme.otr` in the `otter-theme` repository. The Lua example follows `otr/lua/tests/plugins/theme-writer/init.lua`.

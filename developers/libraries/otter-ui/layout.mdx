@@ -1,37 +1,125 @@
 ---
 title: "Layout model"
 sidebarTitle: "Layout model"
-description: "Measure and place borrowed otr node trees with explicit sizing and alignment."
+description: "Size and place Surface Description nodes with rows, columns, stacks, sizing rules, and virtual lists."
 ---
 
-Import `otter_ui.ui_frame` or the defining `ui_frame_spec` module.
+Layout types are in `otter_ui.ui_frame_spec`. Every `Node` has a `layout` field of type `LayoutSpec`.
 
-## Size and placement
+## Rows and columns
 
-`LayoutSpec` controls `width`, `height`, minimum/maximum extents, `padding`, `gap`, `flex`, axis alignment, and clipping.
+```otr
+fn toolbar(title: str) void {
+    var actions = [2]Node{
+        Node.button(Id.named_comptime("toolbar.cancel"), "Cancel"),
+        Node.button(Id.named_comptime("toolbar.apply"), "Apply"),
+    }
+    var cells = [2]Node{
+        with_layout(Node.label(Id.named_comptime("toolbar.title"), title, 14, null), .{ width: .fill, height: .fill, align_y: .center }),
+        Node.row(Id.named_comptime("toolbar.actions"), .{ width: .fit, height: .fill, gap: 8 }, &mut actions),
+    }
+    root := Node.row(Id.named_comptime("toolbar"), .{ width: .fill, height: .fixed{ 40 }, padding: geo.Padding.uniform(4), gap: 12 }, &mut cells)
+    _ = root
+}
 
-| `SizeRule`        | Meaning                    |
-| ----------------- | -------------------------- |
-| `.fit`            | Use measured content size  |
-| `.fill`           | Use available layout space |
-| `.fixed{ value }` | Use an explicit extent     |
+fn with_layout(n: Node, l: ui_frame_spec.LayoutSpec) Node {
+    var out = n
+    out.layout = l
+    return out
+}
+```
 
-`LayoutSpec.fixed(width, height)` builds two fixed sizing rules. `AxisAlign` has `start`, `center`, `end`, and `stretch`.
+`Node.row` and `Node.column` take an id, a `LayoutSpec` and a mutable slice of children. A row places children left to right, and a column top to bottom. The constructors for leaf nodes use a default layout. Assign `layout` afterwards to change it, as `with_layout` does here.
 
-Rows distribute children horizontally; columns distribute vertically. Gaps separate siblings, padding insets content, and flex participates in distributing remaining space among fill children. Bounds and min/max limits constrain final sizes.
+## Sizing
 
-## Borrowed trees
+| `SizeRule` | Meaning |
+| --- | --- |
+| `.fit` | The measured size of the content. This is the default. |
+| `.fill` | The space the parent has left. |
+| `.fixed{ n }` | Exactly `n` logical pixels. |
 
-`Node` is a `ref struct` that borrows child slices and text. Construct trees for the current render call, not as persistent pointer graphs.
+`LayoutSpec.fixed(width, height)` builds a spec with both axes fixed.
 
-`Node.row(id, layout, children)` and `Node.column(id, layout, children)` accept `[]Node`. Supply stable `Id` values independently of the stack storage used for nodes.
+| Field | Meaning |
+| --- | --- |
+| `width`, `height` | A `SizeRule` per axis. |
+| `min_width`, `min_height`, `max_width`, `max_height` | Limits applied after the rule. |
+| `padding` | Space inside the node, around its children. |
+| `gap` | Space between neighboring children. |
+| `flex` | The share of leftover space a `.fill` child takes, relative to its `.fill` siblings. Defaults to 1. |
+| `align_x`, `align_y` | `start`, `center`, `end` or `stretch`. |
+| `clip` | Clips children to the node's rectangle. |
+| `shrink` | When fitted children overflow a row or column, shrinks them in proportion. A button then cuts its text with an ellipsis. |
 
-## Virtualized geometry
+## Other containers
 
-`UniformList` and `UniformGrid` compute visible ranges, hit indices, content height, and scroll positions without materializing every item. Build only the visible native rows for large lists.
+A node's `kind` selects how it arranges children.
 
-Use logical geometry with an explicit rendering `Scale`. Layout positions use signed coordinates; extents use the shared geometry types.
+| Kind | Arrangement |
+| --- | --- |
+| `row`, `column` | In a line, with `gap` between children. |
+| `stack` | On top of each other. Use it to put content over a panel. |
+| `grid` | In `grid_columns` columns. |
+| `spacer` | Empty space that takes part in layout. |
+| `scroll_view` | A column that scrolls when its children are taller than it. Build it with `Node.scroll_view`. |
+
+For a kind with no constructor, write the node literal:
+
+```otr
+var layers = [2]Node{
+    Node.panel(ids.surface, .{ width: .fill, height: .fill }, panel_spec),
+    .{ id: ids.column, kind: .column, layout: .{ width: .fill, height: .fill, padding: geo.Padding.uniform(16), gap: 6, clip: true }, children: &mut content },
+}
+root := Node{ id: ids.card, kind: .stack, layout: .{ width: .fixed{ 640 }, height: .fixed{ 420 } }, children: &mut layers }
+```
+
+## Trees are borrowed
+
+`Node` is a `ref struct`. It borrows its children slice and its text, so a tree lives on the stack of the function that renders it. Build the tree, pass it to `frame.render`, and let it go.
+
+Ids are separate from that storage. An id names the same control in every frame, wherever its node happens to sit.
+
+## Long lists
+
+A list of thousands of rows should build nodes only for the rows on screen. `otter_ui.ui_frame_list.UniformList` does the arithmetic for rows of one height.
+
+```otr
+fn visible_rows(scroll_offset: usize, selected: usize) void {
+    list := ui_frame_list.UniformList{ item_count: 10000, item_height: 28, viewport_height: 280, scroll_offset: scroll_offset }
+    range := list.visible_range()
+    for i in range.start..range.end {
+        y := range.y_offset + @int_cast(i32, (i - range.start) * 28)
+        std.io.printf("row {} at y {}\n", .{ i, y })
+    }
+    next := list.move_selection(selected, .page_next)
+    std.io.printf("{} {}\n", .{ next, list.scroll_offset_for_selection(next) })
+    if list.hit_index(geo.Rect{ x: 0, y: 0, width: 300, height: 280 }, geo.Point{ x: 20, y: 100 }) |index| {
+        std.io.printf("pointer over row {}\n", .{ index })
+    }
+}
+```
+
+`visible_range()` gives the first and last row to build and the y offset of the first. `hit_index` maps a pointer position to a row, `move_selection` applies a keyboard move, and `scroll_offset_for_selection` returns the scroll offset that keeps a row in view. `UniformGrid` does the same for a grid of equal cells.
+
+Rows of mixed height use `otter_ui.scroll.SnapRows`.
+
+## Lua
+
+`otter.ui` has the same list and grid math for Lua frames.
+
+```lua
+local ui = require("otter.ui")
+
+local first, last, y = ui.list_range(#items, 28, view_height, scroll)
+for i = first, last do
+  draw_row(items[i], y)
+  y = y + 28
+end
+```
+
+`list_hit` and `list_move` match `hit_index` and `move_selection`. `grid_range` is the grid form. In the `sd` table, `sd.row(x, y, gap)` and `sd.col(x, y, gap)` open containers, and `sd.finish()` closes the innermost one.
 
 ## Source reference
 
-`otr/ui_frame_spec.otr`, `otr/ui_frame_list.otr` in the component repository.
+`otr/ui_frame_spec.otr`, `otr/ui_frame_list.otr`, `otr/scroll.otr`, `otr/lua/ui.otr` in the component repository.

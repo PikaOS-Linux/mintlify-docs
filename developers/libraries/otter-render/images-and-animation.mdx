@@ -1,37 +1,126 @@
 ---
 title: "Images and animation"
 sidebarTitle: "Images and animation"
-description: "Supported image codecs, owned image stores, sprites, and integer animation."
+description: "Image decoding, image stores and handles, animated images, sprites, and integer animation."
 ---
 
 ## Images
 
-Import `otter_render.image`. `Image` owns RGBA bytes and has consuming `deinit()`. File loaders take allocator and explicit `std.Io`; memory loaders consume encoded bytes only for the call.
+Import `otter_render.image`. An `Image` owns straight RGBA bytes with a `width` and `height`. It is a resource, so you consume it with `deinit()` or move it into a store.
 
-| API family                                                   | Use                                               |
-| ------------------------------------------------------------ | ------------------------------------------------- |
-| `load_from_file`, `load_from_memory`                         | Decode at source size                             |
-| `load_from_file_at_size`, `load_from_memory_at_size`         | Decode and fit target dimensions                  |
-| `load_from_file_downsampled`, `load_from_memory_downsampled` | Reduce large source images                        |
-| `load_from_file_sampled`, `load_from_memory_sampled`         | Bounded statistical sampling for color extraction |
-| Foreground-aware SVG loaders                                 | Resolve symbolic `currentColor`                   |
+File loaders take an allocator, an `std.Io` and a path. Memory loaders borrow the encoded bytes for the call.
 
-Supported formats are PNG, JPEG, SVG, ICO, BMP, and WebP. Support does not extend to every zigimg format.
+| Loader | Use |
+| --- | --- |
+| `load_from_file`, `load_from_memory` | Decode at the source size. |
+| `load_from_file_at_size`, `load_from_memory_at_size` | Decode and fit a square `target_size`, keeping the aspect ratio. |
+| `load_from_file_downsampled`, `load_from_memory_downsampled` | Decode to a target width and height, with an optional blur and a `cover` flag. Use these for wallpapers. |
+| `load_from_file_sampled`, `load_from_memory_sampled` | Bounded statistical sampling, for extracting colors from a picture. |
+| `load_svg_file_with_foreground`, `load_svg_memory_with_foreground`, `load_from_file_with_foreground_at_size` | Rasterize an SVG with `currentColor` resolved to a color you pass. |
 
-JPEG and WebP runtime decoders load lazily. Missing decoder libraries fail that format; PNG/BMP/ICO remain available. Statistical JPEG sampling uses its own native decoder. Build options can disable text, SVG, JPEG, or WebP support.
+The formats are PNG, JPEG, SVG, ICO, BMP, GIF (first frame) and WebP. PNG, JPEG, SVG, BMP, ICO and GIF decode in otr. WebP opens `libwebp` on first use, and a missing library fails only WebP loads.
 
 ## Stores and handles
 
-`ImageStore` owns images in generational slots. `insert` returns `ImageHandle`; `remove` transfers the image out. `image` and `image_mut` lend scoped access. Commands and UI specs keep handles, not image addresses.
+Commands and UI specs refer to images by `ImageHandle`. An `ImageStore` owns the images and resolves the handles.
 
-## Sprites and animation
+```otr
+import std
+import std.mem
+import otter_render.image
 
-`otter_render.sprite` provides `SpriteSheet.frame_rect` and `SpriteAnim.frame_at`.
+pub fn main(env: std.Env) !void {
+    var store = image.ImageStore.init(mem.heap)
+    defer store.deinit()
 
-`otter_render.animation.Animation` provides integer `tick`, `lerp`, and `lerp_i32`. Custom curves live in a caller-owned `CurveTable`, not mutable module globals. `AnimBatch` borrows column slices, and `tick_batch` updates them using that table and a supplied timestamp.
+    wallpaper := try image.Image.load_from_file_downsampled(mem.heap, env.io, "/usr/share/backgrounds/wall.jpg", 1920, 1080, 0, true)
+    handle := store.insert(wallpaper)
 
-Lua `otter.render.image_size(bytes)` returns dimensions and format from encoded headers. Pixel drawing uses SD/UI bindings.
+    if store.image(handle) |img| {
+        std.io.printf("{}x{}\n", .{ img.width, img.height })
+    }
+
+    if store.remove(handle) |img| { img.deinit() }
+    std.io.printf("{}\n", .{ store.image(handle) == null })    // true
+}
+```
+
+`insert` moves the image in and returns its handle. `remove` moves it back out. `image` and `image_mut` lend it. Handles are generational, so a handle to a removed image resolves to `null` and draws nothing.
+
+`ImageSource` is the interface the rasterizer looks images up through. It has one method, `image(handle)`. An app with its own icon cache can implement it instead of using `ImageStore`.
+
+## Animated images
+
+`otter_render.animated.frames.AnimatedImage` plays GIF, APNG and animated WebP. A still image opens as one frame.
+
+```otr
+import otter_render.animated.frames
+
+var anim = try frames.AnimatedImage.open(mem.heap, file_bytes, .{})
+defer anim.deinit()
+
+width := anim.width
+height := anim.height
+for i in 0..anim.frame_count() {
+    shown := try anim.frame(i)
+    present(shown.rgba, width, height, frames.display_delay(shown.delay_ms))
+}
+```
+
+`open` takes ownership of the file bytes as a `List(u8)`. `frame(i)` returns a full-canvas RGBA buffer that stays valid until the next call. Frames decode on demand within `Options.memory_budget`, which defaults to 256 MiB. `loop_count` is `null` for an animation that repeats forever. `display_delay` shows delays of 10 ms or less as 100 ms, as browsers do.
+
+`otter_render.exif` reads orientation and camera metadata from JPEG, PNG, WebP and TIFF files. The `otter_render_formats` package in `otr/formats/` decodes AVIF, HEIC, JPEG XL, TIFF and camera RAW through system libraries.
+
+## Sprites
+
+`otter_render.sprite` maps frame numbers to rectangles in a sprite sheet.
+
+```otr
+import otter_render.sprite
+
+sheet := sprite.SpriteSheet.init(64, 64, 16, 16, 16)    // 64x64 image, 16x16 frames, 16 frames
+walk := sprite.SpriteAnim{ first_frame: 4, frame_count: 4, frame_ms: 120 }
+
+if sheet.frame_rect(walk.frame_at(elapsed_ms)) |src| {
+    cmds.sprite(dst, handle, src, .{ pixelated: true })
+}
+```
+
+## Animation
+
+`otter_render.animation.Animation` is an integer ease-out animation that advances one step per frame. `init` takes a duration in milliseconds and the refresh rate.
+
+```otr
+import otter_render.animation
+
+var slide = animation.Animation.init(200, 60)
+
+// once per frame
+animating := slide.tick(expanded)
+y := slide.lerp_i32(-40, 0)
+```
+
+`tick(true)` moves toward the end and `tick(false)` back toward the start. It returns true while the animation is still moving, and it handles a reversal partway through. `lerp` and `lerp_i32` interpolate between two values at the current progress.
+
+For many values at once, `AnimBatch` borrows column slices (`from`, `to`, `start_ms`, `duration_ms`, `curve_id`, `current`), and `tick_batch(&mut batch, &curves, now_ms)` updates `current` in one pass. Curves come from a `CurveTable` that you own. `CurveTable.set` replaces one of the custom curves with cubic Bezier parameters.
+
+## Lua
+
+`otter.render.image_size` reads the size and format of an encoded image from its header.
+
+```lua
+local render = require("otter.render")
+
+local w, h, format = render.image_size(bytes)
+if w then
+  print(w, h, format)   -- 37  23  png
+else
+  print(h)              -- unsupported image
+end
+```
+
+The formats are `"png"`, `"jpeg"`, `"webp"` and `"bmp"`.
 
 ## Source reference
 
-`otr/image.otr`, `otr/codecs.otr`, `otr/sprite.otr`, `otr/animation.otr` in the component repository.
+`otr/image.otr`, `otr/codecs.otr`, `otr/animated/frames.otr`, `otr/sprite.otr`, `otr/animation.otr` in the component repository.

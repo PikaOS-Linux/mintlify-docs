@@ -6,39 +6,105 @@ description: "Flat configuration syntax and supported otr field types."
 
 ## File syntax
 
-```ini
+```conf
 # Values not present keep their schema defaults.
 name = "example"
 width = 800
 enabled = true
 position = bottom
+cpu_cores = [0, 1, 2, 3]
+tags = ["fps", "competitive"]
+clock_time_format = "%I:%M %p"
 ```
 
-Use `#` comments, quoted strings, and unquoted boolean, number, or enum values. Nested structs flatten: `clock_time_format` addresses `config.clock.time_format`.
+Comments start with `#`. Strings are quoted. Booleans, numbers and enum tags are bare words. Lists use square brackets. Nested structs flatten, so `clock_time_format` sets `config.clock.time_format`.
 
 ## Field types
 
-| otr field                           | Use                                                |
-| ----------------------------------- | -------------------------------------------------- |
-| `bool`, integers, floats            | Scalar settings                                    |
-| Enum                                | Unquoted tag name                                  |
-| Fixed arrays                        | Fixed-size settings                                |
-| `text.Text`                         | Static default or owned parsed text                |
-| `?text.Text`                        | Optional text; an empty parsed string becomes null |
-| `text.TextList`                     | List of strings                                    |
-| `list.List(i64)` / `list.List(f64)` | Variable-length numeric lists                      |
-| Nested struct                       | Flattened sections                                 |
-| Custom `parse` / `to_str` type      | Colors and other string-valued types               |
-| `dynamic.Dynamic(Elem, prefix)`     | Indexed entries                                    |
+| otr field | Use |
+| --- | --- |
+| `bool`, integers, floats | Scalar settings |
+| Enum | A bare tag name |
+| `[N]T` | Fixed-size lists of integers, floats or bools |
+| `text.Text` | A string: a static default or an owned parsed value |
+| `?text.Text` | Optional text. An empty parsed string becomes null |
+| `text.TextList` | A list of strings |
+| `list.List(i64)`, `list.List(f64)` | Variable-length numeric lists |
+| `?T` | An optional scalar or custom value that stays null until a file sets it |
+| Nested struct | Flattened sections |
+| A type with `parse` and `to_str` | Colors and other values written as strings |
+| `dynamic.Dynamic(Elem, prefix)` | Indexed entries |
 
-All parser-visible fields must be `pub` and have defaults. Configuration strings are not raw `str` fields: parsed text must remain owned after the input buffer goes away.
+Every field the parser can set is `pub` and has a default.
 
-## Ownership and serialization details
+```otr
+import std
+import std.list
+import std.mem
+import otter_conf.loader
+import otter_conf.support
+import otter_conf.text
+import otter_geo.color
 
-A struct with `Text`, `TextList`, or `Dynamic` fields declares `deinit(self)` and delegates to `support.free_config`. Read `Text` with `as_str()`; clone it when another owner needs an independent value.
+const Scheduler = enum { none, bpfland, rusty, lavd, flash }
 
-Null non-string optionals are omitted from serialization. A null optional string serializes as an empty quoted string. A `[N]u8` field parses as text but serializes as a numeric list; use `Text` for ordinary string settings.
+const Clock = struct {
+    pub time_format: text.Text = text.Text.of("%H:%M")
+    pub text_color: ?color.Color = null
+}
+
+const Profile = struct {
+    pub name: text.Text = text.Text.of("default")
+    pub scheduler: Scheduler = .none
+    pub scheduler_mode: ?text.Text = null
+    pub cpu_cores: list.List(i64) = list.List(i64).init(mem.heap)
+    pub fps_limit: ?i64 = null
+    pub resolution_scale: f64 = 1.0
+    pub tags: text.TextList = text.TextList.of(&[0][]static u8{})
+    pub clock: Clock = .{}
+
+    pub fn deinit(self: Profile) void {
+        support.free_config(Profile, self)
+    }
+}
+
+pub fn main() !void {
+    content :=
+    \\name = "cs2"
+    \\scheduler = flash
+    \\cpu_cores = [0, 1, 2, 3]
+    \\fps_limit = 400
+    \\tags = ["fps", "competitive"]
+    \\clock_time_format = "%I:%M %p"
+    \\clock_text_color = "#7aa2f7"
+    cfg := try loader.load_from_slice(Profile, mem.heap, content)
+    defer cfg.deinit()
+
+    std.io.printf("{} on {}\n", .{ cfg.name.as_str(), @tag_name(cfg.scheduler) })
+    for core in cfg.cpu_cores.items() {
+        std.io.printf("core {}\n", .{ core })
+    }
+    for i in 0..cfg.tags.len() {
+        std.io.println(cfg.tags.at(i))
+    }
+    std.io.println(cfg.clock.time_format.as_str())
+}
+```
+
+## Text and ownership
+
+`Text` is a union of a static literal and an owned `String`. `Text.of("x")` is the literal form for field defaults. A value the parser reads from a file is an owned copy, so it outlives the input buffer.
+
+Read a `Text` with `as_str()` and compare it with `eql(s)`. `clone(alloc)` gives another owner an independent copy. `TextList` has `len()` and `at(i)`.
+
+A struct with a `Text`, `TextList`, `List` or `Dynamic` field is a resource. Declare `pub fn deinit(self: Self) void` and call `support.free_config(Self, self)` in it. `free_config` walks nested structs that have no `deinit` of their own. [Ownership and borrowing](/otr/memory/ownership-and-borrowing) explains the resource rules.
+
+## Serialization details
+
+The serializer omits a null optional, except a null optional string, which it writes as `key = ""`. It writes a custom value as the text its `to_str()` returns.
+
+A `[N]u8` field parses from a string and serializes as a list of numbers. Use `Text` for ordinary string settings.
 
 ## Source reference
 
-`otr/parser.otr`, `otr/support.otr`, `otr/text.otr`, `otr/serializer.otr` in the component repository.
+`otr/parser.otr`, `otr/support.otr`, `otr/text.otr` and `otr/serializer.otr` in the `otter-conf` repository. The example follows `otr/tests/example_advanced.otr`.

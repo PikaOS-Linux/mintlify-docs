@@ -1,35 +1,177 @@
 ---
 title: "Input"
 sidebarTitle: "Input"
-description: "Queued otr pointer, keyboard, IME, clipboard, and injection APIs."
+description: "Pointer, keyboard, input method, clipboard, and key injection in otter-wayland."
 ---
 
-## Input components
+## Seat and keyboard
 
-`seat.SeatState`, `keyboard.Keyboard`, and `text_input.TextInput` apply hub records during `pump` and expose queues. They do not store app callback/context pointers.
+`seat.SeatState` tracks the pointer and `keyboard.Keyboard` tracks keys through xkbcommon. Both read hub records in `pump` and queue events for you to drain. Neither stores a callback.
 
-`SeatState` retains pointer coordinates, current surface ID, and protocol serials. `Keyboard` owns keymap/repeat state and exposes an optional repeat descriptor. Drive repeat from that descriptor rather than a polling timer.
+```otr
+var kb = try keyboard.Keyboard.init(&conn.hub)
+defer kb.deinit()
+var st = seat.SeatState.init(&conn.hub)
+defer st.deinit()
+```
 
-## Preserve input order
+After each dispatch, pump both. Passing the keyboard to the seat's `pump` lets the seat attach it when the compositor announces keyboard capability.
 
-Seat, keyboard, and IME queues are separate. Use `input_order.next` to merge their heads by hub sequence number when ordering matters. Draining all pointer events before all key events can reorder one compositor dispatch.
+```otr
+if hub.lend(wl.Seat, &conn.seat) |s| {
+    st.pump(&conn.hub, s, &mut kb, null)
+}
+kb.pump(&conn.hub)
+```
 
-## IME
+`SeatEvent` is a union of `enter`, `motion`, `leave`, `button`, `scroll`, `scroll_value120`, `scroll_end`, and the swipe and pinch gesture events. Pointer positions are in surface coordinates. Handle `scroll_value120` as well as `scroll`, because mouse wheels report through it.
 
-`TextInput` supports preedit, composition checks, cursor rectangles, enable/disable, and commit operations. Suppress direct key insertion while composition owns the text.
+`KeyboardEvent` is `key`, `enter` or `leave`. A `KeyEvent` carries the `keysym`, the `utf8` text the key produces, an `action` of `pressed`, `released` or `repeat`, and the `mods`. `keyboard.keysyms` names the common keys.
 
-Password controls call `set_content(.password)`. This sends sensitive/hidden-text hints and password purpose to the compositor. A change while enabled still needs a commit.
+### Key repeat
 
-## Clipboard and drag-and-drop
+The keyboard owns a timer for repeat. `get_repeat_fd()` returns its descriptor, or `null` until repeat is first armed. Add it to your poll set and call `handle_repeat()` when it becomes readable. Repeats then arrive as `key` events with `action == .repeat`.
 
-`clipboard`, `clipboard_transfer`, `clipboard_dnd`, and `clipboard_monitor` separate transfer and ownership policy. Drain DnD events and answer through explicit acceptance/finish methods instead of callback return values.
+## Keep events in order
 
-## Injection
+The seat and the keyboard have separate queues. If you drain all pointer events and then all key events, a click and a key press from the same dispatch can swap places. `input_order.next` returns the oldest event across the queues.
 
-`virtual_keyboard.TextInjector` provides explicit typing/key/chord operations with borrowed connection and I/O. Availability depends on the compositor's virtual-input protocols; the library does not bypass that policy.
+```otr
+import std
+import otter_wayland.connection
+import otter_wayland.hub
+import otter_wayland.input_order
+import otter_wayland.keyboard
+import otter_wayland.seat
+import otter_wayland.wayland
 
-Lua `otter.wayland.clipboard()` and `set_clipboard` both require `clipboard`. Window/workspace actions require `wayland-actions`. A readable public output list does not imply either capability.
+const wl = wayland.wl
+
+fn drain_input(conn: &mut connection.Connection, st: &mut seat.SeatState, kb: &mut keyboard.Keyboard) bool {
+    if hub.lend(wl.Seat, &conn.seat) |s| {
+        st.pump(&conn.hub, s, kb, null)
+    }
+    kb.pump(&conn.hub)
+
+    for {
+        ev := input_order.next(st, kb, null) orelse break
+        switch ev {
+            .pointer |p| => {
+                switch p {
+                    .motion |m| => std.io.printf("pointer at {},{}\n", .{ m.point.x, m.point.y })
+                    .button |b| => {
+                        if b.button.is_left() and b.state == .pressed {
+                            std.io.println("left press")
+                        }
+                    }
+                    else => {}
+                }
+            }
+            .key |k| => {
+                switch k {
+                    .key |key| => {
+                        if key.state() != .pressed {
+                            continue
+                        }
+                        if key.keysym == keyboard.keysyms.Escape {
+                            return false
+                        }
+                        if key.mods.ctrl and key.unshifted_codepoint == 'v' {
+                            std.io.println("paste")
+                        } else {
+                            std.io.printf("typed {}\n", .{ key.utf8.as_str() })
+                        }
+                    }
+                    else => {}
+                }
+            }
+            .text => {}
+        }
+    }
+    return true
+}
+```
+
+The third argument is an optional `TextInput`, whose events then arrive as `.text`. `input_order` is not part of `otter_wayland_core`, because it needs the keyboard module.
+
+## Cursor shape
+
+`st.set_cursor_shape(manager, shape)` sets the pointer image through `wp-cursor-shape-v1`. Pass the manager from `hub.lend(wp.CursorShapeManagerV1, &conn.cursor_shape_manager)`. `hide_cursor()` hides the pointer.
+
+## Input methods
+
+`text_input.TextInput` wraps `zwp_text_input_v3` for CJK input and compose sequences. Create it from the connection's manager and seat, enable it on the focused surface, and commit.
+
+```otr
+var ti = text_input.TextInput.init(&conn.hub, hub.lend(zwp.TextInputManagerV3, &conn.text_input_manager), hub.lend(wl.Seat, &conn.seat))
+defer ti.deinit()
+
+ti.enable(&surf)
+ti.set_cursor_rectangle(caret.x, caret.y, 1, caret.height)
+ti.commit()
+```
+
+After `ti.pump(&conn.hub)`, `next_event()` returns `commit` with the finished text or `preedit` with the text being composed. While `is_composing()` is true, skip your own handling of key events, because the input method owns them.
+
+A password field calls `ti.set_content(.password)` once after `init`. The compositor then receives the sensitive-data and hidden-text hints and the password purpose. If you change the content while the input is enabled, call `commit` afterwards.
+
+## Clipboard
+
+`clipboard.Clipboard` wraps `wl_data_device` for copy, paste and drag-and-drop targets.
+
+```otr
+fn new_clipboard(conn: &connection.Connection) ?clipboard.Clipboard {
+    ddm := hub.lend(wl.DataDeviceManager, &conn.data_device_manager) orelse return null
+    s := hub.lend(wl.Seat, &conn.seat) orelse return null
+    return clipboard.Clipboard.init(&conn.hub, ddm, s)
+}
+
+fn paste(conn: &connection.Connection, clip: &mut clipboard.Clipboard) void {
+    var buf: [4096]u8 = unsafe { undefined }
+    if clip.get_text(&conn.display, &mut buf) |text| {
+        std.io.printf("clipboard: {}\n", .{ text })
+    }
+}
+```
+
+Call `clip.pump(&conn.hub, &conn.display)` after each dispatch. `get_text` reads into your buffer, and `get_text_alloc(&display, max_bytes)` returns a list that grows to fit a large paste. `set_text(ddm, serial, text)` offers text, using the serial of the input event that triggered the copy.
+
+Drops arrive as `DndEvent` values. Answer them with `Target.set_acceptance` and `Target.finish_drop` after you read the event.
+
+Related modules:
+
+| Module | Purpose |
+| --- | --- |
+| `clipboard_dnd` | Drop targets, drag sources and URI list parsing. |
+| `clipboard_transfer` | Reading and writing offer data over pipes. |
+| `clipboard_monitor` | Watches the selection through data-control, for clipboard managers. |
+| `primary_selection` | Select-to-copy and middle-click paste through `zwp_primary_selection_v1`. |
+
+## Key injection
+
+`virtual_keyboard.TextInjector` types text and presses keys through the compositor's virtual keyboard protocol. `init` returns `error.NoVirtualKeyboardManager` when the compositor does not offer it.
+
+```otr
+var injector = try virtual_keyboard.TextInjector.init(hub.lend(zwp.VirtualKeyboardManagerV1, &conn.virtual_keyboard_manager), hub.lend(wl.Seat, &conn.seat))
+defer injector.deinit()
+
+try injector.type_text(&mut conn, io, "hello")
+try injector.press_input_chord(&mut conn, io, .ctrl, .v)
+```
+
+## Lua
+
+Lua reaches the clipboard through `otter.wayland`, and only with the `clipboard` capability.
+
+```lua
+local wayland = require("otter.wayland")
+
+local text = wayland.clipboard()          -- nil when the selection has no text
+wayland.set_clipboard("copied from Lua")
+```
+
+Pointer and key events reach Lua widgets through the [otter-ui bindings](/developers/libraries/otter-ui), not through this module.
 
 ## Source reference
 
-`otr/seat.otr`, `otr/keyboard.otr`, `otr/text_input.otr`, `otr/input_order.otr`, `otr/clipboard_dnd.otr`, `otr/virtual_keyboard.otr` in the component repository.
+`otr/seat.otr`, `otr/keyboard.otr`, `otr/input_order.otr`, `otr/text_input.otr`, `otr/clipboard.otr`, `otr/clipboard_dnd.otr`, `otr/virtual_keyboard.otr` in the component repository. `otr/tests/e2e_order.otr` is a complete ordered-input client.

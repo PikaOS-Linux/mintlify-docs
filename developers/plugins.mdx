@@ -1,12 +1,20 @@
 ---
 title: "Writing plugins"
 sidebarTitle: "Plugins"
-description: "Build LuaJIT widgets and launcher providers with manifests, capabilities, and opf."
+description: "Write Lua bar widgets and launcher providers with manifests, capabilities, and opf."
 ---
 
-Otter Shell v0.13.12 hosts extensions through LuaJIT. The Zig `.so` plugin ABI is unsupported. Each plugin has a `plugin.toml` manifest and Lua source. Native hosts own layout, input routing, and rendering; scripts describe frames through `sd.*`.
+A plugin is a directory with a `plugin.toml` manifest and Lua source. The apps that load plugins are otr programs: the bar, launcher, dock, and taskbar each embed the `otter-lua` plugin host. The host owns layout, input routing, and rendering. Your script describes a frame with `sd.*` calls and reaches desktop services through `otter.*` modules.
 
 For installation and Settings controls, see [Plugins](/desktop/plugins).
+
+## How a host runs a plugin
+
+The host gives each plugin its own sandboxed LuaJIT state. One event loop waits on every source a plugin created, such as timers, child programs, and file watches, then delivers each plugin's events in order.
+
+A bar widget draws only when it calls `otter.host.redraw()`, when the bar resizes it, or after one of its events. An idle widget with no sources costs no wakeup and no Lua call.
+
+You write an otr app only when you need a window or a daemon of your own. See [Creating an app](/developers/creating-an-app).
 
 ## Choose an extension
 
@@ -18,7 +26,7 @@ For installation and Settings controls, see [Plugins](/desktop/plugins).
 | Whole Lua app                | `draw`, optional `event`            | `opf new app my-app`                     |
 | Replace a supported app's UI | `frame`, optional `action`          | [UI scripts](/developers/lua/ui-scripts) |
 
-The `app` starter uses `otter-lua run`, whose current backend is headless. For a Lua UI in a real Wayland window, start with the native shell in [Creating an app](/developers/creating-an-app).
+The `app` starter runs under `otter-lua run`, which has a headless backend. For a Lua UI in a real Wayland window, start with the Lua UI template in [Creating an app](/developers/creating-an-app).
 
 ## Scaffold and check
 
@@ -37,30 +45,126 @@ opf pack
 opf check --build
 ```
 
-- `build` syntax-checks every `.lua` file. It does not produce a native library or ship Lua bytecode.
-- `check` validates the manifest, loads the entry script, and checks its exports. Widgets are measured and drawn; providers are queried.
-- `pack` copies the manifest, Lua sources, and README/license files into `dist/plugins/my-chip/`.
-- `check --build` packs first, then checks the packed copy too.
+| Command | What it does |
+| --- | --- |
+| `opf build` | Compiles every `.lua` file to check its syntax |
+| `opf check` | Validates the manifest with the host's parser, loads the entry script, and calls its exports. It measures and draws a widget and queries a provider |
+| `opf pack` | Copies the manifest, the Lua sources, and README and license files to `dist/plugins/my-chip/` |
+| `opf check --build` | Packs first, then checks the packed copy too |
 
-`opf check` does not spawn programs, access your files, or run timers. Its filesystem, timer, and process modules are inert substitutes; other service modules can be stubs. Use it to check the contract; test live service integration in the host.
+`opf check` loads the plugin in a sandboxed runtime that spawns nothing, reads no files, and starts no timers. `sd.*`, `otter.theme`, `otter.log`, and `otter.host` are real. `otter.fs`, `otter.timer`, and `otter.process` keep their capability checks but their calls do nothing. Other `otter.*` modules are inert. Use `opf check` for the contract, and test service integration in the real host.
 
 ## Manifest
 
-```toml
-name = "my-chip"
+This is the manifest of the `examples-counter` widget in `otter-examples/otr/plugins/`:
+
+```toml plugin.toml
+name = "examples-counter"
 version = "0.1.0"
-entry = "init.lua"
 kind = "widget"
-provides = ["bar"]
+description = "The Otter Examples counter as a bar widget"
 capabilities = []
-description = "A small clickable status chip"
 ```
 
-`entry` defaults to `init.lua`; `kind` defaults to `plugin`. Accepted kinds are `widget`, `plugin`, and `app`. `provides` lets hosts select compatible plugins before running their code. Launcher providers require `kind = "plugin"` and `provides = ["launcher"]`; dock extensions need `provides = ["dock"]`.
+| Key | Value | Default |
+| --- | --- | --- |
+| `name` | The plugin's name | Required |
+| `version` | A version string | |
+| `entry` | The entry script | `init.lua` |
+| `kind` | `widget`, `plugin`, or `app` | `plugin` |
+| `capabilities` | What the plugin asks to use, such as `"spawn"` or `"fs:~/.config/otter-shell"` | None |
+| `provides` | The hosts the plugin is for | |
+| `description` | Text that Settings shows | |
 
-The parser accepts the manifest's supported string fields and string arrays, not arbitrary TOML. Unknown keys are errors. There is no `abi_version`, native `library`, or `provides_bar_widget` flag.
+A launcher provider needs `kind = "plugin"` and `provides = ["launcher"]`. A dock tile needs `provides = ["dock"]`.
 
-Use the same name for the directory and manifest when creating new plugins. Discovery, `plugin:<id>` layout names, and `plugins.conf` policy use the directory name.
+The parser reads `key = value` lines with strings, string arrays, and `#` comments. It rejects everything else, including an unknown key, so a misspelt key is an error.
+
+Give the directory and the manifest the same name. Discovery, `plugin:<id>` layout names, and `plugins.conf` policy all use the directory name.
+
+## A bar widget
+
+A widget's entry script returns `measure`, `draw`, and an optional `event`. This is `examples-counter/init.lua`:
+
+```lua init.lua
+local host = require("otter.host")
+local log = require("otter.log")
+local theme = require("otter.theme")
+
+local width = 132
+local clicks = 0
+
+-- Colours follow the theme: redraw when it changes.
+theme.subscribe(function() host.redraw() end)
+
+return {
+  measure = function(max_w, max_h)
+    return math.min(width, max_w), max_h
+  end,
+  draw = function(w, h)
+    local t = theme.get()
+    local size = math.min(14, h)
+    sd.begin(w, h)
+    sd.rect(0, 2, w, h - 4, theme.alpha(t.colors.accent, 0x28), t.layout.control_radius)
+    sd.hit(1)
+    local label = "Clicked " .. clicks .. (clicks == 1 and " time" or " times")
+    sd.text(8, math.floor((h - size) / 2) - 1, label, size, t.colors.accent)
+    sd.finish()
+  end,
+  event = function(kind, id)
+    if kind == "click" and id == 1 then
+      clicks = clicks + 1
+      log.info("examples-counter: clicked", clicks)
+      host.redraw()
+    end
+  end,
+}
+```
+
+The bar calls `measure(max_w, max_h)` for the size the widget wants and `draw(w, h)` for the frame. `sd.hit(1)` tags the rectangle before it as hit area 1, and a click on it calls `event("click", 1)`. The widget needs no capabilities.
+
+## A launcher provider
+
+A provider returns `query` and `activate`. The launcher calls `query(text, max)` as you type and shows the entries it returns. This is the core of `examples-profiles/init.lua`:
+
+```lua init.lua
+local log = require("otter.log")
+local process = require("otter.process")
+
+local rows = {
+  { title = "Otter Examples window", subtitle = "Surface Description card in an xdg toplevel", payload = "window" },
+  { title = "Otter Examples overlay", subtitle = "the same card on a layer-shell surface", payload = "layer" },
+}
+
+return {
+  query = function(text, max)
+    local out = {}
+    if not matches(text) then return out end
+    for _, row in ipairs(rows) do
+      if #out >= max then break end
+      out[#out + 1] = row
+    end
+    return out
+  end,
+  activate = function(payload)
+    log.info("examples-profiles: opening", payload)
+    process.launch({ "otter-examples", payload })
+  end,
+}
+```
+
+`matches` is a local function in the same file that compares the query with the plugin's keywords. Each entry has a `title`, an optional `subtitle`, and a `payload` string. `activate(payload)` runs when you choose an entry.
+
+`process.launch` needs the `spawn` capability, so the manifest declares it:
+
+```toml plugin.toml
+name = "examples-profiles"
+version = "0.1.0"
+kind = "plugin"
+provides = ["launcher"]
+description = "Launcher rows that open the Otter Examples card"
+capabilities = ["spawn"]
+```
 
 ## Install and discover
 
@@ -71,21 +175,21 @@ my-chip/
   helpers.lua
 ```
 
-Copy `dist/plugins/my-chip/` into `${XDG_DATA_HOME:-$HOME/.local/share}/otter-shell/plugins/`, or point `OTTER_PLUGIN_PATH` at `dist/plugins` for development.
+Copy `dist/plugins/my-chip/` into `$XDG_DATA_HOME/otter-shell/plugins/`. While you develop, point `OTTER_PLUGIN_PATH` at `dist/plugins` instead.
 
-Hosts search these roots in order; the first matching directory name wins:
+Hosts search these roots in order, and the first matching directory name wins:
 
 1. Each colon-separated `OTTER_PLUGIN_PATH` root.
 2. `$XDG_DATA_HOME/otter-shell/plugins`, defaulting to `~/.local/share/otter-shell/plugins`.
 3. `/usr/lib/otter-shell/plugins`.
 4. `otter-shell/plugins` under each `$XDG_DATA_DIRS` entry, defaulting to `/usr/local/share` and `/usr/share`.
 
-`OTTER_PLUGIN_SYSTEM_ROOTS` replaces the system roots for tests and development. An empty value excludes system plugins. Configuration directories hold policy, not plugin code.
+`OTTER_PLUGIN_SYSTEM_ROOTS` replaces the system roots for tests and development. An empty value excludes system plugins. The configuration directory holds policy and never plugin code.
 
 Add a bar widget to `otter-bar.conf`:
 
 ```conf
-layout_right = plugin:my-chip, clock
+layout_right = "plugin:my-chip,clock"
 ```
 
 ## Enable and grant capabilities
@@ -99,25 +203,26 @@ my-provider_enabled = true
 my-provider_capabilities = spawn
 ```
 
-A plugin receives only capabilities requested in its manifest **and** permitted by policy. A missing `_capabilities` key permits every declared capability; an empty value permits none. `*` permits all declared capabilities, not undeclared ones.
+A plugin gets a capability only when its manifest declares it and the policy allows it. With no `_capabilities` key, the policy allows every declared capability. An empty value allows none. `*` allows every declared capability and never adds an undeclared one.
 
-Most plugins default to enabled. Launcher providers `calc`, `emoji`, `clip`, and `search` default to disabled because native launcher extensions already provide those results. `snippet-provider` is also opt-in. Custom providers are not universally disabled.
+A plugin is enabled unless its `_enabled` key says otherwise. The launcher makes five exceptions: `calc`, `emoji`, `clip`, `search`, and `snippet-provider` stay off until you enable them. The launcher has built-in results for the first four.
 
 See [Bindings and capabilities](/developers/lua/bindings) before granting process launch or file access.
 
 ## Reload and failures
 
-The host watches plugin Lua files and manifests. Reload builds a fresh candidate instance. A previously drawn widget must also measure and draw successfully before replacement. A failed candidate leaves the running instance intact and records the error.
+The host watches each plugin's Lua files and manifest. A change loads a candidate instance in a fresh runtime. If the widget was already drawn, the candidate must also measure and draw before it replaces the running instance. A candidate that fails leaves the old instance running, and the host records the error.
 
-A runtime error, memory-limit failure, or watchdog timeout unloads only the failing plugin. Its timers, child-process resources, watches, and subscriptions are released. Fixing its files or requesting **Reload** can load it again.
+A runtime error, a heap cap failure, or a watchdog timeout unloads only the failing plugin. The host releases its timers, child programs, watches, and subscriptions, and every other plugin keeps running. Fix the files or click **Reload** to load it again.
 
-Settings' **Plugins** page shows requested and granted capabilities, host status, heap use, reload/failure counts, recent logs, and reload controls. [Runtime safety](/developers/lua/runtime) explains isolation and limits.
+The **Plugins** page in Settings shows each plugin's requested and granted capabilities, host status, heap use, reload and failure counts, and recent logs. [Runtime safety](/developers/lua/runtime) explains isolation and limits.
 
 ## Continue
 
-- [Widgets and providers](/developers/lua/widgets-and-providers): export contracts, input, tooltips, menus, and launcher rows.
-- [UI scripts](/developers/lua/ui-scripts): supported app UI replacement and hot reload.
-- [Bindings and capabilities](/developers/lua/bindings): built-in modules and native service bindings.
-- [Runtime safety](/developers/lua/runtime): sandbox, heap cap, CPU watchdog, and privileged scripts.
+- [Widgets and providers](/developers/lua/widgets-and-providers): export contracts, input, tooltips, menus, and launcher rows
+- [UI scripts](/developers/lua/ui-scripts): Lua UIs for supported apps, with hot reload
+- [Bindings and capabilities](/developers/lua/bindings): the `otter.*` modules and what each one needs
+- [Runtime safety](/developers/lua/runtime): sandbox, heap cap, CPU watchdog, and privileged scripts
+- [otter-lua](/developers/libraries/otter-lua): the otr library that hosts plugins
 
-Source references: [otter-lua](https://git.pika-os.com/otter-shell/otter-lua), [factory's otr guide](https://git.pika-os.com/otter-shell/otter-plugin-factory/src/branch/main/otr/README.md), and [Lua example plugins](https://git.pika-os.com/otter-shell/otter-shell-plugins/src/branch/main/otr/plugins).
+Sources: [otter-lua](https://git.pika-os.com/otter-shell/otter-lua), the [opf guide](https://git.pika-os.com/otter-shell/otter-plugin-factory/src/branch/main/otr/README.md), and the [example plugins](https://git.pika-os.com/otter-shell/otter-shell-plugins/src/branch/main/otr/plugins).

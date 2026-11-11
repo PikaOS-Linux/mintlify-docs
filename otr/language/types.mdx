@@ -1,0 +1,322 @@
+---
+title: "Types"
+description: "Numbers, strings, slices, structs, enums, unions, optionals, error unions and interfaces."
+---
+
+## Type summary
+
+| Type | Meaning |
+| --- | --- |
+| `i8 i16 i32 i64 i128 isize`, `u8` to `u128`, `usize` | Integers. `iN` and `uN` work for any width up to 128 bits, such as `u21` |
+| `f16 f32 f64` | Floats |
+| `bool`, `void`, `noreturn` | |
+| `[N]T` | Fixed-size array, a value type |
+| `?T` | Optional |
+| `E!T` | Error union |
+| `&T`, `&mut T` | Shared and exclusive borrowed references |
+| `[]T`, `[]mut T` | Shared and exclusive borrowed slices |
+| `&out T`, `[]out T` | Storage lent to be filled |
+| `&r T`, `[]r T` | Reference and slice into region `r` |
+| `&static T`, `[]static T` | References to data that lives for the whole program |
+| `*T`, `*const T`, `[*]T` | Raw pointers. Dereferencing needs `unsafe` |
+| `fn(A, B) R` | Function value: a code pointer with no captured environment |
+| `Vec(N, T)` | SIMD vector |
+| `type`, `region` | Compile-time only |
+
+The borrowed, region and static reference kinds are explained in [Ownership and borrowing](/otr/memory/ownership-and-borrowing) and [Regions, pools and cells](/otr/memory/regions-pools-and-cells).
+
+## Strings
+
+`str` is an alias for `[]u8` that holds UTF-8. A string literal has type `[]static u8` and coerces to `str`.
+
+```otr
+name: str = "otr"
+std.io.printf("{} {} {}\n", .{ name == "otr", name[0..2], name.len })   // true ot 3
+```
+
+`==` on strings compares contents. Slicing with `s[a..b]` is bounds-checked.
+
+`String` from `std.string` is the owned, growable string. Borrow its contents with `as_str()`:
+
+```otr
+var s = string.String.from(std.mem.heap, "otter")
+defer s.deinit()
+s.push_str(" shell")
+s.print(" {d:03}", .{ 7 })
+std.io.println(s.as_str())      // otter shell 007
+```
+
+`[:0]u8` is a slice that a zero byte follows in memory, so its `.ptr` is a C string. String literals are of this kind, which is why you can pass `"text"` to a C function that takes `const char *`.
+
+## Arrays and slices
+
+An array `[N]T` is a value. Assigning it copies it. A slice is a borrowed view of an array or of part of one:
+
+```otr
+arr := [4]i32{ 5, 7, 9, 11 }
+all: []i32 = &arr
+tail := arr[1..]
+first_two := arr[0..2]
+```
+
+A `[]mut T` lets you write the elements:
+
+```otr
+fn double_all(xs: []mut i64) void {
+    for mut x in xs { x.* *= 2 }
+}
+
+var nums = [3]i64{ 1, 2, 3 }
+double_all(&mut nums)
+```
+
+Indexing and slicing are bounds-checked in every build mode.
+
+## Structs
+
+```otr
+const Point = struct {
+    x: f32
+    y: f32 = 0
+
+    pub fn len(self: &Point) f32 {
+        return @sqrt(self.x * self.x + self.y * self.y)
+    }
+
+    pub fn scale(self: &mut Point, k: f32) void {
+        self.x *= k
+        self.y *= k
+    }
+}
+
+var p = Point{ x: 3, y: 4 }
+q: Point = .{ x: 1 }          // type from context, y takes its default
+p.scale(2)
+std.io.printf("{} {}\n", .{ p.len(), q.y })   // 10 0
+```
+
+Fields are separated by newlines or commas, and a field can have a default.
+
+A function inside a struct whose first parameter is the struct type is a method. The receiver is borrowed for you: `p.scale(2)` passes `&mut p`. This automatic borrow applies to the receiver only. Other arguments need an explicit `&` or `&mut`.
+
+Field access goes through references without extra syntax. `r.*` names the whole value behind a reference.
+
+`@This()` refers to the enclosing struct type inside its body. `Self` is the conventional alias for it in generic types.
+
+### Field visibility
+
+A field marked `pub` is fully public. Any other field can be read from every module, but only the declaring module can assign it, borrow it with `&mut`, or build the struct with a literal.
+
+This is what lets a type keep invariants. `List`'s length and capacity are readable everywhere and writable only inside `std.list`.
+
+```otr
+pub const Rect = struct {
+    pub w: i64
+    pub h: i64
+}
+```
+
+Mark fields `pub` when other modules need to construct the struct with a literal.
+
+### Layout
+
+The compiler chooses field layout. An ordinary struct places its fields by decreasing alignment, so it needs padding only at the end. Field order as written is still what literals, reflection and printing see.
+
+| Kind | Layout |
+| --- | --- |
+| `struct` | Chosen by the compiler |
+| `extern struct` | The C layout, for types shared with C |
+| `packed struct` | Bit-exact. The struct is one integer made of its fields' bits, first field lowest |
+| `ref struct` | A struct that may hold borrowed references. See [ref structs](/otr/memory/ownership-and-borrowing#ref-structs) |
+
+## Enums
+
+```otr
+const Color = enum { red, green, blue }
+
+c := Color.green
+std.io.printf("{} {}\n", .{ @tag_name(c), c == .green })   // green true
+```
+
+Tags are stored as `u32` counting from 0. Give a backing type and values when you need them:
+
+```otr
+const Level = enum(u8) { low = 1, mid, high }
+
+lv := Level.mid
+std.io.printf("{}\n", .{ @int_from_enum(lv) })   // 2
+```
+
+A trailing `_` makes the enum open. Every value of the backing type is then one of its values, named or not, as C enums are. A `switch` on an open enum needs `else`.
+
+```otr
+const Op = enum(i32) { add, sub, mul = 7, _ }
+```
+
+`@enum_from_int(T, n)` checks that `n` is a value of a closed enum and panics otherwise.
+
+## Unions
+
+A `union` is always tagged. You reach its payload only through `switch` or `if` capture, so reading the wrong variant is impossible in safe code.
+
+```otr
+const Shape = union {
+    circle: struct { r: f32 }
+    rect: struct { w: f32, h: f32 }
+    empty
+}
+
+fn area(s: Shape) f32 {
+    return switch s {
+        .circle |c| => 3.14159 * c.r * c.r
+        .rect |r| => r.w * r.h
+        .empty => 0
+    }
+}
+
+shapes := [3]Shape{ .circle{ r: 1 }, .rect{ w: 2, h: 3 }, .empty }
+std.io.printf("{}\n", .{ shapes[2] == .empty })   // true
+```
+
+Union literals are `.circle{ r: 2 }` and `.empty`. Where the type is not known from context, name it: `Shape.circle{ r: 2 }`.
+
+`s == .empty` and `s != .circle` test which variant a union holds, whatever its payload.
+
+A capture `|c|` is a copy when the payload is copyable and a shared reference otherwise. `|mut c|` captures a `&mut`.
+
+`extern union` is the untagged C form. Which field is valid is not tracked, so safe code can read a field only when every bit pattern is a valid value of its type.
+
+## Optionals
+
+`?T` is the only way to express "no value". There are no null references.
+
+```otr
+fn find(xs: []i32, want: i32) ?usize {
+    for x, i in xs {
+        if x == want { return i }
+    }
+    return null
+}
+```
+
+| Form | Behaviour |
+| --- | --- |
+| <code>if opt \|v\| \{ ... \}</code> | Runs the block with the value when there is one |
+| `opt orelse default` | The value, or `default` when null |
+| `opt orelse return` | The value, or leave the function |
+| `opt.?` | The value. Panics on null |
+| `opt == null`, `opt == 3` | Comparison with null or with a value |
+
+## Errors
+
+An error set is a named set of tags. `E!T` is either an error from `E` or a `T`.
+
+```otr
+const ParseError = error { Empty, BadDigit, Overflow }
+
+pub fn parse(s: str) ParseError!u32 {
+    if s.len == 0 { return error.Empty }
+    ...
+}
+```
+
+| Form | Behaviour |
+| --- | --- |
+| `try expr` | The value, or return the error to the caller |
+| `expr catch default` | The value, or `default` on any error |
+| <code>expr catch \|e\| \{ ... \}</code> | The value, or run the block with the error |
+| <code>if expr \|v\| \{ ... \} else \|e\| \{ ... \}</code> | Branch on success or failure |
+
+```otr
+n := try parse(input)
+m := parse(input) catch 0
+k := parse(input) catch |e| {
+    std.io.printf("bad input: {}\n", .{ @error_name(e) })
+    return e
+}
+```
+
+Merge error sets with `||`. `anyerror` is the set of all errors.
+
+`errdefer` is the cleanup that pairs with `try`. It runs only when the function leaves with an error:
+
+```otr
+pub fn create(name: str) fs.Error!Temp {
+    path := string.String.from_fmt(std.mem.heap, "{}/{}", .{ fs.temp_dir(), name })
+    errdefer path.deinit()
+    try fs.write_file(std.mem.heap, path.as_str(), "")
+    return .{ path: path }
+}
+```
+
+<Note>A panic is not an error. It prints a message with the source location and ends the process with status 101. No cleanup runs. Use errors for anything external input can cause.</Note>
+
+## Interfaces
+
+An interface lists methods. Any type with matching methods implements it. You do not declare the relationship.
+
+```otr
+const Shape = interface {
+    fn area(self: &Self) i64
+    fn name(self: &Self) []static u8
+}
+
+const Square = struct {
+    side: i64
+
+    pub fn area(self: &Square) i64 { return self.side * self.side }
+    pub fn name(self: &Square) []static u8 { return "square" }
+}
+```
+
+You can use an interface in two ways.
+
+`dyn Shape` is the type-erased form: a pointer plus a method table. It appears only behind a reference or an owning pointer, as `&dyn Shape`, `&mut dyn Shape` or `Box(dyn Shape)`. One compiled copy of the function serves every type.
+
+```otr
+fn describe(s: &dyn Shape) void {
+    std.io.printf("{} {}\n", .{ s.name(), s.area() })
+}
+```
+
+As a generic constraint, the interface gives you static dispatch. The function is compiled once per type and its body is checked once against the interface.
+
+```otr
+fn total(comptime T: type, xs: []T) i64 where T: Shape {
+    var sum: i64 = 0
+    for x in xs {
+        sum += x.area()
+    }
+    return sum
+}
+```
+
+`Copy`, `Send` and `Sync` are built-in marker interfaces. See [Comptime and generics](/otr/language/comptime-and-generics#constraints).
+
+## Out references
+
+`&out T` lends storage for the callee to fill. The local you pass does not need a value yet, and it counts as assigned once the call returns normally.
+
+```otr
+fn fill(out: &out i64) void {
+    out.* = 42
+}
+
+var x: i64
+fill(&out x)
+```
+
+`[]out T` is a slice whose elements are written and never read. It is how you hand an uninitialised buffer to code that fills a prefix of it:
+
+```otr
+fn read_some(buf: []out u8) []mut u8 {
+    buf[0] = 'o'
+    buf[1] = 'k'
+    return unsafe { buf[0..2] }
+}
+
+var buf: [16]u8
+got := read_some(&out buf)      // "ok"
+```
+
+The filler converts the part it wrote back to a `[]mut T` inside `unsafe`, because the compiler does not track which elements were written. Callers stay safe. Standard-library readers such as `linux.Fd.read` and `net.Conn.read` have this shape.

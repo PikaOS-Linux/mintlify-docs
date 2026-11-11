@@ -1,54 +1,98 @@
 ---
 title: "Surface Description"
 sidebarTitle: "Surface Description"
-description: "Borrowed otr UI frames, long-lived state, capacities, and rasterization."
+description: "The otter-ui frame lifecycle: long-lived state, one frame per paint, capacities, and rasterization."
 ---
 
-Import `otter_ui.ui_frame`.
+Import `otter_ui.ui_frame` for the state and frame types, `otter_ui.ui_frame_spec` for nodes, and `otter_ui.ui_frame_types` for ids and options.
 
-## State and frame lifetime
+## State and frame
 
-`UiState(caps)` owns commands, hit regions, element records, keyed state slots, and a per-frame label arena. Initialize it with `init()`.
+`UiState(caps)` holds what survives between frames: the recorded commands, hit regions, element rectangles, input state, and the scroll, text and animation slots keyed by id. Create it once with `init()`.
 
-`UiFrame(caps)` is a `ref struct`. `state.begin(FrameOptions)` borrows the state, theme, font, image store, and optional shaping resources for one frame. Do not keep a frame across updates or rasterize through state while that borrow is live.
+`UiFrame(caps)` is a `ref struct` that borrows the state for one paint. `state.begin(options)` returns it. While the frame lives you cannot touch the state, so put the frame in its own block.
 
 ```otr
-import otter_ui.ui_frame
+var ui = UiState.init()
+viewport := geo.Rect{ x: 0, y: 0, width: 320, height: 120 }
+{
+    var frame = ui.begin(.{ viewport: viewport, font: &mut f, alloc: mem.heap, images: &mut images, theme: &theme, styles: &styles })
+    frame.clear(theme.colors.background)
 
-pub fn main() !void {
-    var state = ui_frame.UiState(.{}).init()
-    bounds := ui_frame.Rect{ x: 0, y: 0, width: 320, height: 100 }
-    {
-        var frame = state.begin(.{ viewport: bounds, scale: 1, scale_q8: 256 })
-        root := ui_frame.Node.rect(ui_frame.Id.root, .{ width: .fill, height: .fill }, .{})
-        _ = try frame.render(&root, bounds)
-        try frame.finish()
+    var rows = [2]Node{
+        Node.label(ids.title, "Unsaved changes", styles.title_size(), null),
+        Node.button(ids.save, "Save"),
     }
-    _ = state.command_slice()
+    root := Node.column(ids.root, .{ width: .fill, height: .fill, padding: geo.Padding.uniform(16), gap: 8 }, &mut rows)
+    _ = try frame.render(&root, viewport)
+    try frame.finish()
 }
 ```
 
-## Frame options
-
-`FrameOptions` supplies the viewport, integer ceiling `scale`, exact `scale_q8`, optional font/theme/styles/images, input snapshot, and optional text shaping resources/provider. A zero `scale_q8` derives the exact factor from the integer scale. Set shaping resources when text requires them; do not keep backend pointers in the command list.
-
 ## Lifecycle
 
-1. `begin` resets per-frame output.
-2. `render` measures and places the root tree, emits commands, and records hits.
-3. Queue overlays after their anchor content is laid out.
-4. `finish` orders overlay/tooltip output.
-5. End the frame's borrow.
-6. `state.rasterize` borrows the destination surface, optional `TextContext`, image source, damage, and full-redraw flag.
+1. `begin` clears the previous frame's commands, hits and elements.
+2. `frame.clear(color)` fills the background, if you want one.
+3. `frame.render(&root, bounds)` measures and places the tree, records its commands and hit regions, and returns the rectangle it used.
+4. `queue_overlay` and `queue_tooltip` add popups. See [Input and overlays](/developers/libraries/otter-ui/input-and-overlays).
+5. `frame.finish()` puts overlays and tooltips above the main content.
+6. The frame's block ends, which releases the borrow.
+7. `state.rasterize` draws the recorded commands onto a surface.
 
-## Capacity and ownership
+```otr
+var txt = quad_renderer.TextContext{ font: &mut f }
+ui.rasterize(&mut target, &mut txt, &images, null, true)
+```
 
-`Capacities` bounds commands, strings, elements, hits, overlays, and state slots. `label_bytes` bounds copied label text; zero derives a capacity from record counts. Capacity-sensitive frame operations return `FrameError.Overflow`.
+`rasterize` takes the target surface, an optional `TextContext`, an image source, optional damage rectangles and a full-redraw flag. They are the same arguments as [`quad_renderer.rasterize`](/developers/libraries/otter-render/command-list#rasterize).
 
-`command_storage = false` is only for input/layout states whose app owns external commands. Rendering entry points intentionally reject that configuration.
+## Frame options
 
-Use `state.release_icons(&mut images)` to release UI-owned cached image handles. Store-owned pixels and borrowed frame resources have separate lifetimes.
+| Field | Meaning |
+| --- | --- |
+| `viewport` | The logical rectangle of the surface. Required. |
+| `scale`, `scale_q8` | The integer buffer scale and the exact Q8 factor. A `scale_q8` of 0 derives it from `scale`. |
+| `font` | The font for measuring and drawing text. |
+| `alloc` | An allocator for the frame to use. |
+| `images` | The `ImageStore` that image and icon handles resolve through. Pass the same store to `rasterize`. |
+| `theme`, `styles` | The theme and its resolved `StyleSet`. Controls take their default colors, radii and sizes from these. |
+| `text_system`, `text_scratch` | Shaping resources for bidirectional and complex text. |
+| `text_provider` | An object that creates the shaping resources the first time a node needs them. |
+| `input` | An `InputSnapshot` to render with, when you track input outside the state. |
+
+Get a `StyleSet` with `otter_ui.style.resolve(&theme)`. Apps read semantic roles from it, such as `styles.button.height` and `styles.colors.accent`, and never branch on a theme or profile name.
+
+## Capacities
+
+`Capacities` fixes the size of every buffer in a state at compile time. The defaults suit a large app. A small surface can shrink them:
+
+```otr
+const caps = ui_frame_types.Capacities{ elements: 16, hit_regions: 4, overlays: 1 }
+const UiState = ui_frame.UiState(caps)
+const UiFrame = ui_frame.UiFrame(caps)
+```
+
+| Field | Default | Bounds |
+| --- | --- | --- |
+| `commands`, `command_strings` | 2048, 32 KiB | Drawing commands and their text. |
+| `elements` | 512 | Nodes that record a rectangle. |
+| `hit_regions` | 512 | Clickable regions. |
+| `overlays`, `tooltips` | 64, 32 | Queued popups per frame. |
+| `scroll_states`, `text_states`, `animation_states` | 128, 64, 128 | Per-id state slots. |
+| `semantics` | 0 | Accessibility records. |
+
+An operation that runs out of room returns `FrameError.Overflow`. `state.commands_overflowed()` tells you whether drawing commands were dropped.
+
+Set `command_storage` to `false` only for a state that does layout and input while your app owns the command list. Its rendering methods then fail to compile.
+
+## Icons
+
+The frame caches the icons it loads in the image store. Before you drop the store, call `state.release_icons(&mut images)` to hand them back.
+
+## Debug overlay
+
+`state.cycle_debug_overlay()` steps through an inspector, a metrics overlay and off. `ui_frame_types.is_debug_overlay_shortcut(keysym, ctrl, shift)` recognizes Ctrl+Shift+I.
 
 ## Source reference
 
-`otr/ui_frame.otr`, `otr/ui_frame_types.otr` in the component repository.
+`otr/ui_frame.otr`, `otr/ui_frame_types.otr`, `otr/style.otr` in the component repository. `otr/ui/draw.otr` in otter-examples is a paint path with damage tracking.

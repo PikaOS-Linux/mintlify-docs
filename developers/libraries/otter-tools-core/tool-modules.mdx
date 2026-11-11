@@ -1,41 +1,127 @@
 ---
 title: "Tool modules"
 sidebarTitle: "Tool modules"
-description: "Native otr tool helpers, socket clients, and selective Lua modules."
+description: "Native otr tool helpers, socket clients, and the otter.tools Lua modules."
 ---
 
 ## Native modules
 
-| Module                                      | Purpose                                            |
-| ------------------------------------------- | -------------------------------------------------- |
-| `calc`                                      | `eval` expressions; nesting capped at 256          |
-| `duration`                                  | `parse_seconds`, bounded `format_compact`          |
-| `calendar`                                  | Dates, weekdays, month shifts/grids                |
-| `emoji`                                     | 3944-entry static catalog and bounded index search |
-| `clip_history`, `clipboard`                 | History policy and clipboard helpers               |
-| `record`                                    | Capture/encoder/backend selection                  |
-| `weather`                                   | URLs, parsed forecasts, cache format               |
-| `web_search`                                | Search URL construction and owned result parsing   |
-| `nightlight`                                | Schedule, Kelvin/gamma, command/state protocol     |
-| `search_client`, `assist_client`, `framing` | Local socket protocols and streamed events         |
-| `knowledge`                                 | Read-only zidx knowledge sessions                  |
+| Module | Purpose |
+| --- | --- |
+| `calc` | `eval` for `+ - * /`, parentheses and unary minus |
+| `duration` | `parse_seconds` for text such as `1h30m`, and `format_compact` |
+| `calendar` | Dates, weekdays, month shifts and the 6x7 month grid |
+| `emoji` | The 3944-entry Unicode emoji table and its search |
+| `color` | Hex parsing and formatting, sRGB to OKLCH |
+| `clip_history`, `clipboard` | Clipboard history policy and copy helpers |
+| `record` | Recorder capture mode, encoder backend and input choice |
+| `weather` | Open-Meteo URLs, forecast parsing, units and the cache format |
+| `web_search` | Search URL construction and result parsing |
+| `nightlight` | Schedule, Kelvin to gamma, and the command and state protocol |
+| `search_client`, `assist`, `framing` | Local socket protocols for `otter-search` and `otter-assist` |
+| `knowledge` | Read-only search over a markdown knowledge index |
 
-`calc.eval` returns `Error!f64`, including `TooDeep`. `emoji.search` writes catalog indices into caller output rather than returning pointers to entries.
+```otr
+import std
+import otter_tools_core.calc
+import otter_tools_core.calendar
+import otter_tools_core.color
+import otter_tools_core.duration
+import otter_tools_core.emoji
 
-`knowledge.Session.init(env, alloc, root)` owns mapped index/model state. Search results own their strings. Index writers remain outside this native read API.
+pub fn main() !void {
+    std.io.printf("{}\n", .{ try calc.eval("(2+3)*4") })                 // 20
+
+    seconds := try duration.parse_seconds("1h1m1s")
+    var buf: [16]u8 = [16]u8{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    std.io.printf("{} {}\n", .{ seconds, duration.format_compact(&mut buf, 300) orelse "?" })   // 3661 5m
+
+    grid := calendar.build_month(2026, 6, 2026, 6, 5)
+    first := grid.cells[0]
+    std.io.printf("{} {} {}\n", .{ first.day, first.month_delta, grid.cells[5].today })   // 31 -1 true
+
+    var hits: [8]u16 = [8]u16{ 0, 0, 0, 0, 0, 0, 0, 0 }
+    n := emoji.search("heart love", &mut hits)
+    for i in hits[0..n] {
+        std.io.printf("{} {}\n", .{ emoji.items[i].glyph, emoji.items[i].name })
+    }
+
+    rgb := try color.parse_hex("#336699")
+    lch := color.to_oklch(rgb)
+    std.io.printf("{} {d:.2}\n", .{ color.format_hex(rgb)[0..], lch.l })
+}
+```
+
+`calc.eval` returns `Error!f64`. Its errors are `Empty`, `UnexpectedToken`, `DivideByZero`, `TrailingInput` and `TooDeep`. Nesting stops at `calc.max_depth`, 512 levels, so untrusted input cannot overflow the stack.
+
+`emoji.search` writes indices into `emoji.items` and returns how many it wrote. A query matches when every space-separated term occurs in the emoji's name or tags.
+
+`calendar.build_month(year, month, today_year, today_month, today_day)` returns 42 cells. A cell's `month_delta` is -1 or 1 for the days of the neighboring months, and `today` marks the current day.
+
+`knowledge.Session.init(env, alloc, root)` maps an index and its model, and `search` returns results that own their strings. `knowledge.search_markdown` does both in one call. This module reads indexes and does not build them.
 
 ## Search engine
 
-The separate `otter_tools_search_engine` package contains `file_index`, `query`, `scanner`, `finder`, `content`, `fuzzy`, `scoring`, and `partial_sort`.
+The `otter_tools_search_engine` package has the modules `file_index`, `query`, `scanner`, `finder`, `content`, `fuzzy`, `scoring` and `partial_sort`.
 
-Searchers borrow the current index per search; they do not retain an index pointer. Cancel and join readers before mutating/replacing the live index.
+A `finder.Searcher` takes the index as an argument to each `search` call and keeps no reference to it. `content` search learns trigram signatures as queries arrive, so it takes `&mut FileIndex`. Cancel and join content workers before you change or replace the index.
 
 ## Lua modules
 
-`otter_tools_core_lua` provides `otter.tools.calc`, `.duration`, `.color`, `.emoji`, `.calendar`, `.weather`, and `.search`.
+The `otter_tools_core_lua` package provides seven modules for [otter-lua](/developers/libraries/otter-lua) hosts.
 
-Read-only computations need no capability. `.search` requires `desktop-search`. Weather cache paths and search socket paths are configured by the host. A module's presence does not imply the plugin can fetch arbitrary URLs or read arbitrary files.
+| Module | Functions |
+| --- | --- |
+| `otter.tools.calc` | `eval` |
+| `otter.tools.duration` | `parse`, `format` |
+| `otter.tools.color` | `parse_hex`, `format_hex`, `to_oklch` |
+| `otter.tools.emoji` | `search`, `count` |
+| `otter.tools.calendar` | `is_leap`, `days_in_month`, `weekday`, `shift_month`, `parse_date`, `from_unix`, `month` |
+| `otter.tools.weather` | `code_label`, `condition`, `weekday_label`, `forecast_url`, `geocoding_url`, `parse_forecast`, `read_cache` |
+| `otter.tools.search` | `parse_query`, `match`, and with `desktop-search`: `query`, `status`, `roots`, `reindex` |
+
+```lua
+local log = require("otter.log")
+local calc = require("otter.tools.calc")
+local duration = require("otter.tools.duration")
+local color = require("otter.tools.color")
+local emoji = require("otter.tools.emoji")
+local cal = require("otter.tools.calendar")
+
+assert(calc.eval("2+3*4") == 14)
+local v, e = calc.eval("1/0")            -- nil, "DivideByZero"
+
+assert(duration.parse("1h1m1s") == 3661)
+assert(duration.format(300) == "5m")
+
+local r, g, b = color.parse_hex("#336699")
+assert(color.format_hex(171, 205, 239) == "#ABCDEF")
+
+local hits = emoji.search("heart love", 8)
+log.info("first hit", hits[1].glyph)
+
+local grid = cal.month(2026, 6, 2026, 6, 5)
+assert(#grid == 42 and grid[1].day == 31 and grid[1].delta == -1 and grid[6].today)
+```
+
+A failed parse returns `nil` and the error's name. A wrong argument type raises a Lua error.
+
+The pure functions need no capability. `otter.tools.search` asks the `otter-search` daemon with `query(kind, text, ms)`, where `kind` is `"path"` or `"content"`. Those calls reveal file names and contents, so they need the `desktop-search` capability.
+
+```lua
+local log = require("otter.log")
+local search = require("otter.tools.search")
+
+local q = search.parse_query("@ext:lua !test/ main handler:42")
+log.info("query", #q.parts, q.line, q.constraints[1].kind)   -- 2 42 extension
+
+if search.match("cfg", "src/ConfigFile.lua") then
+  local reply = search.query("path", "budget pdf")
+end
+```
+
+`otter.tools.weather` builds URLs, parses forecast bodies and reads the cache file the host configured. It does not fetch anything. Use `otter.http` from [otter-http](/developers/libraries/otter-http) for the request.
 
 ## Source reference
 
-`otr/calc.otr`, `otr/emoji.otr`, `otr/knowledge.otr`, `otr/search_engine/`, `otr/lua/` in the component repository.
+`otr/calc.otr`, `otr/emoji.otr`, `otr/calendar.otr`, `otr/knowledge.otr`, `otr/search_engine/` and `otr/lua/` in the `otter-tools-core` repository. The Lua examples follow `otr/lua/tests/tools.lua`.

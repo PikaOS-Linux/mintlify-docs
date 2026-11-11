@@ -1,0 +1,133 @@
+---
+title: "Run-time checks and unsafe"
+sidebarTitle: "Checks and unsafe"
+description: "The checks that stay in every build mode, what a panic does, and what unsafe unlocks."
+---
+
+## Run-time checks
+
+Most of otr's safety is decided at compile time and costs nothing when the program runs. A few properties depend on run-time values, and each is checked with a branch. These checks are present in safe code in every build mode.
+
+| Rule | Check |
+| --- | --- |
+| K1 | Array and slice indexing and slicing are bounds-checked |
+| K2 | `x.?` on null panics |
+| K4 | Every local is definitely assigned before use. This one is proved at compile time |
+| K5 | `@int_cast` to a narrower type panics when the value does not fit |
+| K6 | `@int_from_float` panics on NaN or a value with no integer in the target type |
+
+Union payloads need no run-time tag check, because you can only reach a payload through `switch` or `if` capture.
+
+`@enum_from_int` panics when its argument is not a value of a closed enum. Division by zero panics. `debug.assert` checks in every build mode too.
+
+### Integer overflow
+
+Overflow on `+`, `-` and `*` panics in debug and release builds and wraps in release-fast. Wrapping cannot break memory safety, because bounds checks are never disabled.
+
+When you want wrapping or saturating arithmetic on purpose, say so with `+%`, `-%`, `*%` or `+|`, `-|`, `*|`. Those behave the same in every mode.
+
+### Definite assignment
+
+You can declare a `var` without a value. The compiler then proves that every path assigns it before any read:
+
+```otr
+var x: i64
+if ready {
+    x = 1
+} else {
+    x = 2
+}
+use(x)
+```
+
+A struct may be filled one field at a time, and it becomes usable as a whole value once every field is assigned on every path.
+
+Writing one element of an array does not count as assigning the whole array. Initialise it with a literal, with `std.mem.splat(N, T, value)`, or with `std.mem.array(N, T, f)`, which calls `f(i)` for each element:
+
+```otr
+var storage = std.mem.splat(1024, u8, 0)
+```
+
+Reading an array you only declared is rejected:
+
+```text
+error: 'storage' may be used before it is initialised (spec K4)
+```
+
+A buffer that some other code will fill does not need a value. Pass it as `&out` or `[]out`. See [out references](/otr/language/types#out-references).
+
+## Panics
+
+A panic prints a message with the source location and ends the process with exit status 101.
+
+```otr
+xs := [3]i32{ 1, 2, 3 }
+var i: usize = 2
+i += 1
+std.io.printf("{}\n", .{ xs[i] })
+```
+
+```text
+panic: panic.otr:7:30: index out of bounds
+```
+
+No cleanup runs after a panic. Defers do not execute and nothing unwinds. A panic means a bug in the program.
+
+Do not panic on anything external input can reach. Wire messages, config values, CLI arguments and file contents should produce errors, which the caller can handle.
+
+In a library built with `--lib`, a panic calls `abort()` instead of exiting, so the host program's crash handling sees it.
+
+## Unsafe code
+
+`unsafe { ... }` blocks and `unsafe fn` declarations let you do what the compiler cannot check:
+
+- dereference raw pointers and do pointer arithmetic
+- call `extern` and `unsafe` functions
+- use `undefined`, `@ptr_cast`, `@index_unchecked`, and `@bit_cast` between types that are not plain
+- read `extern union` fields whose type does not accept every bit pattern
+- convert a `[]out T` whose elements were all written to `[]mut T` or `[]T`
+- vouch that a zero follows a slice, making it `[:0]T`
+- declare a type `Send` or `Sync` by hand
+
+```otr
+var out: [19]f32 = unsafe { undefined }
+
+n := unsafe { stdlib.atoi("42".ptr) }
+
+got: str = unsafe { buf[0..n] }
+```
+
+An `unsafe` block is a promise that the code inside upholds the rules the compiler would otherwise check. Keep the blocks small and put a safe function around each one.
+
+### Plain types
+
+Some conversions that need `unsafe` in other languages are safe in otr when the types involved are plain. A plain type is bytes with no padding and no meaning beyond them: numbers, open enums, numeric vectors, and arrays and padding-free `extern` or `packed` structs of these.
+
+A C header struct or a wire-format struct therefore converts to and from bytes in safe code:
+
+```otr
+bytes := std.mem.to_bytes(Header, header)          // [@size_of(Header)]u8
+parsed := std.mem.from_bytes(Header, input)        // ?Header, null if input is too short
+```
+
+`@is_plain(T)` tells you at compile time whether `T` qualifies.
+
+### Raw pointers
+
+`*T`, `*const T` and `[*]T` are raw pointers. You can create and pass them in safe code, but dereferencing one needs `unsafe`. They exist for C interop and for the insides of containers.
+
+Any raw pointer converts implicitly to `*anyopaque`, as pointers convert to `void *` in C.
+
+### What unsafe code must still respect
+
+Callers rely on the borrow rules through every function between them and the unsafe code. Three obligations matter most:
+
+- Do not hand out a reference of a type that could not point into the storage it points into. A `[]u8` over a `u64` breaks the type-based narrowing every caller relies on.
+- Do not store a fresh borrow of a local through a parameter.
+- Do not write a variable through a raw pointer, or let C write it, while that variable is being passed by value to an otr function. Release builds assume by-value arguments are not written during the call.
+
+### Where the standard library keeps its unsafe code
+
+Inside `std`, containers reach their storage through one private `RawBuf(T)`, and `Cell`, `Mutex` and `RwLock` mutate through one private `UnsafeCell(T)`. The unsafe code that those types rely on sits in two places.
+
+The same approach works in your own code. Generated bindings, such as the Wayland scanner's output, hold the `unsafe` blocks, and the programs that use them need none.

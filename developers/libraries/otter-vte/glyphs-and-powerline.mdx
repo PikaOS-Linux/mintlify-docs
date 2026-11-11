@@ -1,30 +1,117 @@
 ---
 title: "Glyphs and powerline"
 sidebarTitle: "Glyphs and powerline"
-description: "Owned powerline/block operation lists and reusable glyph geometry in otr."
+description: "Geometry for block, quadrant and braille glyphs, and operation lists for powerline shapes."
 ---
+
+A terminal draws some characters itself instead of taking them from the font, so that they join cleanly across cells. `cell_glyphs` gives the rectangles for those characters. `ops` batches powerline shapes and block rectangles and draws them onto a surface.
+
+```otr
+import std
+import std.mem
+import otter_geo.rect as geo
+import otter_render.color
+import otter_render.scale
+import otter_render.surface
+import otter_vte.cell_glyphs
+import otter_vte.ops
+
+pub fn main() void {
+    var target = surface.Surface.init_owned(mem.heap, 64, 32, scale.Scale.one)
+    defer target.deinit()
+
+    // U+2584 LOWER HALF BLOCK in an 8x16 cell at (0, 0)
+    if cell_glyphs.build(0, 0, 8, 16, 0x2584, color.Color.white) |glyph| {
+        for r in glyph.slice() {
+            target.fill_rect(r, glyph.color)
+        }
+    }
+
+    var masks = ops.RoundMaskCache.init(mem.heap)
+    defer masks.deinit()
+    var powerline = ops.PowerlineOps.init(mem.heap)
+    defer powerline.deinit()
+    powerline.ensure_capacity(64)
+    powerline.append(.{ kind: .triangle, direction: .right, x: 8, y: 0, width: 8, height: 16, color: color.Color.blue, bg: color.Color.black })
+    powerline.append(.{ kind: .round, direction: .left, x: 16, y: 0, width: 8, height: 16, color: color.Color.green, bg: color.Color.black })
+    powerline.draw(&mut target, &mut masks)
+
+    var blocks = ops.BlockOps.init(mem.heap)
+    defer blocks.deinit()
+    blocks.ensure_capacity(256)
+    blocks.append(.{ rect: geo.Rect{ x: 24, y: 8, width: 8, height: 8 }, color: color.Color.white })
+    blocks.draw(&mut target, null, true)
+
+    if powerline.dropped or blocks.dropped {
+        std.io.println("glyph ops dropped")
+    }
+    powerline.reset()
+    blocks.reset()
+}
+```
 
 ## Custom glyph rectangles
 
-`otter_vte.cell_glyphs.build` produces geometry for custom terminal glyphs. `GlyphRects` stores up to 16 rectangles and exposes `slice()`.
+`cell_glyphs.build(x, y, width, height, cp, color)` returns the rectangles that make up code point `cp` in a cell at that position and size. It returns `null` for a code point the font should draw.
 
-Fractional blocks, quadrants, and braille use `append_bottom_frac`, `append_quadrant`, and `append_braille`. This geometry remains separate from font fallback.
+The result is a `GlyphRects`, which holds up to 16 rectangles and a color. `slice()` lends the rectangles. Shade characters come back with a reduced alpha in `color`.
+
+To build a `GlyphRects` yourself, start from `GlyphRects{ color: c }` and add to it:
+
+| Function | Adds |
+| --- | --- |
+| `append(rect)` | One rectangle. |
+| `append_bottom_frac(&mut out, x, y, w, h, numerator, denominator)` | The bottom fraction of the cell, as the eighth-block characters use. |
+| `append_quadrant(&mut out, x, y, w, h, idx)` | One quadrant of the cell. |
+| `append_braille(&mut out, x, y, w, h, sym)` | The dots of a braille pattern, one bit per dot. |
 
 ## Operation lists
 
-`otter_vte.ops.PowerlineOps` and `BlockOps` initialize with an allocator, reserve capacity explicitly, and reuse storage through `reset`. `append` records operations; `items()` exposes the recorded slice. The public `dropped` field records overflow.
+`ops.PowerlineOps` and `ops.BlockOps` collect shapes during the cell walk and draw them in one pass afterwards. Both take an allocator in `init` and are consumed by `deinit()`.
 
-Payload types such as `PowerlineOp`, `PowerlineKind`, and `BlockOp` live at module level rather than nested under the list types.
+`ensure_capacity(n)` reserves storage. `append` records one operation and does not grow the list, so an operation past the capacity is dropped and the public `dropped` field becomes true. `items()` lends what was recorded, and `reset()` empties the list and keeps the storage.
+
+A `PowerlineOp` has a `kind` of `triangle`, `separator` or `round`, a `direction` of `left` or `right`, a cell rectangle (`x`, `y`, `width`, `height`), and the shape and background colors. A `BlockOp` is a rectangle and a color.
+
+`PowerlineOps.draw(&mut surface, &mut masks)` draws every shape. `BlockOps.draw(&mut surface, damage_rects, full_damage)` draws the rectangles that touch the damage.
+
+To draw one shape without a list, call `draw_powerline_triangle`, `draw_powerline_separator` or `draw_powerline_round` directly.
 
 ## Rounded masks
 
-`RoundMaskCache` is caller-owned, not a mutable module global. The terminal `Renderer` owns one and passes it to powerline drawing. Masks allocate lazily on first use.
+Round powerline caps are anti-aliased from a coverage mask. `RoundMaskCache` computes a mask the first time a size and direction is drawn and keeps it. You own the cache and pass it to `PowerlineOps.draw` and `draw_powerline_round`. `renderer.Renderer` has one in its `round_masks` field.
 
 ## Lua
 
-`otter.vte.glyph(cp, x, y, w, h)` returns rectangles plus alpha, or nil. `powerline(cp)` classifies a glyph.
+`otter.vte` exposes the same geometry and shapes to Lua widgets.
 
-Plugin canvases support `clear`, `draw_powerline`, `draw_glyph`, `pixel`, and `free`. At most four canvases belong to one plugin, each bounded to 2 Mi physical pixels. The host releases them when that plugin instance unloads.
+```lua
+local vte = require("otter.vte")
+
+local rects, alpha = vte.glyph(0x2584, 4, 6, 8, 16)
+-- rects[1] is { x = ..., y = ..., w = ..., h = ... }; alpha is 0..255
+
+print(vte.powerline(0xe0b4))   -- round  right
+print(vte.powerline(0xe0b5))   -- nil
+
+local c = vte.canvas(16, 16, 2)
+vte.clear(c, 0xff000000)
+vte.draw_powerline(c, "round", "left", 8, 0, 8, 8, 0xff00ff00, 0xff000000)
+local drawn = vte.draw_glyph(c, 0x2588, 0, 8, 8, 8, 0xff0000ff)   -- false when the font draws it
+vte.free(c)
+```
+
+| Function | Returns |
+| --- | --- |
+| `glyph(cp, x, y, w, h)` | An array of rectangles and an alpha, or `nil` when the font draws `cp`. |
+| `powerline(cp)` | The kind and direction for U+E0B0 to U+E0B6, or `nil`. |
+| `batching_safe(cell_width, physical_advance, scale)` | Whether text runs can be batched at that cell width. |
+| `canvas(width, height, scale)` | A canvas handle. The size is logical. |
+| `clear(handle, argb)`, `draw_powerline(...)`, `draw_glyph(...)` | Drawing onto a canvas. Colors are `0xAARRGGBB`. |
+| `pixel(handle, x, y)` | The color of a physical pixel, or `nil` outside the canvas. |
+| `free(handle)` | Releases a canvas. |
+
+A plugin can hold at most four canvases, each up to 2 Mi physical pixels. The host frees them when the plugin unloads.
 
 ## Source reference
 

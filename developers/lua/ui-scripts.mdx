@@ -1,47 +1,185 @@
 ---
 title: "Lua UI scripts"
 sidebarTitle: "UI scripts"
-description: "Replace supported app frames with Lua while native code owns the window and state."
+description: "Describe a native app's frames in Lua while the app owns the window, input, and state."
 ---
 
-A UI script describes frames for a native application. Unlike a plugin, it does not need `plugin.toml`, `measure`, or the plugin event loop. The application owns the window, native services, input, and state passed to Lua.
+A UI script describes frames for a native application. It needs no `plugin.toml` and no `measure` export, and it runs without the plugin event loop. The application owns the window, its native services, and the state it passes to Lua.
 
-Examples include `osd.lua`, `logout.lua`, and the starter's `examples.lua`. State keys and registered bindings are specific to each app; copying a script between hosts does not give it the same state.
+`otter-osd` loads `osd.lua`, `otter-logout` loads `logout.lua`, and the `otter-examples` Lua starter loads `examples.lua`. Each app chooses its own state keys and bindings. A script copied to another host does not receive the same state.
 
 ## Script contract
 
-Return a frame function, or a table with `frame` and optional `action`:
+Return a frame function, or a table with `frame` and an optional `action`:
 
 ```lua
-local clicks = 0
-
 return {
-  frame = function(s)
-    sd.begin(320, 80)
-    sd.rect(0, 0, 320, 80, 0x202020ff, 4)
-    sd.hit(1)
-    sd.text(12, 12, "Clicks: " .. clicks, 14, 0xffffffff)
-    sd.finish()
+  frame = function(s)       -- one frame: sd.begin(w, h) ... sd.finish()
   end,
-  action = function(id)
-    if id == 1 then clicks = clicks + 1 end
+  action = function(id)     -- a click on a hit area tagged sd.hit(id)
   end,
 }
 ```
 
-`frame(state)` records a Surface Description frame. `action(id)` handles a tagged hit routed by the native host. See [Widgets and providers](/developers/lua/widgets-and-providers) for `sd.*` calls and frame limits.
+`frame(s)` records one Surface Description frame from the host's state table `s`. `action(id)` receives the id of a hit that the native host routed to the script. See [Widgets and providers](/developers/lua/widgets-and-providers#surface-description-calls) for the `sd.*` calls and frame limits.
 
-The host sends only state changes and replays unchanged frames without rerunning Lua. A failed update is not retried on every idle update; it waits for new state or a script edit.
+The host copies only changed state values into Lua. It runs `frame` when a value changed or after an action. Otherwise it replays the recorded frame without calling Lua.
 
-`require("helper")` loads `helper.lua` or `helper/init.lua` from the script directory. Paths must resolve inside that directory. Standard Lua package search paths and native module loading are unavailable. Reload creates a new runtime and module cache.
+`require("helper")` loads `helper.lua` or `helper/init.lua` from the script's directory. The host resolves symlinks and refuses a path that leaves that directory. Standard Lua package search paths and native module loading are unavailable. A reload builds a new runtime with an empty module cache.
+
+## A complete script
+
+This script is a reduced version of `otter-examples/otr/lua-ui/ui/examples.lua`. It keeps that script's helpers, state keys, and hit handling. Save it as `examples.lua` to run it in the `otter-examples` Lua host.
+
+```lua
+local ex = otter.examples
+local floor = math.floor
+
+local INCREMENT, RESET = 10, 11
+local W, H, PAD = 320, 148, 16
+
+-- The script owns this state. The host does not see it.
+local counter = 0
+
+-- A filled rect with an inside border.
+local function framed(x, y, w, h, fill, edge, r)
+  sd.rect(x, y, w, h, fill, r)
+  if edge % 256 > 0 then sd.outline(x, y, w, h, edge, r, 1) end
+end
+
+-- An invisible rect carrying a hit id.
+local function hit(id, x, y, w, h)
+  sd.rect(x, y, w, h, 0, 0)
+  sd.hit(id)
+end
+
+local function button(s, id, x, y, w, h, t)
+  local bg = s.button_bg
+  if s.active == id then
+    bg = s.button_pressed
+  elseif s.hover == id then
+    bg = s.button_hover
+  end
+  local size = s.font_size
+  sd.rect(x, y, w, h, bg, s.button_radius)
+  sd.outline(x, y, w, h, s.button_border, s.button_radius, 1)
+  local tw = ex.measure(t, size)
+  sd.text(x + floor((w - tw) / 2), ex.baseline_in(y, h, size) - size, t, size, s.button_text)
+  hit(id, x, y, w, h)
+end
+
+local function card(s)
+  local bh = s.button_height
+  local w = W - 2 * PAD
+  framed(0, 0, W, H, s.panel_surface, s.border, s.panel_radius)
+  sd.text(PAD, PAD, s.title, s.title_size, s.foreground)
+  local label = "Clicked " .. counter .. " time" .. (counter == 1 and "" or "s")
+  sd.text(PAD, PAD + 32, label, s.label_size, s.muted)
+  local half = floor((w - 8) / 2)
+  local by = H - PAD - bh
+  button(s, INCREMENT, PAD, by, half, bh, "Increment")
+  button(s, RESET, PAD + half + 8, by, half, bh, "Reset")
+end
+
+return {
+  frame = function(s)
+    if not s.w then
+      sd.begin(1, 1)
+      sd.finish()
+      return
+    end
+    sd.begin(s.w, s.h)
+    sd.col(s.x, s.y, 0)
+    card(s)
+    sd.finish()
+    sd.finish()
+  end,
+  action = function(id)
+    if id == INCREMENT then
+      counter = counter + 1
+    elseif id == RESET then
+      counter = 0
+    end
+  end,
+}
+```
+
+The script has three parts.
+
+Layout comes from the host. `s.x`, `s.y`, `s.w`, and `s.h` are the card's origin and size. `sd.col(s.x, s.y, 0)` moves the origin, and every child uses coordinates relative to it. otter-ui's sink treats `sd.row` and `sd.col` as origin offsets and does not apply `gap`, so the script places each child itself.
+
+State has two owners. The script keeps `counter` in a local. The host passes the theme and pointer state in `s`: colors such as `s.button_bg` and `s.foreground` as `0xRRGGBBAA`, sizes such as `s.button_height` and `s.font_size`, and the hovered and pressed hit ids in `s.hover` and `s.active`, which are 0 when no hit applies. `push_state` in `otter-examples/otr/lua-ui/view.otr` lists every key.
+
+Input arrives as hit ids. `sd.hit(id)` tags the node before it, so `hit` draws an invisible rectangle over each button. A click runs `action(id)`, and the host then renders the frame again.
+
+## The native side
+
+The app finds the script, pushes state, and replays the frame into its own UI. The smallest host looks like this, from the otter-lua README:
+
+```otr
+import std
+import otter_lua.host
+import otter_lua.search
+
+pub fn main(env: std.Env) !void {
+    var ui = try host.Ui.open(search.from_env(env, false), "osd.lua", .{})
+    defer ui.deinit()
+    ui.set_number("volume", 0.4)
+    _ = ui.update()
+    _ = ui.action(7)
+}
+```
+
+`set_number`, `set_text`, and `set_bool` fill the state table. `update()` brings the frame up to date and returns whether it changed. `replay` plays the recorded frame into the app's `sd.Sink`, and otter-ui's `otter_ui_lua.ui.SdSink` is the sink the shell apps use. Add `watch_fd()` to the event loop and call `on_watch()` when it is readable.
+
+`otter.examples` in the script above is a binding the examples host registers. The host lists it in `runtime.Options.bindings`, and the script sees each entry as `otter.<name>`. These lines are from `otter-examples/otr/lua-ui/view.otr`:
+
+```otr
+fn open_examples(L: ?*lj.State) i32 {
+    unsafe {
+        lj.c.lua_createtable(L, 0, 2)
+        lj.c.lua_pushcfunction(L, ex_measure)
+        lj.c.lua_setfield(L, -2, "measure".ptr)
+        lj.c.lua_pushcfunction(L, ex_baseline_in)
+        lj.c.lua_setfield(L, -2, "baseline_in".ptr)
+    }
+    return 1
+}
+
+const bindings = [1]runtime.Binding{ .{ name: "examples", open: open_examples } }
+
+fn options(jit: bool) runtime.Options {
+    return .{ bindings: &bindings, jit: jit }
+}
+```
+
+The same file routes a click to the script. It dispatches the press through otter-ui's hit testing and passes the hit's id to `action`:
+
+```otr
+pub fn on_press(self: &mut LuaView, ui: &mut demo.UiState, p: Point) demo.PressResult {
+    press := ui.dispatch(.button_press{ .{ point: p, button: 1 } })
+    if press.id.eql(Id.none) {
+        return .none
+    }
+    self.active = press.data
+    id := @truncate(u32, press.data)
+    u := &mut self.ui
+    _ = loan.lend(self.ctx.get(), fn[u, id]() bool {
+        return u.action(id)
+    })
+    return .full
+}
+```
+
+`host.Ui.open_with` also accepts `binding.Module` lists, so a script can `require("otter.theme")` and other [binding modules](/developers/lua/bindings) with the capabilities the host chooses. A `Ui` has no event loop. Bindings that post callbacks need the plugin host. See [otr quickstart](/otr/quickstart) for the language used in these snippets.
 
 ## Script locations
 
-For ordinary, non-privileged hosts:
+An ordinary host looks in these places:
 
-1. `OTTER_UI_DIR`, when set to an absolute directory, is the **only** directory searched.
-2. Otherwise, `$XDG_DATA_HOME/otter-shell/ui`, defaulting to `~/.local/share/otter-shell/ui`.
-3. Then `otter-shell/ui` under `$XDG_DATA_DIRS`, defaulting to `/usr/local/share` and `/usr/share`.
+1. `OTTER_UI_DIR`, when it holds an absolute directory. The host then looks nowhere else.
+2. `$XDG_DATA_HOME/otter-shell/ui`, which defaults to `~/.local/share/otter-shell/ui`.
+3. `otter-shell/ui` under each `$XDG_DATA_DIRS` entry, which defaults to `/usr/local/share` and `/usr/share`.
 
 For example:
 
@@ -51,9 +189,9 @@ For example:
   helper.lua
 ```
 
-Scripts in `~/.config/otter-shell/ui/` are not loaded. The host warns you to move them to the data directory. Keep configuration in `plugins.conf` and `ui.conf`, and store executable Lua in the data directory.
+The host does not load scripts from `~/.config/otter-shell/ui/`. It prints a warning that names the data directory to move them to. The config directory holds only `plugins.conf` and `ui.conf`.
 
-Privileged surfaces follow a stricter [root-owned script policy](/developers/lua/runtime#privileged-surfaces), ignoring user overrides and environment paths.
+Privileged surfaces follow a stricter [root-owned script policy](/developers/lua/runtime#privileged-surfaces). They ignore user directories and environment paths.
 
 ## Choose native or Lua mode
 
@@ -65,33 +203,40 @@ otter-osd_hot_reload = true
 otter-logout_mode = native
 ```
 
-Keys use the app id, not the script filename:
+Keys start with the app name, such as `otter-osd`, and the script's file name plays no part.
 
-- `auto`: try the Lua script; native fallback is the host's responsibility.
-- `native`: refuse the Lua script.
-- `hot_reload = false`: do not watch the loaded script for edits.
+| Key                | Values             | Effect                                                                       |
+| ------------------ | ------------------ | ---------------------------------------------------------------------------- |
+| `<app>_mode`       | `auto`, `native`   | `auto` uses the Lua script when it loads. `native` refuses the script.       |
+| `<app>_hot_reload` | `true`, `false`    | `false` leaves the loaded script unwatched, so saved edits do not reload it. |
 
-The default is `auto` with hot reload enabled. A privileged host ignores this user policy. Not every app has a native fallback: the Lua-only examples view exits if forced native.
+The defaults are `auto` and `true`. A missing file, an unknown value, or a malformed line keeps the defaults, and the last line for a key wins. A privileged host never reads this file.
 
-Settings lists script path, active mode/reason, reload and failure counts, heap use, and the last message when a host reports them. Explicit reload controls depend on the host; the OSD supports a reload request, while short-lived surfaces need not keep a running control loop.
+With `native`, `Ui.open` fails with `error.ForcedNative` and the app draws its native UI. `otter-osd` has a native renderer and uses it whenever no script loads. The `otter-examples` Lua starter has no native card, so it exits when you force native mode.
+
+Settings shows the script path, mode, reload and failure counts, heap use, and the last message for each host that publishes a status file.
 
 ## Safe reload
 
-When a watched script changes, the host builds a candidate runtime and renders it against current state. Only a successful load and complete frame replace the existing runtime and frame. A syntax error, runtime error, unfinished frame, memory failure, or watchdog timeout leaves the last valid UI intact and records the reason.
+The host watches the script's directory. A save of the script or of a `.lua` module beside it triggers one reload. The host builds a candidate runtime, loads the script into it, and renders a frame against the full current state. The candidate replaces the running runtime only when all of that succeeds.
 
-Reload starts fresh Lua state. Keep durable data in native application state or an explicitly permitted storage service, not script globals.
+A syntax error, a runtime error, an unfinished frame, an allocation past the heap cap, or a watchdog timeout keeps the previous UI on screen. The host records the reason in `last_message`.
+
+A failed update is not retried until the state or the script changes. A script that fails on the current state therefore costs one watchdog budget, and idle updates do not run it again.
+
+A reload starts with fresh Lua state, so script locals such as `counter` reset. Keep durable data in the native application's state.
 
 ## Start a real window
 
-The `otter-examples` Lua-UI starter combines this contract with the native template's XDG toplevel or layer-shell lifecycle. From that repository's root:
+The `otter-examples` Lua starter hosts `examples.lua` in the native template's XDG toplevel or layer-shell surface. From that repository's root:
 
 ```bash
-otr run otr/build.otr --release-fast -- run-lua -- window
-otr run otr/build.otr --release-fast -- run-lua -- layer
+otr run otr/build.otr -- run-lua -- window
+otr run otr/build.otr -- run-lua -- layer
 ```
 
-The build wrapper selects `otr/lua-ui/ui/examples.lua`. Its host pushes geometry, resolved theme values, and hover/active ids. `otter.examples.measure(text, size)` and `baseline_in(y, height, size)` expose native text metrics to this particular script.
+The build runner selects `otr/lua-ui/ui/examples.lua`. Pass `--ui-dir DIR` to the app to load the script from another directory. Edit and save the script while the window is open, and the card reloads.
 
-For a source map and verification commands, see [Creating an app](/developers/creating-an-app). `otter-lua run` is a separate whole-app host with a headless backend.
+See [Creating an app](/developers/creating-an-app) for the source map and verification commands. `otter-lua run` is a separate whole-app host with a headless backend.
 
-Source references: `otter-lua/otr/search.otr`, `host.otr`, `runtime.otr`, and `ui_conf.otr`; `otter-examples/otr/lua-ui/README.md`; `otter-settings/otr/ui_scripts.otr`.
+Source references: `otter-lua/otr/host.otr`, `search.otr`, `runtime.otr`, and `ui_conf.otr`; `otter-examples/otr/lua-ui/README.md` and `view.otr`; `otter-osd/otr/lua_ui.otr`; `otter-settings/otr/ui_scripts.otr`.

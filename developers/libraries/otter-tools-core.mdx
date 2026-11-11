@@ -4,20 +4,39 @@ sidebarTitle: "otter-tools-core"
 description: "otr helpers for small tools, protocols, search, palettes, and knowledge lookup."
 ---
 
-`otter-tools-core` shares data processing between small tools and larger applications. Import `otter_tools_core.<module>`; there is no root barrel.
+`otter-tools-core` holds the data processing that the small tools and the larger apps share. The package name is `otter_tools_core`. It has no root module, so you import `otter_tools_core.calc`, `otter_tools_core.weather` and the rest by name.
 
-Pure helpers include calculator parsing, durations, calendars, emoji lookup, color conversion, recorder selection, and palette generation. Environment/file/socket operations take explicit `std.Env` or `std.Io`.
+```toml
+[dependencies]
+otter_tools_core = { path = "../../otter-tools-core/otr" }
+```
 
-Owned results use `String` and `List`; bounded results use standard otr containers. Socket replies append into caller-owned reusable strings rather than returning a 256 KiB inline reply object.
+```otr
+import std
+import otter_tools_core.calc
+import otter_tools_core.duration
 
-## Separate packages
+pub fn main() !void {
+    std.io.printf("{}\n", .{ try calc.eval("(2+3)*4") })                    // 20
+    std.io.printf("{}\n", .{ try duration.parse_seconds("1h1m1s") })        // 3661
+}
+```
 
-- `otter_tools_search_engine`: indexing, query parsing, scanning, fuzzy/content search.
-- `otter_tools_search`: configured search integration.
-- `otter_ocr`: OCR integration.
-- `otter_tools_core_lua`: selected `otter.tools.*` modules.
+The calculator, durations, calendars, emoji lookup, color conversion, recorder backend choice and palette generation are pure functions. Functions that read the environment, files or sockets take a `std.Env`.
 
-Lua exposure is selective. The weather binding parses bodies and reads caches; it does not fetch forecasts by itself. Search daemon operations require `desktop-search`.
+Results that own text are `String` and `List` values you release with `deinit()`. Socket clients append replies to a `String` you pass in, so one buffer serves many requests.
+
+## Nested packages
+
+The repository holds five more packages, each a directory with its own `otr.toml`:
+
+| Package | Directory | Purpose |
+| --- | --- | --- |
+| `otter_tools_search_engine` | `otr/search_engine/` | File index, query parsing, scanning, fuzzy and content search |
+| `otter_tools_search` | `otr/search/` | Search roots and exclusions from the `otter-search` config |
+| `otter_ocr` | `otr/ocr/` | Text recognition from a PNG |
+| `otter_tools_spell` | `otr/spell/` | Spell checking: dictionaries, tokenizing and the checker |
+| `otter_tools_core_lua` | `otr/lua/` | The `otter.tools.*` Lua modules |
 
 ## Reference pages
 
@@ -26,4 +45,4 @@ Lua exposure is selective. The weather binding parses bodies and reads caches; i
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml`, `otr/API.md` and `otr/` in the `otter-tools-core` repository.

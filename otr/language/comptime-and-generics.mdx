@@ -1,0 +1,210 @@
+---
+title: "Comptime and generics"
+description: "Compile-time evaluation, generic types, where constraints and reflection."
+---
+
+otr has no separate generics syntax and no macros. A generic type is a function that runs at compile time and returns a type, as in Zig.
+
+## Compile-time evaluation
+
+The compiler evaluates a top-level `const` initialiser when it can. The binary then holds the finished value:
+
+```otr
+fn squares(comptime n: usize) [n]u32 {
+    var t: [n]u32 = std.mem.splat(n, u32, 0)
+    for i in 0..n {
+        t[i] = @int_cast(u32, i * i)
+    }
+    return t
+}
+
+// Evaluated by the compiler. The binary holds the finished table.
+const table = squares(8)
+```
+
+Compile-time code runs in a sandboxed interpreter. It cannot do I/O, it is deterministic, and it is bounded by an evaluation-step limit that is reported as a compile error when exceeded.
+
+A `comptime` parameter must be known at compile time at every call. `comptime { ... }` blocks force evaluation of their contents.
+
+`&x` of a value known at compile time is a `&static` reference, and a slice known at compile time is `[]static T`. Tables of descriptors that point at strings, other constants and functions are therefore read-only data with no start-up code.
+
+`@in_comptime()` is `true` in code running at compile time and `false` in code compiled for run time. Use it when a function needs a plain path at compile time and a SIMD or C path at run time.
+
+## Generic types
+
+```otr
+fn Stack(comptime T: type, comptime N: usize) type {
+    return struct {
+        const Self = @This()
+        items: [N]?T
+        len: usize
+
+        pub fn init() Self {
+            return .{ items: std.mem.splat(N, ?T, null), len: 0 }
+        }
+
+        pub fn push(self: &mut Self, item: T) bool {
+            if self.len == N { return false }
+            self.items[self.len] = item
+            self.len += 1
+            return true
+        }
+
+        pub fn pop(self: &mut Self) ?T {
+            if self.len == 0 { return null }
+            self.len -= 1
+            return self.items[self.len]
+        }
+    }
+}
+
+var s = Stack(i32, 4).init()
+_ = s.push(1)
+_ = s.push(2)
+std.io.printf("{}\n", .{ s.pop().? })   // 2
+```
+
+`Stack(i32, 4)` is an ordinary type expression. Identical instantiations are compiled once across the whole build.
+
+## Generic functions
+
+A generic function takes its types as `comptime` parameters:
+
+```otr
+fn max(comptime T: type, a: T, b: T) T {
+    return if a > b { a } else { b }
+}
+
+max(f64, 1.5, 2.5)
+```
+
+`anytype` accepts a value of any type without naming the type. `@type_of(x)` gives you the type back, which is how you pass a closure's anonymous type:
+
+```otr
+fn apply(comptime F: type, f: &F, x: i64) i64 {
+    return f(x)
+}
+
+triple := fn[scale](x: i64) i64 { return x * scale }
+apply(@type_of(triple), &triple, 14)
+```
+
+## Constraints
+
+A `where` clause constrains a comptime parameter. Each predicate is either a compile-time function that returns `bool`, or an interface.
+
+```otr
+fn ordered(comptime T: type) bool {
+    return @type_info(T) == .int or @type_info(T) == .float
+}
+
+fn max(comptime T: type, a: T, b: T) T where ordered(T) {
+    return if a > b { a } else { b }
+}
+
+fn dump(comptime W: type, w: &mut W, v: i64) !void where W: Writer {
+    ...
+}
+```
+
+Predicates are checked at the call site before the body is instantiated. A failed predicate reports the call site and the predicate's name. A predicate can call `@compile_error("...")` to give its own message.
+
+Closure constraints name a call kind and signature: `where F: fn(i32) bool`, `where F: mut fn(i32) void` or `where F: once fn() !void`. See [Closures](/otr/memory/closures#passing-closures-to-functions).
+
+### Interface-checked generics
+
+By default, a generic body is type-checked once per instantiation, as in Zig. Errors then show up only when someone uses the function with a type that does not fit.
+
+When every `comptime T: type` parameter of a function has at least one interface constraint, the body is type-checked once, at its definition, against those interfaces. Errors are reported where the function is written, and the language server can check the body before anything calls it.
+
+```otr
+const Shape = interface {
+    fn area(self: &Self) i64
+    fn scale(self: &mut Self, k: i64) void
+}
+
+fn grown(comptime T: type, x: T) T where T: Shape {
+    var y = x
+    y.scale(2)
+    return y
+}
+
+fn total(comptime T: type, xs: []T) i64 where T: Shape, T: Copy {
+    var sum: i64 = 0
+    for x in xs {
+        sum += x.area()
+    }
+    return sum
+}
+```
+
+Inside an interface-checked body:
+
+- A value of type `T` supports only the methods of its interfaces, and being moved, passed and returned.
+- `T` is treated as move-only and as a possible resource unless it is constrained by `Copy`.
+- Code that inspects `T` at compile time, such as `@type_info(T)` or `@size_of(T)`, is an error.
+
+Code is still generated per instantiation, so there is no run-time cost. A function with any unconstrained type parameter falls back to per-instantiation checking.
+
+The built-in marker interfaces are `Copy`, `Send` and `Sync`.
+
+## Reflection
+
+`@type_info(T)` returns a `TypeInfo` union with one variant per kind of type. Test the kind with `==`, and read a variant's payload as a field:
+
+```otr
+@type_info(T) == .int
+@type_info(T).int.bits
+@type_info(T).struct.fields     // slice of Field { name, type, is_pub }
+@type_info(E).enum.tags         // the tag names
+```
+
+`@field(x, name)` is `x.name` for a name known at compile time. With `inline for`, which unrolls over a compile-time sequence, you can walk any struct:
+
+```otr
+const Config = struct {
+    pub port: u16 = 8080
+    pub workers: u32 = 4
+    pub verbose: bool = false
+}
+
+fn dump(comptime T: type, v: &T) void {
+    inline for f in @type_info(T).struct.fields {
+        std.io.printf("{} = {}\n", .{ f.name, @field(v, f.name) })
+    }
+}
+
+dump(Config, &Config{})
+```
+
+```text
+port = 8080
+workers = 4
+verbose = false
+```
+
+This is how `std.json.parse_as` reads a document straight into a struct with no generated code.
+
+| Builtin | Result |
+| --- | --- |
+| `@type_info(T)` | A `TypeInfo` describing `T` |
+| `@Type(info)` | The type `info` describes: the inverse of `@type_info` |
+| `@field(x, name)` | `x.name`, readable and writable |
+| `@field(U, name)` | A variant of union `U`, as a pattern, a test, or a constructor |
+| `@has_decl(T, name)` | Whether a type or module declares `name` |
+| `@decl_names(T)` | The names of a type's `pub` declarations, in source order |
+| `@has_field_default(T, name)`, `@field_default(T, name)` | A struct field's default value |
+| `@is_resource(T)`, `@is_plain(T)` | Whether `T` must be consumed, and whether it is plain bytes |
+| `@size_of(T)`, `@align_of(T)` | Layout |
+| `@target_arch()` | `.x86_64` or `.aarch64` |
+| `@compile_error("message")` | Stops compilation with your message |
+
+A value that holds a `type`, as `TypeInfo` does, exists at compile time only.
+
+## Performance hints
+
+Two builtins in a function's body steer the release optimiser. Neither changes behaviour.
+
+`@cold()` marks the function as rarely run, such as a cache's miss path. Release builds never inline it and treat the paths that call it as cold.
+
+`@always_inline()` marks the function to be inlined into every direct caller. Calls through a function value, and recursive calls, stay calls.

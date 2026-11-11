@@ -1,0 +1,312 @@
+---
+title: "Language basics"
+sidebarTitle: "Basics"
+description: "Source files, bindings, functions, control flow, operators and modules in otr."
+---
+
+## Source files
+
+Source files are UTF-8 with the extension `.otr`. Each file is a module. A module's top-level declarations are `import`, `const`, `fn` and `test`, and their order does not matter.
+
+Comments run from `//` to the end of the line. `///` is a doc comment for the declaration that follows it. There are no block comments.
+
+By convention, types are `PascalCase` and everything else is `snake_case`. The compiler does not enforce this.
+
+### Statement endings
+
+otr has no semicolons. A newline ends a statement when the line's last token could end one: an identifier, a literal, a closing bracket, `?`, or a keyword such as `return` or `break`. This is Go's rule, and it has the same consequences:
+
+- An opening `{` goes on the same line as its `if`, `for`, `fn` or `struct`.
+- `} else {` goes on one line.
+- A line that ends in a binary operator or a comma continues on the next line.
+- Inside `(` or `[`, newlines never end a statement, so argument lists can span lines.
+
+You can write `;` to put several statements on one line. `otr fmt` removes it anywhere else.
+
+## Bindings
+
+```otr
+n := 10                 // immutable, type inferred
+limit: u32 = 10         // immutable, type given
+var total: i64 = 0      // mutable, type given
+var count = 0           // mutable, type inferred
+```
+
+`:=` and `name: T = expr` declare immutable bindings. `var` declares a mutable one. `const` is for the top level and for declarations inside a `struct` body.
+
+Shadowing a local is a compile error. Pick a new name.
+
+A `var` can be declared without a value. The compiler then proves that every path assigns it before reading it:
+
+```otr
+var x: i64
+fill(&out x)      // fill assigns x through an out reference
+```
+
+### No mutable globals
+
+There are no top-level `var`s. A top-level `const` whose value is known at compile time is folded into each use. Shared mutable state is a `const` of a synchronised type such as `sync.Atomic` or `sync.Mutex(T)`, and per-thread state is a `const` of `thread.Local(T)`. See [Concurrency](/otr/concurrency#global-state).
+
+## Functions
+
+```otr
+fn area(w: f32, h: f32) f32 {
+    return w * h
+}
+```
+
+Parameters are immutable. The return type is mandatory, and you write `void` when the function returns nothing. Return types are never inferred.
+
+`pub` exports a declaration from its module. Everything else is private to the file.
+
+A `pub fn` that can fail must name its error set, as in `ParseError!u32` or `anyerror!u32`. A private function may write `!u32` and let the compiler infer the set.
+
+Fully declared signatures are what keep compiles fast. An edit to a function body never invalidates its callers.
+
+### The entry point
+
+A program starts at `pub fn main`. It can take no parameters or an `Env`, and it can return `void` or `!void`:
+
+```otr
+pub fn main(env: std.Env) !void {
+    io := env.io
+    std.io.printf("{} arguments\n", .{ env.arg_count() })
+}
+```
+
+`Env` gives you `arg_count()`, `arg(i)`, `get_env(name)` and the default I/O runtime in `env.io`.
+
+### Returning several values
+
+A struct with unnamed members is a tuple type. A function can return one, and the caller can take it apart:
+
+```otr
+fn min_max(xs: []i32) struct { i32, i32 } {
+    var lo = xs[0]
+    var hi = xs[0]
+    for x in xs {
+        if x < lo { lo = x }
+        if x > hi { hi = x }
+    }
+    return .{ lo, hi }
+}
+
+lo, hi := min_max(&[4]i32{ 4, -2, 9, 0 })
+```
+
+`a, b := e` works on any struct or tuple. `_` skips a part that owns no resource.
+
+## Control flow
+
+`if`, `for` and `switch` take no parentheses around their conditions.
+
+### if
+
+```otr
+if x > 0 {
+    ...
+} else if x < 0 {
+    ...
+} else {
+    ...
+}
+```
+
+`if` is also an expression:
+
+```otr
+bigger := if a > b { a } else { b }
+```
+
+A `{` ends the condition, so a struct literal in an `if`, `for` or `switch` head needs parentheses around it.
+
+### for
+
+`for` is the only loop keyword.
+
+```otr
+for { ... }                     // infinite
+for queue.len > 0 { ... }       // while
+for i in 0..n { ... }           // range, end exclusive
+for item in items { ... }       // slice, array, or iterator
+for item, i in items { ... }    // with index
+for mut item in items { ... }   // item is a &mut T
+```
+
+A range index is a `usize`. Convert it when you need another integer type:
+
+```otr
+var total: i64 = 0
+for i in 0..10 {
+    total += @int_cast(i64, i)
+}
+```
+
+In `for item in items`, `item` is a copy when the element type is copyable and a shared reference otherwise. `for mut` gives you a `&mut T`, which you write through with `item.* = v` or by assigning its fields.
+
+Any type with a `next(self: &mut Self) ?T` method works as an iterator in a `for`.
+
+Labels let `break` and `continue` reach an outer loop:
+
+```otr
+outer: for row in grid {
+    for cell in row {
+        if cell == 0 { continue outer }
+        sum += cell
+    }
+}
+```
+
+### switch
+
+`switch` is an expression and must be exhaustive. `else =>` covers the rest.
+
+```otr
+fn classify(n: i32) str {
+    return switch n {
+        0 => "zero"
+        1, 2, 3 => "small"
+        else => "big"
+    }
+}
+```
+
+A `switch` on a string compares contents and needs an `else` arm:
+
+```otr
+fn kind(name: str) i32 {
+    return switch name {
+        "bar" => 1
+        "dock" => 2
+        else => 0
+    }
+}
+```
+
+Switching on unions and capturing their payloads is covered in [Types](/otr/language/types#unions).
+
+### defer and errdefer
+
+`defer stmt` runs `stmt` when the enclosing block exits. `errdefer stmt` runs it only when the block exits by returning an error. Several defers run in reverse order.
+
+```otr
+fn cleanup() void {
+    defer std.io.println("first registered, runs last")
+    defer std.io.println("second registered, runs first")
+    std.io.println("body")
+}
+```
+
+```text
+body
+second registered, runs first
+first registered, runs last
+```
+
+## Operators
+
+Operators and precedence follow C, without `++`, `--` and the comma operator. Logical operators are the words `and` and `or`.
+
+| Operators | Meaning |
+| --- | --- |
+| `+ - *` | Arithmetic. Integer overflow panics in debug and release builds and wraps in release-fast |
+| `+% -% *%` | Wrapping arithmetic in every build mode |
+| <code>+\| -\| *\|</code> | Saturating arithmetic |
+| `/ %` | Division and remainder. `%` is for integers, and floats use `math.fmod` |
+| `== !=` | Equality. On slices of integers, bools or enums it compares lengths and contents |
+| `and or` | Short-circuit logic |
+| `x.?` | Unwraps an optional, and panics on null |
+| `x orelse d` | Unwraps an optional with a default |
+| `r.*` | The whole value behind a reference |
+
+```otr
+a: u8 = 250
+std.io.printf("{} {}\n", .{ a +% 10, a +| 10 })   // 4 255
+```
+
+There is no operator overloading.
+
+### Conversions
+
+The only implicit conversions widen an integer or float to a type that holds every value of the source. Everything else is a builtin call:
+
+```otr
+wide: i64 = 300
+narrow := @int_cast(u16, wide)                   // panics if the value does not fit
+f := @float_from_int(f64, narrow) / 8
+whole := @int_from_float(i32, f)                 // panics on NaN or out of range
+low := @truncate(u8, wide)                       // keeps the low bits
+```
+
+Operands, arguments and literal elements are evaluated left to right.
+
+## Literals
+
+| Kind | Examples |
+| --- | --- |
+| Integer | `123`, `1_000_000`, `0xff`, `0o17`, `0b1010` |
+| Float | `1.5`, `1e9`, `0x1p-3` |
+| String | `"text\n"` with the escapes `\n \r \t \\ \" \u{1F600} \xNN` |
+| Character | `'a'` |
+| Array | `[3]i32{ 1, 2, 3 }` |
+| Struct | `Point{ x: 1, y: 2 }`, or `.{ x: 1, y: 2 }` when the type is known |
+
+Multi-line strings put `\\` at the start of each line, as in Zig:
+
+```otr
+text := \\first line
+    \\second line
+```
+
+## Modules and imports
+
+```otr
+import std
+import std.net
+import app.config as cfg
+```
+
+`import a.b.c` binds the last segment, `c`. `import a.b.c as x` binds `x`.
+
+Put imports at the top of the file, before other declarations. Modules cannot import each other in a cycle.
+
+The first segment of a path decides where the module comes from:
+
+- `std` is the standard library.
+- `build_options` is the module the build writes from your [build options](/otr/packages-and-builds#build-options).
+- A name that your package's `otr.toml` declares as a dependency is that package. `import wayland` loads its root module, and `import wayland.seat` loads its `seat.otr`.
+- Anything else is a module of your own package. The compiler looks beside the importing file first, then from the package's directory.
+
+Inside a package you import sibling modules by their own name. A module `geometry/rect.otr` is `import rect` from `geometry/geometry.otr`, not `import geometry.rect`.
+
+Each module loads once. A package reached through several dependents is one package, so its types are the same types to all of them.
+
+## Builtins
+
+Builtins start with `@`. The ones you will meet first:
+
+| Builtin | Purpose |
+| --- | --- |
+| `@int_cast(T, x)`, `@truncate(T, x)` | Integer conversion, checked or truncating |
+| `@float_from_int(T, x)`, `@int_from_float(T, x)`, `@float_cast(T, x)` | Number conversions |
+| `@as(T, x)` | Gives a literal or expression a type |
+| `@min(a, b)`, `@max(a, b)`, `@sqrt(x)`, `@fma(a, b, c)` | Math that also works on vectors |
+| `@size_of(T)`, `@align_of(T)`, `@type_of(x)` | Type queries |
+| `@tag_name(e)`, `@int_from_enum(e)`, `@enum_from_int(T, n)` | Enum helpers |
+| `@error_name(e)` | The name of an error value |
+| `@panic("message")` | Ends the process |
+| `@embed_file("path")` | A file's bytes as a static string |
+| `@pop_count(x)`, `@clz(x)`, `@ctz(x)`, `@byte_swap(x)`, `@bit_reverse(x)` | Bit operations |
+
+The reflection builtins are in [Comptime and generics](/otr/language/comptime-and-generics).
+
+## Keywords
+
+```text
+and as break callconv catch comptime const continue defer dyn else enum errdefer
+error export extern false fn for if import in inline interface mut null once or
+orelse packed pub ref region return simd soa static struct switch test true try
+undefined union unsafe var where
+```
+
+Directly after a `.`, a keyword is an ordinary name, so members can be spelled like keywords: `Kind.ref`, `.struct`.

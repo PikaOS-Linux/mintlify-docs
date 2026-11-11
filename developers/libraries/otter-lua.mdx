@@ -4,78 +4,262 @@ sidebarTitle: "otter-lua"
 description: "Sandboxed LuaJIT UI scripts, capability-scoped plugins, and otr binding modules."
 ---
 
-`otter-lua` hosts LuaJIT scripts and plugins in otr applications. It owns the runtime, UI hot reload, plugin discovery/lifecycle, and binding interface. Individual libraries provide their Lua bindings separately.
+`otter-lua` hosts LuaJIT scripts and plugins inside otr apps. It owns the sandboxed runtime, UI script hot reload, plugin discovery and lifecycle, and the interface that binding modules implement. Lua builds frames. Layout, hit testing and rasterization stay native.
 
-Import native leaves such as `otter_lua.runtime`, `host`, `plugins`, `binding`, `sd`, `manifest`, and `caps`.
+Each library ships its own `otter.*` Lua module in a separate `otr/lua/` package, so an app that hosts no Lua never links LuaJIT.
 
-## UI scripts and plugins
-
-`host.Ui` manages one live UI script and its last good frame. `open_with` supplies host-chosen extensions. Successful reload replaces the script only after a candidate loads and renders. Failed edits keep the previous UI. This host does not run a plugin event loop; asynchronous binding events need `plugins.Host`.
-
-`plugins.Host` owns a sandboxed runtime per plugin and one descriptor-driven event loop. Use `poll_fd` with an outer app loop or `run_once` to drive it. `load`, `reload`, `set_allow`, `unload`, `info`, and `write_status` support lifecycle and Settings administration.
-
-Plugin reload creates a new instance. Handles, timers, processes, watches, callbacks, and module subscriptions belong to the instance and are released on replacement/unload. A failed candidate keeps the old running instance; a failing call unloads only its own plugin.
-
-## Plugin manifest
-
-A plugin directory contains `plugin.toml` and its text entry script:
+The package name is `otter_lua`. Import modules such as `otter_lua.host`, `otter_lua.plugins`, `otter_lua.binding`, `otter_lua.sd`, `otter_lua.manifest` and `otter_lua.search`.
 
 ```toml
-name = "example-widget"
+[dependencies]
+otter_lua = { path = "../../otter-lua/otr" }
+```
+
+## UI scripts
+
+A UI script draws one surface for a native app. It returns a frame function, or a table with `frame` and `action`. `frame` receives the host's state table and describes one frame with the global `sd` table.
+
+```lua
+local clicks = 0
+return {
+  frame = function(s)
+    sd.begin(320, 80)                 -- root
+    sd.row(0, 0, 8)                   -- container: x, y, gap
+      sd.rect(0, 0, 64, 64, 0xff0000ff, 4)   -- x, y, w, h, 0xRRGGBBAA, radius
+      sd.outline(0, 0, 64, 64, 0xffffffff, 4, 2)  -- ... and stroke width
+      sd.hit(7)                       -- tags the node before it with action id 7
+      sd.icon(8, 8, "volume", 24, 0xffffffff)
+      sd.text(72, 0, s.label .. " " .. clicks, 14, 0xffffffff)
+    sd.finish()                       -- closes the row
+    sd.finish()                       -- closes the root: the frame is complete
+  end,
+  action = function(id) clicks = clicks + id end,
+}
+```
+
+A frame holds at most 4096 nodes and 64 KiB of text. The host refuses a frame that leaves a container open, calls out of order or passes those limits, and keeps showing the previous one.
+
+On the native side, `host.Ui` manages one script and its last good frame:
+
+```otr
+import std
+import otter_lua.host
+import otter_lua.search
+
+pub fn main(env: std.Env) !void {
+    var ui = try host.Ui.open(search.from_env(env, false), "osd.lua", .{})
+    defer ui.deinit()
+
+    ui.set_number("volume", 0.4)
+    if ui.update() {
+        std.io.println("new frame")
+    }
+    _ = ui.action(7)
+}
+```
+
+`set_number`, `set_text` and `set_bool` fill the state table. `update()` runs the script when the state changed. `ui.replay(S, &mut sink)` plays the recorded frame into your `sd.Sink`, so an unchanged frame never runs Lua. `action(id)` delivers a click on a hit.
+
+Add `ui.watch_fd()` to your event loop and call `ui.on_watch()` when it is readable. A reload loads the new script and renders a trial frame first. A script that fails keeps the previous one running, and `last_message()` says why.
+
+`Ui.open_with(paths, file, options, .{ modules: &mods, caps: &allow, home: home })` also gives the script `require("otter.x")` for the binding modules and capabilities you choose. A `Ui` has no event loop, so bindings that post events need `plugins.Host`.
+
+## Plugins
+
+A plugin is a directory with a `plugin.toml` manifest and an entry script.
+
+```toml
+name = "cmd-watch"
 version = "0.1.0"
 entry = "init.lua"
 kind = "widget"
-capabilities = []
+capabilities = ["spawn"]
 provides = ["bar"]
-description = "Example widget"
+description = "Shows the first line of a command's output"
 ```
 
-Kinds are `widget`, `plugin`, and `app`; default kind is `plugin`. Widget exports are `measure(max_w, max_h)`, `draw(w, h)`, and `event(kind, id, x, y)`. Export names for non-widget extensions depend on the consuming application.
+`kind` is `widget`, `plugin` or `app`, and defaults to `plugin`. `entry` defaults to `init.lua`. `provides` names the hosts the plugin is for. An unknown key is an error.
 
-## Widget drawing
-
-The runtime provides the global `sd` table. This `init.lua` exports a static widget without requesting capabilities:
+This is the entry script of the `cmd-watch` example. It runs a command every five seconds and shows the first line of its output:
 
 ```lua
+local command = { "date", "+%H:%M" }
+local every_ms = 5000
+local font_size = 13
+local color = 0xe6e6e6ff
+
+local process = require("otter.process")
+local timer = require("otter.timer")
+local host = require("otter.host")
+local log = require("otter.log")
+
+local label = "…"
+local running = false
+
+local function refresh()
+  if running then return end
+  running = true
+  process.spawn(command, function(code, out, err)
+    running = false
+    local line = out:match("[^\n]*") or ""
+    if code ~= 0 then
+      log.warn("command failed", code, err)
+      line = "!" .. code
+    end
+    if line ~= label then
+      label = line
+      host.redraw()   -- only a changed label costs a frame
+    end
+  end)
+end
+
+refresh()
+timer.every(every_ms, refresh)
+
 return {
   measure = function(max_w, max_h)
-    return math.min(120, max_w), math.min(32, max_h)
+    return math.min(#label * font_size * 0.6 + 12, max_w), max_h
   end,
   draw = function(w, h)
     sd.begin(w, h)
-    sd.rect(0, 0, w, h, 0x202020FF, 4)
-    sd.text(8, 6, "Example", 14, 0xFFFFFFFF)
+    sd.rect(0, 0, w, h, 0x00000000, 4)
+    sd.hit(1)
+    sd.text(6, (h - font_size) / 2, label, font_size, color)
     sd.finish()
   end,
-  event = function(kind, id, x, y)
+  event = function(kind, id)
+    if kind == "click" and id == 1 then refresh() end
   end,
 }
 ```
 
-`sd` records a bounded frame; the application replays it through its native drawing sink. It does not grant arbitrary window or filesystem access.
+A widget returns `measure(max_w, max_h)`, `draw(w, h)` and `event(kind, id, ...)`. The host draws it only after it called `otter.host.redraw()`, was resized or handled an event. An idle widget costs no wakeup and no Lua call.
+
+A widget can also export `tooltip`, `menu`, `menu_activate` and `menu_closed`. The bar, taskbar and dock use them for hover text and click menus.
+
+## Hosting plugins
+
+`plugins.Host` gives each plugin its own sandboxed runtime and runs one epoll loop for all of them.
+
+```otr
+import std
+import otter_lua.binding
+import otter_lua.lj
+import otter_lua.plugins
+
+fn answer(L: ?*lj.State) i32 {
+    unsafe { lj.c.lua_pushnumber(L, 42) }
+    return 1
+}
+
+fn open(L: ?*lj.State, o: &binding.Open) void {
+    _ = L
+    o.add("answer", answer, "")
+}
+
+pub fn module() binding.Module {
+    return .{ name: "otter.example", open: open }
+}
+
+pub fn main(env: std.Env) !void {
+    modules := [1]binding.Module{ module() }
+    var host = try plugins.Host.init(&modules, .{ home: env.get_env("HOME") orelse "" })
+    defer host.deinit()
+
+    allow := [1]str{ "spawn" }
+    id := host.load("/usr/lib/otter-shell/plugins/cmd-watch", &allow)
+    for {
+        _ = host.run_once(-1)
+        if host.draw(id, 200, 32) {
+            std.io.println("widget drew a new frame")
+        }
+    }
+}
+```
+
+| Method | Purpose |
+| --- | --- |
+| `load(dir, allow)` | Loads a plugin with the allow-list you choose and returns its `Id` |
+| `run_once(timeout_ms)` | Waits for plugin sources, then delivers each plugin's queued events |
+| `poll_fd()` | A descriptor for your own epoll. Call `run_once(0)` when it is readable |
+| `measure(id, max_w, max_h)`, `draw(id, w, h)`, `frame(id)` | Size a widget, draw it, and read its recorded frame |
+| `event(id, kind, hit, x, y)`, `event_text(id, kind, hit, text)` | Deliver pointer and text input |
+| `has_export`, `call`, `call_bool`, `call_records`, `draw_export` | Call a named function of the table the plugin returned |
+| `reload(id)`, `set_allow(id, allow)`, `unload(id)` | Lifecycle |
+| `ids(out)`, `info(id)`, `status(id)` | Admin queries for a settings page |
+
+Each load or reload creates a new instance with a fresh runtime. Timers, programs, watches, callbacks and module subscriptions belong to the instance, and the host releases them with it.
+
+A change to a plugin's `.lua` files or manifest reloads it. The candidate loads, and a drawn widget measures and draws, before it replaces the running instance. A failing candidate leaves the old instance running.
+
+A call into a plugin that fails unloads that plugin alone. Its status becomes `failed` and the host keeps its message. Other plugins keep running.
+
+`manifest.read(dir, &mut m, &mut err)` parses a manifest without loading the plugin, and `m.provides_has("launcher")` lets a host pick its plugins first. `policy.load_policy(env, id)` reads the user's `plugins.conf`, where `otter-settings` stores each plugin's enabled switch and allow-list.
 
 ## Sandbox and capabilities
 
-Each state opens base, table, string, math, and bit support. Raw `io`, `os`, `ffi`, `package`, `debug`, and `jit` libraries are not opened. FFI is compiled out. Code-loading/dumping functions are removed, bytecode is refused, and local `require` stays beneath the script directory after resolving symlinks.
+Each Lua state opens the base, table, string, math and bit libraries. `io`, `os`, `package` and `debug` are never opened, and FFI is compiled out of the LuaJIT build. `load`, `loadstring`, `dofile`, `loadfile`, `string.dump`, `collectgarbage`, `getfenv` and `setfenv` are removed. Chunks load in text mode, so bytecode is refused.
 
-Every allocation counts against a heap cap. A CPU-time watchdog bounds calls, including JIT execution. Privileged UI scripts additionally require trusted root-owned sources.
+`require("name")` loads `name.lua` or `name/init.lua` from the script's own directory. Symlinks are resolved and must stay inside it.
 
-Capabilities granted to a plugin are the intersection of manifest requests and the host allow-list. File roots are canonicalized; a declared request alone grants nothing.
+Every allocation counts against a heap cap, 32 MiB by default and 16 MiB for a plugin. A watchdog bounds each call into Lua to 50 ms of the thread's CPU time, including time inside JIT traces and string pattern matching.
 
-Built-ins are `otter.timer`, `otter.process`, `otter.fs`, `otter.log`, and `otter.host`. File/process actions use their capability checks. Additional `otter.*` modules exist only when registered by the host.
+A plugin is granted the capabilities it declares that the host's allow-list for it also permits. An allow-list entry is `*`, a capability name, `fs:*` or `fs:<root>`. A declared capability with no matching allow entry grants nothing. `fs:` roots are made canonical and granted only when they exist.
 
-## Binding contract
+Privileged surfaces load scripts only from `/usr/local/share` and `/usr/share`. The script and every module it requires must be owned by root, writable by no one else, and reached through no symlink.
 
-`binding.Module` names a module and supplies `open`, optional module capability, `release(instance)`, and optional `shutdown`. `Open.add` gates individual functions. Missing permissions become explicit Lua errors, not silent no-ops.
+## Built-in modules
 
-Binding callbacks post to the host bus; Lua callbacks run later under the guarded host loop, never inside C callbacks. Watch descriptors through `binding.watch` and remove them before closing resources.
+| Module | Functions | Capability |
+| --- | --- | --- |
+| `otter.timer` | `after(ms, f)`, `every(ms, f)`, `cancel(h)`, `now_ms()` | None |
+| `otter.process` | `spawn(argv, on_exit)`, `launch(argv)`, `kill(h)` | `spawn` for `spawn` and `launch` |
+| `otter.fs` | `read(path)`, `list(path)`, `watch(dir, f)`, `unwatch(h)`, `roots()`, `write(path, data)` | An `fs:` root, and an `fs-write:` root for `write` |
+| `otter.log` | `debug`, `info`, `warn`, `error` | None |
+| `otter.host` | `redraw()`, `quit()`, `name()`, `env(name)` | `env:<NAME>` or `env:<PREFIX>*` for `env` |
 
-Lua errors unwind past ordinary native cleanup. Follow `binding.otr`'s no-`defer` and argument-validation rules when implementing binding callbacks; do not acquire host resources before a later argument check can raise.
+`argv` is a list of strings run without a shell. Paths are absolute or start with `~/`, and must lie beneath a granted root. Each instance may hold 64 timers, 16 programs and 16 watches. `fs.read` returns at most 4 MiB and `fs.write` takes at most 1 MiB.
+
+Other `otter.*` modules exist only when the host registers them. The libraries that provide one document it on their own page: [otter-conf](/developers/libraries/otter-conf/loading-api#lua), [otter-config-types](/developers/libraries/otter-config-types#lua-schema-access), [otter-theme](/developers/libraries/otter-theme#lua), [otter-tools-core](/developers/libraries/otter-tools-core/tool-modules#lua-modules), [otter-crypto](/developers/libraries/otter-crypto#lua), [otter-http](/developers/libraries/otter-http#lua) and [otter-cue](/developers/libraries/otter-cue#lua).
+
+## Writing a binding module
+
+A `binding.Module` has a `name`, an `open` function, an optional `cap` that gates the whole module, and an optional `state`. `open` fills the module table through `Open.add(name, f, cap)`. When the plugin lacks `cap`, `add` installs a stub that raises `otter.x.name: capability 'cap' not granted`.
+
+The `otter.example` module in the host example above is a complete binding. After the host registers it, a plugin calls `require("otter.example").answer()`.
+
+A module that keeps connections, subscriptions or handles stores them in a state per host. The state type `S` has `init(env: ?std.Env) S` and `release(self: &mut S, instance: u32)`, plus `deinit` when it holds resources.
+
+```otr
+const slot = binding.Slot(S, "otter.example")
+
+pub fn module(env: std.Env) binding.Module {
+    return .{ name: slot.name, open: open, state: slot.spec(env) }
+}
+```
+
+`slot.with` reaches the state of the host whose call is running. Host code between calls uses `slot.on(host.module_states(), f)`.
+
+Binding functions follow these rules:
+
+- Hold no `defer`. A Lua error unwinds past otr cleanup, and the compiler rejects a pending `defer` across a call that can raise.
+- Read and check every argument before you take a resource.
+- Never call Lua from a C callback. Post an event with `binding.post` and let the host loop deliver it. Register descriptors with `binding.watch`.
+- Keep objects Lua holds in a `handles.Table(T)` owned by the instance. Lua sees a checked integer handle.
+
+A host takes at most 32 modules. A name used twice, or the name of a built-in, fails `Host.init` with `error.DuplicateModule`.
 
 ## Build setup
 
-From `otter-lua`, run `otr run otr/build.otr --release-fast -- deps` before building a dependent. This builds the pinned static LuaJIT with FFI disabled. Register per-library modules from their separate `otr/lua/` packages; native dependencies alone do not link them into the host.
+`otter-lua` links a static LuaJIT built with FFI disabled. Build it once before you build this package or anything that depends on it:
+
+```bash
+cd otter-lua
+otr run otr/build.otr --release-fast -- deps
+```
+
+The `otter-lua run <dir>` executable runs an `app` plugin headless with the built-in modules only.
 
 ## Source reference
 
-`otr/runtime.otr`, `otr/host.otr`, `otr/plugins.otr`, `otr/binding.otr`, `otr/sd.otr`, `otr/manifest.otr`, `otr/caps.otr` in the component repository.
+`otr/runtime.otr`, `otr/host.otr`, `otr/plugins.otr`, `otr/binding.otr`, `otr/sd.otr`, `otr/manifest.otr`, `otr/caps.otr` and `otr/search.otr` in the `otter-lua` repository. The plugin example is `examples/cmd-watch/`.

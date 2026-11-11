@@ -1,0 +1,268 @@
+---
+title: "Regions, pools and cells"
+description: "Arena regions for linked data, generational handles for shared objects, and interior mutability."
+---
+
+Borrowed references cannot be stored, so otr gives you other tools for data that points at other data. Regions cover trees, graphs and per-request allocation. Pools cover long-lived objects that are created and freed one at a time. Cells cover mutation through a shared reference.
+
+## Regions
+
+A region is a scoped allocator whose memory is freed all at once. Inside a region, references can be copied and aliased freely, and objects can point at each other, including in cycles.
+
+```otr
+import std
+import std.arena
+
+fn Node(comptime r: region) type {
+    return struct {
+        value: i32
+        next: ?&r Node(r)
+    }
+}
+
+fn build(r: region, n: i32) ?&r Node(r) {
+    var head: ?&r Node(r) = null
+    for i in 0..n {
+        head = r.new(Node(r){ value: @int_cast(i32, i), next: head })
+    }
+    return head
+}
+
+pub fn main() void {
+    region r = arena.Arena.init(std.mem.heap)
+    defer r.deinit()
+
+    var it = build(r, 10)
+    var sum: i64 = 0
+    for it != null {
+        node := it.?
+        sum += node.value
+        it = node.next
+    }
+    std.io.printf("sum {}\n", .{ sum })   // sum 45
+
+    // Region references alias freely, so a cycle is fine.
+    a := r.new(Node(r){ value: 1, next: null })
+    b := r.new(Node(r){ value: 2, next: a })
+    a.next = b
+}
+```
+
+### Creating a region
+
+`region r = expr` creates a region named `r` in the current block. `r.deinit()` may only appear in a `defer`, so the region ends exactly when its block ends.
+
+The expression is a region allocator. The standard library has four:
+
+| Allocator | Memory comes from |
+| --- | --- |
+| `arena.Arena.init(alloc)` | The heap, in growing chunks |
+| `arena.FixedBuffer.init(buf)` | A buffer you own, which it borrows |
+| `arena.Pages.init()` | Pages mapped from the system |
+| A frame of an `arena.Stack` | Reserved address space, with nested frames |
+
+A fixed buffer makes scratch allocation free of the heap:
+
+```otr
+fn scratch_sum(n: usize) i32 {
+    var storage = std.mem.splat(1024, u8, 0)
+    region r = arena.FixedBuffer.init(&mut storage)
+    defer r.deinit()
+    xs := r.alloc(i32, n, 2)
+    xs[0] = 10
+    return total(xs)
+}
+```
+
+### Region types
+
+`&r T` is a reference into region `r`, and `[]r T` is a slice into it.
+
+A function takes a region as an ordinary parameter, `r: region`. It can then name `r` in its types and allocate from it. A type that holds region references takes the region as a compile-time parameter, `comptime r: region`, as `Node` does above.
+
+A type that mentions `r` cannot be used outside the block where `r` was introduced. The name is not in scope there, so you cannot even write the type. That is the whole lifetime check.
+
+Regions exist only during checking. `Node(r1)` and `Node(r2)` compile to the same code.
+
+### Allocating
+
+| Call | Result |
+| --- | --- |
+| `r.new(value)` | `&r T` |
+| `r.alloc(T, n, fill)` | `[]r T` of `n` copies of `fill` |
+| `r.dupe(s)` | `[]r u8`, a copy of a string |
+| `r.list(T)` | `&r RList(r, T)`, a growable list |
+| `r.map(K, V)` | `&r RMap(r, K, V)`, a hash map |
+| `r.string()` | `&r RString(r)`, a growable string |
+| `r.soa_list(T)` | `&r RSoaList(r, T)`, a struct-of-arrays list |
+
+Region objects must be copyable: no resources, no borrows. They are never deinitialised individually.
+
+The region collections have no `deinit`, and you can store them inside other region objects. Growing one allocates a new buffer from the region and copies. The old buffer stays valid until the region ends.
+
+```otr
+region r = arena.Arena.init(std.mem.heap)
+defer r.deinit()
+
+scores := r.list(i32)
+scores.push(3)
+scores.push(1)
+
+m := r.map(u32, i32)
+m.put(7, 70)
+
+text := r.string()
+text.push_str("in region")
+
+std.io.printf("{} {} {}\n", .{ scores.at(0), m.get(7) orelse 0, text.as_str() })
+```
+
+This is the shape of a JSON document or a syntax tree:
+
+```otr
+fn Json(comptime r: region) type {
+    return union {
+        none
+        boolean: bool
+        number: f64
+        string: &r RString(r)
+        array: &r RList(r, Json(r))
+        object: &r RMap(r, []r u8, Json(r))
+    }
+}
+```
+
+### Access by value
+
+Region references may alias, so a borrow taken through one could be invalidated by a write through another. otr avoids the problem by making region access work by value.
+
+Through a region reference or slice, a read copies the value and a write replaces it. `xs[i] = v` is allowed on any alias. Taking `&` or `&mut` of a place reached through a region reference is not allowed.
+
+A method that takes `self: &T` can still be called on a `&r T`. The receiver is copied to a temporary and the method borrows the copy. A method that needs to mutate takes `self: &r T` instead.
+
+### Lending region data to a call
+
+You can pass a `&r T` or `[]r T` directly as an argument where the parameter is `&T`, `&mut T`, `[]T` or `[]mut T`. The borrow lasts only for the call.
+
+```otr
+std.sort.sort(i32, scores.items(), fn(a: &i32, b: &i32) bool { return a.* < b.* })
+```
+
+Two conditions apply. No other argument of the same call may have a type that mentions `r`, and the call's result type must contain no borrowed references.
+
+### Nested regions
+
+A `Stack` reserves address space and hands out frames. `region s = r.frame()` opens a region nested in `r`. Nothing allocates from `r` until `s` ends, and `s` ends first.
+
+A function taking `r: region` can put its result in `r` and its scratch data in a nested frame opened after the result is allocated.
+
+### Threads
+
+Types that mention a region are neither `Send` nor `Sync`. A region belongs to the thread that created it.
+
+## Pools and handles
+
+`pool.Pool(T)` stores values in slots that carry a generation counter. `Handle(T)` is a copyable pair of index and generation. You can store a handle anywhere, send it between threads with its pool, and keep it after the object it names is gone.
+
+```otr
+import std
+import std.pool
+
+const Window = struct {
+    title: []static u8
+    width: i64
+}
+
+pub fn main() void {
+    var windows = pool.Pool(Window).init(std.mem.heap)
+    defer windows.deinit()
+
+    a := windows.insert(.{ title: "term", width: 640 })
+    b := windows.insert(.{ title: "files", width: 800 })
+
+    if windows.get_mut(a) |w| {
+        w.width = 1024
+    }
+    std.io.printf("{} {}\n", .{ windows.at(a).width, windows.at(b).title })
+
+    _ = windows.remove(a)
+    std.io.printf("stale: {}\n", .{ windows.get(a) == null })
+}
+```
+
+```text
+1024 files
+stale: true
+```
+
+Removing a value bumps its slot's generation. A handle issued before the removal no longer matches, even after the slot is reused.
+
+| Method | Behaviour on a stale handle |
+| --- | --- |
+| `get(h)`, `get_mut(h)` | Returns null |
+| `at(h)` | Panics |
+| `set(h, v)` | Panics |
+| `update(h, f)` | Returns false without calling `f` |
+| `remove(h)` | Returns null |
+
+A stale handle is a normal `null` from `get`, so you handle it like any missing value.
+
+This is the "typed index into an array" pattern that GUI and game code already uses, with the generation check that makes it safe. Use it for windows, widgets, connections and any object graph where things come and go independently.
+
+`pool.SoaPool(T)` keeps the slots in struct-of-arrays layout. Its elements have no address, so `get` and `at` return copies and there is no `get_mut`. Code that uses only `insert`, `get`, `at`, `set`, `update` and `remove` switches between `Pool` and `SoaPool` by changing one word.
+
+`pool.Chain(T, "field")` links pool elements into a list through a `pool.Link(T)` field of their own. Insert and remove are O(1) with no allocation, and an element can sit in several chains. It replaces the intrusive lists that C builds with `container_of`.
+
+In debug builds a handle also carries its pool's id, and using it with a different pool panics. Release builds drop the id, so a handle is 8 bytes.
+
+## Interior mutability
+
+A shared reference normally freezes what it points at. Four standard-library types let you change a value through `&T`.
+
+### Cell
+
+`cell.Cell(T)` holds a copyable `T`. `get` returns a copy and `set` replaces the value. You can never get a reference into its contents, so a `set` cannot invalidate any borrow.
+
+```otr
+hits := cell.Cell(i64).init(0)
+r1 := &hits
+r2 := &hits
+r1.set(r2.get() + 5)
+std.io.printf("{}\n", .{ hits.get() })   // 5
+```
+
+### RefCell
+
+`cell.RefCell(T)` lends its value to a callback and checks the borrow at run time. `read` lends it shared and `update` lends it exclusively. An `update` while the value is already lent panics.
+
+```otr
+const Counter = struct { hits: i64 }
+
+state := cell.RefCell(Counter).init(.{ hits: 0 })
+defer state.deinit()
+
+state.update(fn(c: &mut Counter) void { c.hits += 2 })
+n := state.read(fn(c: &Counter) i64 { return c.hits })
+```
+
+### Atomic, Mutex and RwLock
+
+`sync.Atomic`, `sync.Mutex(T)` and `sync.RwLock(T)` are the thread-safe forms. See [Concurrency](/otr/concurrency#shared-state).
+
+## Owning pointers
+
+| Type | Use |
+| --- | --- |
+| `box.Box(T)` | One owner, value on the heap. `get`, `get_mut`, `into_inner`, `deinit` |
+| `arc.Arc(T)` | Shared ownership across threads. `clone` adds an owner and each owner calls `deinit` |
+| `rc.Rc(T)` | Shared ownership on one thread, with weak references through `downgrade` |
+
+`Box(dyn Shape)` and `Box(dyn fn(A) R)` hold a type-erased value or closure:
+
+```otr
+b := box.Box(Counter).init(.{ hits: 9 })
+defer b.deinit()
+std.io.printf("{}\n", .{ b.get().hits })
+```
+
+For a large value, `Box(T).init_with(fill)` builds it in place in the heap allocation. The value never sits on the stack. `List.push_with`, `Pool.insert_with` and `HashMap.put_with` do the same for their elements.

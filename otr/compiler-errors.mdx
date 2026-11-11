@@ -1,0 +1,216 @@
+---
+title: "Compiler errors"
+description: "What the rule codes in otr diagnostics mean, with the usual fix for each."
+---
+
+Safety diagnostics end with the rule they enforce, such as `(spec O3)`. The letter tells you the family:
+
+| Prefix | Family |
+| --- | --- |
+| O | Ownership and resources |
+| B | Borrowed references |
+| R | Ref structs |
+| G | Regions |
+| K | Run-time checks and definite assignment |
+| F | Closures |
+| C | Concurrency |
+| S, D, W | `simd for`, `soa` layout and vectors |
+
+The messages on this page are from otr 0.2.6.
+
+## Ownership
+
+### O3: resource not consumed
+
+```text
+error: resource 'nums' is not consumed on every path (spec O3); add 'defer nums.deinit()'
+```
+
+A value with a `deinit` reached the end of its scope on some path without being moved or deinitialised.
+
+Add the `defer` right after you create the value. If the function returns the value on success, use `errdefer` so that only error paths clean it up.
+
+The same error appears when one branch consumes the value and another does not:
+
+```otr
+xs := list.List(i64).init(std.mem.heap)
+if done {
+    xs.deinit()
+}                    // the other path still owns xs
+```
+
+### O4: use after move
+
+```text
+error: use of 'nums' after it was moved (spec O4)
+```
+
+You passed the value by value, assigned it to another binding, or returned it, and then used the old name.
+
+Pass a reference (`&nums` or `&mut nums`) if the callee only needs access. If it must own the value, use the value before the move or have the callee hand it back.
+
+### O5: moving a field out
+
+```text
+error: cannot move a field out of 'u' (spec O5); use 'std.mem.replace'
+```
+
+A resource field cannot leave its struct, because the struct would be left half-owned.
+
+Swap a new value in with `std.mem.replace(T, &mut s.field, new_value)`, or hold the field as `?T` and take it with `std.mem.take`.
+
+### O6: overwriting a live resource
+
+```text
+error: cannot assign to 'a' while it still owns a resource (spec O6); consume it first
+```
+
+Assignment does not deinitialise the old value. Do it yourself first:
+
+```otr
+a.deinit()
+a = list.List(i64).init(std.mem.heap)
+```
+
+## Borrowing
+
+### B4: changed while borrowed as shared
+
+```text
+error: cannot borrow 'nums' mutably while it is borrowed as shared on line 8 (spec B4)
+```
+
+A shared reference to the value, or into it, is still in use later in the function.
+
+Finish with the reference before you mutate, or copy the data you need out of it. A borrow ends at its last use, so reordering two lines is often the whole fix.
+
+### B5: used while borrowed mutably
+
+```text
+error: cannot read 'x' while it is borrowed mutably on line 4 (spec B5)
+```
+
+While a `&mut` is live, the value can only be reached through it.
+
+Go through the reference (`r.*`), or stop using the reference before you touch the value again.
+
+### B7: returning a reference to a local
+
+```text
+error: returns a reference to 'x', which does not outlive the call (spec B7)
+```
+
+A returned reference must come from a reference parameter or from static data.
+
+Return the value itself, or take the storage as a parameter and return a reference into that.
+
+### B8: storing a borrowed reference
+
+```text
+error: field 'name' of type '&i64' would store a borrowed reference (spec B8); use '&static', an owned type, or a 'ref struct'
+```
+
+Borrowed references cannot live in struct fields, containers or globals. Pick the alternative that fits:
+
+| Situation | Use |
+| --- | --- |
+| The data lives for the whole program | `&static T` or `[]static T` |
+| The struct should own the data | An owned type such as `String`, `List(T)` or `Box(T)` |
+| The struct is a short-lived view or iterator | `ref struct` |
+| Objects point at each other | A [region](/otr/memory/regions-pools-and-cells#regions) or [pool handles](/otr/memory/regions-pools-and-cells#pools-and-handles) |
+
+## Definite assignment
+
+### K4: used before initialised
+
+```text
+error: 'storage' may be used before it is initialised (spec K4)
+```
+
+Some path reads the variable before assigning all of it. Assigning single elements of an array does not initialise the array.
+
+Give the variable a value, or build the array with `std.mem.splat(N, T, v)`. If other code fills the buffer, lend it as `&out`.
+
+## Concurrency
+
+### C3: spawning a borrowing closure
+
+```text
+error: spawn needs a closure that owns its captures; a borrow cannot outlive the code that made it (spec C3)
+```
+
+A detached task may outlive the function that started it, so it cannot capture `&x` or `&mut x`.
+
+Move the value into the closure, share it with `arc.Arc`, or send results back over a `sync.Channel`. If the caller waits for the result anyway, use `io.async`, which may borrow.
+
+## SIMD
+
+### S2: unsupported statement in simd for
+
+```text
+error: 'simd for' has no 'break' or 'continue', so every iteration runs (spec S2)
+```
+
+Every iteration of a `simd for` runs. Express the condition as an `if` inside the body, which compiles to a mask, or use an ordinary `for`.
+
+## Other common errors
+
+### Assigning to an immutable binding
+
+```text
+error: cannot assign to an immutable value
+```
+
+Bindings made with `:=` or `name: T = ...` are immutable, and so are parameters. Declare the binding with `var`.
+
+### Shadowing
+
+```text
+error: 'x' shadows a local of the same name; locals cannot be shadowed (spec §3.2)
+```
+
+Pick a different name for the inner binding.
+
+### Non-exhaustive switch
+
+```text
+error: switch does not handle every case; add the missing ones or an 'else' arm
+```
+
+List the missing variants. Prefer that over `else` for your own enums and unions, so that adding a variant later makes the compiler show you every switch to update.
+
+### Type mismatch between integer types
+
+```text
+error: expected 'i64', found 'usize'
+```
+
+Only widening conversions are implicit. A range index is a `usize`, so convert it: `@int_cast(i64, i)`.
+
+### Calling C without unsafe
+
+```text
+error: calling unsafe function 'atoi' requires an unsafe block
+```
+
+Wrap the call in `unsafe { ... }`, or add the function to the import's [`safe` list](/otr/c-interop#mark-functions-safe) if no call to it can break memory safety.
+
+### Missing module
+
+```text
+error: cannot find module 'geometry/rect' (looked for ./geometry/rect.otr)
+```
+
+The path in the message shows where the compiler looked. Inside a package, import a sibling module by its own name (`import rect`). Only other packages are imported through their dependency name.
+
+## Run-time panics
+
+A panic names the source location and the check that failed:
+
+```text
+panic: panic.otr:7:30: index out of bounds
+panic: v3.otr:25:30: division by zero
+panic: basics.otr:4:12: integer overflow
+```
+
+The process exits with status 101. See [Run-time checks and unsafe](/otr/memory/runtime-checks-and-unsafe).

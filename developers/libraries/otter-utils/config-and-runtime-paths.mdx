@@ -6,32 +6,83 @@ description: "Build XDG-aware Otter Shell paths and read shared session state."
 
 ## XDG paths
 
-Import `otter_utils.xdg_paths`. Builders take `env: std.Env` and an output `&mut Buf`; they return `?str` when a base is missing or the result does not fit.
+Import `otter_utils.xdg_paths`. Each builder takes `env: std.Env` and an output `&mut Buf`. It returns the path as `?str`, or null when the environment names no base or the result does not fit.
 
-| Function                                 | Location                                                              |
-| ---------------------------------------- | --------------------------------------------------------------------- |
-| `otter_config_path` / `otter_config_dir` | `$XDG_CONFIG_HOME/otter-shell/`, else `$HOME/.config/otter-shell/`    |
-| `otter_data_path` / `otter_data_dir`     | `$XDG_DATA_HOME/otter-shell/`, else `$HOME/.local/share/otter-shell/` |
-| `otter_cache_path` / `otter_cache_dir`   | `$XDG_CACHE_HOME/otter-shell/`, else `$HOME/.cache/otter-shell/`      |
+| Function | Location |
+| --- | --- |
+| `otter_config_path`, `otter_config_dir` | `$XDG_CONFIG_HOME/otter-shell/`, else `$HOME/.config/otter-shell/` |
+| `otter_data_path`, `otter_data_dir` | `$XDG_DATA_HOME/otter-shell/`, else `$HOME/.local/share/otter-shell/` |
+| `otter_cache_path`, `otter_cache_dir` | `$XDG_CACHE_HOME/otter-shell/`, else `$HOME/.cache/otter-shell/` |
 
-Empty or relative XDG base variables are ignored. Runtime paths require an absolute `XDG_RUNTIME_DIR`; there is no HOME fallback for that variable.
+The builders ignore an empty or relative `XDG_*` value and an empty `$HOME`. Each one has `_from_base` and `_from_home` forms that take the directory as an argument.
 
-`ensure_dir_path` creates missing parents. `make_private_dir` and `ensure_otter_cache_dir` provide private-directory helpers.
+`ensure_dir_path(p)` creates `p` and its missing parents. `make_private_dir(p)` creates one directory with mode 0700. `ensure_otter_cache_dir(env)` creates the Otter Shell cache directory with mode 0700.
+
+## Runtime paths
+
+Import `otter_utils.runtime_paths` for paths under `$XDG_RUNTIME_DIR/otter-shell/`. `XDG_RUNTIME_DIR` has no fallback, so these builders return null without it.
+
+| Function | Result |
+| --- | --- |
+| `otter_runtime_dir(env, out)` | `$XDG_RUNTIME_DIR/otter-shell/` |
+| `otter_runtime_path(env, out, file_name)` | A file in that directory |
+| `runtime_socket_path(env, out, prefix, suffix)` | `<runtime dir><prefix><$WAYLAND_DISPLAY><suffix>`, or null when the path does not fit a `sockaddr_un` |
+| `ensure_otter_runtime_dir(env)` | Creates the directory with mode 0700 |
+| `login_user_name(out)` | The login name for the current uid, read from the password database |
+
+```otr
+import std
+import otter_utils.xdg_paths
+import otter_utils.runtime_paths
+
+pub fn main(env: std.Env) !void {
+    var buf = xdg_paths.Buf.init()
+    conf := xdg_paths.otter_config_path(env, &mut buf, "otter-bar.conf") orelse return error.NoConfigHome
+    std.io.println(conf)
+
+    var sock_buf = runtime_paths.Buf.init()
+    if runtime_paths.runtime_socket_path(env, &mut sock_buf, "otter-osd-", ".sock") |sock| {
+        std.io.println(sock)
+    }
+
+    if !xdg_paths.ensure_otter_cache_dir(env) {
+        return error.NoCacheDir
+    }
+}
+```
 
 ## Session state
 
-Import `otter_utils.runtime_state` for Do Not Disturb and wallpaper state:
+Import `otter_utils.runtime_state` for the Do Not Disturb and wallpaper state files in the runtime directory.
 
-- `dnd_state_path`, `is_dnd_enabled`, `set_dnd_enabled`, `toggle_dnd`.
-- `wallpaper_state_path`, `open_wallpaper_state_file`, `wallpaper_state_watch_path`.
-- `WallpaperStateIterator`, `first_wallpaper_path`, `wallpaper_path_for_output`.
+`is_dnd_enabled(env)` reads the Do Not Disturb state. `set_dnd_enabled(env, enabled)` writes it and `toggle_dnd(env)` flips it and returns the new value. Both writers hold an exclusive lock on `<state>.lock`, write a temporary file and rename it over the state file. Concurrent togglers in different processes take turns, and a reader sees either the old value or the new one.
 
-DND changes use a lock and atomic replacement. Wallpaper state uses `output_name=absolute_path` lines. The reader retains support for the legacy `/tmp/<uid>/otter-wallpaper-state` file.
+`otter-wallpaper` publishes the wallpaper state as `output_name=absolute_path` lines. The lockscreen, greeter, `otter-shot` and `otter-theme-gen` read it. `open_wallpaper_state_file(env, out)` opens the current file and `wallpaper_state_watch_path(env, out)` gives you the path to watch. Both prefer the runtime file and fall back to `/tmp/<uid>/otter-wallpaper-state`.
 
-Only the wallpaper daemon publishes wallpaper state. Consumers read it; they must not write their own competing copy.
+`WallpaperStateIterator` walks the file's contents. It skips comments, relative paths and paths that contain `..`. `wallpaper_path_for_output(content, name)` returns the path for one output, or the first valid entry when that output has no line.
 
-Set `XDG_CONFIG_HOME` and `XDG_RUNTIME_DIR` to temporary directories in tests.
+```otr
+import std
+import otter_utils.runtime_state
+
+pub fn main(env: std.Env) !void {
+    enabled := try runtime_state.toggle_dnd(env)
+    std.io.printf("Do Not Disturb: {}\n", .{ enabled })
+
+    content := "HDMI-1=/wallpapers/b.png\neDP-1=/wallpapers/a.png\n"
+    var it = runtime_state.WallpaperStateIterator.init(content)
+    for entry in it {
+        std.io.printf("{} shows {}\n", .{ entry.output_name, entry.path })
+    }
+    // DP-2 has no line, so this prints /wallpapers/b.png
+    std.io.println(runtime_state.wallpaper_path_for_output(content, "DP-2") orelse "none")
+}
+```
+
+Only the wallpaper daemon writes wallpaper state. Other apps read it.
+
+In tests, set `XDG_CONFIG_HOME` and `XDG_RUNTIME_DIR` to temporary directories so the helpers stay out of your session.
 
 ## Source reference
 
-`otr/xdg_paths.otr`, `otr/runtime_paths.otr`, `otr/runtime_state.otr` in the component repository.
+`otr/xdg_paths.otr`, `otr/runtime_paths.otr` and `otr/runtime_state.otr` in the `otter-utils` repository.

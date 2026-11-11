@@ -1,40 +1,142 @@
 ---
 title: "Nodes and controls"
 sidebarTitle: "Nodes and controls"
-description: "Native otr node constructors and frame-scoped control specifications."
+description: "Node constructors, control specs, and stable ids in otter-ui."
 ---
 
-`otter_ui.ui_frame.Node` is the native Surface Description node. There is no root `SurfaceNode` export.
+`otter_ui.ui_frame_spec.Node` is the one node type. A node has an `id`, a `kind`, a `layout`, a `content` union that says what to draw, and an optional `hit` kind that makes it clickable.
+
+```otr
+import otter_geo.rect as geo
+import otter_render.image
+import otter_ui.ui_frame_spec
+import otter_ui.ui_frame_types
+
+const Id = ui_frame_types.Id
+const Node = ui_frame_spec.Node
+
+const Row = struct {
+    name: []static u8
+    detail: []static u8
+}
+
+const networks = [3]Row{
+    .{ name: "otter-5g", detail: "Connected" },
+    .{ name: "guest", detail: "Secured" },
+    .{ name: "printer-setup", detail: "Open" },
+}
+
+fn network_list(selected: usize, wifi_on: bool, icon: ?image.ImageHandle) void {
+    list_id := Id.named_comptime("net.list")
+
+    var rows: [3]Node = unsafe { undefined }
+    for net, i in networks {
+        rows[i] = Node.list_row(list_id.child_int(i), .{ title: net.name, subtitle: net.detail, selected: i == selected }, i)
+        rows[i].layout = .{ width: .fill, height: .fixed{ 44 } }
+    }
+
+    var header = [3]Node{
+        Node.icon_button(Id.named_comptime("net.refresh"), .{ icon: icon, fallback_text: "R" }),
+        Node.label(Id.named_comptime("net.title"), "Wi-Fi", 14, null),
+        Node.toggle(Id.named_comptime("net.enabled"), .{ checked: wifi_on }),
+    }
+    var sections = [2]Node{
+        Node.row(Id.named_comptime("net.header"), .{ width: .fill, height: .fixed{ 32 }, gap: 8, align_y: .center }, &mut header),
+        Node.column(list_id, .{ width: .fill, height: .fit, gap: 2 }, &mut rows),
+    }
+    root := Node.column(Id.named_comptime("net"), .{ width: .fill, height: .fill, padding: geo.Padding.uniform(12), gap: 8 }, &mut sections)
+    _ = root
+}
+```
 
 ## Constructors
 
-| Group               | Constructors                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| Layout and surfaces | `row`, `column`, `rect`, `panel`                                                       |
-| Text and actions    | `label`, `button`, `icon_button`                                                       |
-| Editable values     | `text_input`, `checkbox`, `toggle`, `slider`, `number_input`, `select`, `color_picker` |
-| Data and decoration | `progress`, `scrollbar`, `list_row`, `image`, `gradient_swatch`, `icon`                |
+| Group | Constructors |
+| --- | --- |
+| Containers | `row`, `column`, `scroll_view`, `pref_group`, `pref_row`, `expander` |
+| Surfaces | `rect`, `panel`, `image`, `icon`, `gradient_swatch` |
+| Text and actions | `label`, `button`, `icon_button`, `list_row`, `nav`, `segmented` |
+| Values | `text_input`, `checkbox`, `toggle`, `slider`, `number_input`, `select`, `color_picker`, `keycaps`, `key_capture` |
+| Feedback | `progress`, `scrollbar`, `pending_bar`, `toast`, `modal` |
 
-Additional content/spec variants live in `ui_frame_spec`. Check the constructor or `Content` variant instead of inventing a constructor for every spec name.
+Each control constructor takes an id and a spec struct, and sets the matching `hit` kind. `Node.button(id, text)` and `Node.label(id, text, font_size, color)` take their common arguments directly.
+
+A few contents have no constructor: `form_row`, `section`, `tabs` and `color_swatch`. Write those as a node literal with a `content` arm:
+
+```otr
+.{
+    id: ids.profile_form,
+    layout: .{ width: .fill, height: .fixed{ row_height } },
+    content: .form_row{ .{ label: "Visual profile", value: "Current", font_size: font_size, label_width: 144 } },
+}
+```
 
 ## Specs
 
-Text-bearing specs borrow their strings. Examples include `ButtonSpec.text`, `TextInputSpec.text`, `SelectSpec.options`, and `ListRowSpec` labels. Keep source text alive through the render call.
+A spec describes how a control looks right now. Its fields are plain values that you fill from your model on every frame.
 
-`ButtonSpec.icon`, `ImageSpec.image`, and other image fields use `ImageHandle`; the frame resolves pixels through `FrameOptions.images`. Icons can use fallback text without storing a fallback-font pointer.
+```otr
+Node.checkbox(ids.blur, .{ label: "Blur behind windows", checked: prefs.blur })
+Node.slider(ids.opacity, .{ value_q16: prefs.opacity_q16, value_text: "75%" })
+```
 
-Optional colors and radii defer to resolved theme/style values. Disabled controls carry disabled hit/semantic state in addition to their appearance.
+Text fields such as `ButtonSpec.text` and `ListRowSpec.title` borrow their strings, so keep the source alive until `render` returns. Image fields take an `ImageHandle` that the frame resolves through `FrameOptions.images`.
 
-## Stable IDs
+A color or radius of `null` takes the value from the frame's `StyleSet`. Set one only to override the theme. Slider and progress values are `value_q16`, a `u16` from 0 to 65535. `otter_ui.slider.SliderRange` maps a real value range onto it.
 
-`Id.named_comptime("settings.save")` constructs a literal name. `Id.named` accepts runtime text. `child` and `child_int` derive hierarchical IDs for rows.
+`hit_test` skips a control whose spec sets `disabled`.
 
-Keep IDs stable across frames. UI state is keyed by ID, not by node address. If two unrelated controls share an ID, their focus and keyed state collide.
+### State you own
 
-## Native state remains explicit
+The library does not store control values. A checkbox does not flip itself. When `dispatch` reports a press on the checkbox id, you flip your `bool` and render the next frame with it.
 
-A rendered spec describes current state; it does not own application data or automatically apply every edit. Handle dispatch results in your model and construct the next frame from the updated values.
+Hover, press and focus are different: the `UiState` tracks those by id and the controls draw them for you.
+
+## Stable ids
+
+An `Id` is a 64-bit hash.
+
+| Function | Use |
+| --- | --- |
+| `Id.named_comptime("settings.save")` | A literal name, hashed at compile time. |
+| `Id.named(text)` | A name known at run time. |
+| `id.child("label")`, `id.child_int(i)` | An id derived from a parent, for rows of a list. |
+| `Id.none` | No id. |
+
+Keep an id the same from frame to frame. Focus, hover, scroll offsets and animations are stored under it. Two controls that share an id share that state, which is a bug.
+
+Most apps collect their ids in one struct:
+
+```otr
+pub const ids = struct {
+    pub const card = Id.named_comptime("demo.card")
+    pub const counter = Id.named_comptime("demo.counter")
+    pub const increment = Id.named_comptime("demo.increment")
+}
+```
+
+## Hit data and semantics
+
+`hit_data` is a `u64` that comes back in the dispatch result. `Node.list_row(id, spec, data)` sets it, so one handler can serve every row.
+
+`semantics` gives a node an accessible role, label, value and state. It is recorded only when `Capacities.semantics` is above zero.
+
+## Lua
+
+Lua frames have no node objects. A script emits flat `sd` calls, and `sd.hit(id, kind)` marks the node before it as a hit area.
+
+```lua
+local function button(x, y, w, h, label, id, hovered)
+  sd.rect(x, y, w, h, hovered and style.button.hover_background or style.button.background, style.button.radius)
+  sd.outline(x, y, w, h, style.button.border, style.button.radius, 1)
+  sd.text(x + 12, y + 8, label, 14, style.button.text)
+  sd.rect(x, y, w, h, 0, 0)
+  sd.hit(id)
+end
+```
+
+`style` is the table that `require("otter.ui.style").resolve(theme.get())` returns. `otter.ui.id(name)` and `otter.ui.child(id, key)` compute the same ids as the native functions.
 
 ## Source reference
 
-`otr/ui_frame_spec.otr`, `otr/ui_frame_types.otr` in the component repository.
+`otr/ui_frame_spec.otr`, `otr/ui_frame_types.otr`, `otr/lua/style.otr` in the component repository. `otr/ui/demo.otr` in otter-examples builds a settings-style card from these nodes.

@@ -1,22 +1,109 @@
 ---
 title: "otter-desktop"
 sidebarTitle: "otter-desktop"
-description: "otr D-Bus, application discovery, system monitoring, PAM, and separate PipeWire services."
+description: "Desktop integration in otr: D-Bus services, applications, system monitoring, PAM, and PipeWire."
 ---
 
-`otter-desktop` supplies desktop integration through leaf modules grouped under `otter_desktop.dbus`, `.apps`, `.sys`, and `.pam`.
+`otter-desktop` connects Otter Shell apps to the rest of the desktop. It has no root module. You import leaf modules from its feature folders.
 
-Services own their handles and receive environment/I/O explicitly when needed. Callers process readiness and observe state rather than storing callback/userdata pointers into movable application structs.
+| Folder | Import prefix | Contents |
+| --- | --- | --- |
+| `otr/dbus/` | `otter_desktop.dbus` | The D-Bus connection and a client for each service: UPower, MPRIS, NetworkManager, logind, notifications, system tray and more. |
+| `otr/apps/` | `otter_desktop.apps` | Desktop entries, the application list, launching, MIME handlers and login sessions. |
+| `otr/monitor/` | `otter_desktop.monitor` | CPU, memory, disk and sensor readings, and the process monitor. |
+| `otr/brightness/`, `otr/falcond/` | `otter_desktop.brightness`, `otter_desktop.falcond` | Backlight control and Falcond status. |
+| `otr/pam/` | `otter_desktop.pam` | PAM authentication and sessions. |
 
-## Package boundaries
+## Packages
 
-- `otter_desktop`: D-Bus, XDG applications/icons, system state, optional PAM.
-- `otter_desktop_pipewire` (`otr/pipewire/`): audio client, playback, capture, video sources.
-- `otter_desktop_lua` (`otr/lua/`): host-registered Lua desktop modules.
+The repository holds three packages.
 
-PipeWire is static by default; the separate package can select `pipewire=system`. Applications not using audio avoid that dependency. D-Bus uses vendored basu; PAM remains option-gated.
+| Package | Path | Contents |
+| --- | --- | --- |
+| `otter_desktop` | `otr/` | Everything in the table above. |
+| `otter_desktop_pipewire` | `otr/pipewire/` | The PipeWire client: devices and volume, playback, capture and video sources. |
+| `otter_desktop_lua` | `otr/lua/` | The `otter.desktop.*` Lua modules. |
 
-Lua modules expose specific reads and capability-gated actions. A plugin cannot infer permission to launch, change audio, or power off from permission to inspect public state.
+```toml
+[dependencies]
+otter_desktop = { path = "../../otter-desktop/otr" }
+otter_desktop_pipewire = { path = "../../otter-desktop/otr/pipewire" }
+```
+
+PipeWire is a separate package so that an app without audio does not link it. The D-Bus transport is written in otr and links no D-Bus library. PAM is off by default. Turn it on with `-D enable_pam=true`, which links libpam.
+
+## The service pattern
+
+Every service client works the same way. `init` connects and reads the current state. `start_monitoring` subscribes to changes. `poll_fd` gives you a descriptor for your event loop. `drain` applies what arrived, and `generation` changes whenever the state does.
+
+```otr
+import std
+import std.linux
+import std.mem
+import otter_desktop.dbus.notification_client
+import otter_desktop.dbus.upower
+
+pub fn main() !void {
+    var power = try upower.UPower.init(mem.heap)
+    defer power.deinit()
+    power.start_monitoring()
+
+    wait := try linux.Epoll.init()
+    defer wait.deinit()
+    try wait.add_raw(power.poll_fd(), linux.EPOLL.readable, 0)
+
+    var drawn: u64 = 0
+    for {
+        if power.generation() != drawn {
+            drawn = power.generation()
+            if power.primary_battery() |b| {
+                var buf: [32]u8 = unsafe { undefined }
+                std.io.printf("{}% {} ({})\n", .{ b.percent(), b.state.as_text(), b.format_time_remaining(&mut buf) })
+                if b.warning_level == .critical {
+                    _ = try notification_client.send(mem.heap, .{ app_name: "battery-watch", desktop_entry: "battery-watch", summary: "Battery critical", body: "Plug in now.", urgency: 2 })
+                }
+            }
+        }
+        var ready: [1]linux.EpollEvent = unsafe { undefined }
+        _ = try wait.wait(&out ready, -1)
+        _ = power.drain()
+    }
+}
+```
+
+No client stores a callback. You compare `generation()` with the value you last drew and read the state through view methods such as `primary_battery()`.
+
+## Lua
+
+A host app registers the `otter.desktop.*` modules it wants plugins to have. Reading state needs no capability. Each action names the capability a plugin must declare in its `plugin.toml`.
+
+```lua
+local battery = require("otter.desktop.battery")
+local host = require("otter.host")
+
+battery.subscribe(function() host.redraw() end)
+
+local b = battery.primary()
+if b then
+  print(b.percent, b.state, b.time_remaining)
+end
+```
+
+| Module | Reads | Action capability |
+| --- | --- | --- |
+| `otter.desktop.apps` | Installed applications | `spawn` |
+| `otter.desktop.xdg_open` | MIME types and handlers | `spawn` |
+| `otter.desktop.icons` | Icon paths and themes | none |
+| `otter.desktop.battery` | Batteries through UPower | none |
+| `otter.desktop.power_profiles`, `otter.desktop.logind` | Power profile, session events | `power` |
+| `otter.desktop.mpris` | Media players | `media` |
+| `otter.desktop.network` | NetworkManager state | `network` |
+| `otter.desktop.bluetooth` | BlueZ devices | `bluetooth` |
+| `otter.desktop.notifications` | Notifications the plugin sent | `notifications` |
+| `otter.desktop.tray` | Status notifier items | `tray` |
+| `otter.desktop.sysinfo`, `otter.desktop.monitor` | System metrics and processes | none |
+| `otter.desktop.brightness` | Backlight devices | `brightness` |
+| `otter.desktop.volume` | PipeWire sinks and sources | `audio` |
 
 ## Reference pages
 
@@ -27,4 +114,4 @@ Lua modules expose specific reads and capability-gated actions. A plugin cannot 
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml`, `otr/API.md`, `otr/lua/` and `otr/pipewire/otr.toml` in the component repository.

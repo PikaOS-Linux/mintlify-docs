@@ -1,38 +1,123 @@
 ---
 title: "Fonts and text"
 sidebarTitle: "Fonts and text"
-description: "FreeType fonts, HarfBuzz shaping, and native otr bidi layout."
+description: "FreeType fonts, HarfBuzz shaping, bidi layout, and text measurement in otter-render."
 ---
 
-## Font ownership
+## Fonts
 
-Import `otter_render.font`. `Font.init(alloc, io, options)` returns an owned `Font`, not a heap pointer. Its consuming `deinit()` closes backend resources.
+Import `otter_render.font`. `Font.init(alloc, io, options)` returns a `Font` by value. It is a resource, so you `defer f.deinit()`.
 
-`InitOptions` borrows paths or bytes during initialization. Explicit static font data can remain embedded and be read in place. File-backed font operations take `std.Io` explicitly.
+```otr
+var f = try font.Font.init(mem.heap, env.io, .{ font_family: "Inter" })
+defer f.deinit()
 
-`measure_text_at_scale(text, size, factor)` uses an explicit `Scale`. Terminal layout uses `terminal_metrics_at_scale`.
+width := f.measure_text_at_scale("hi", 12, scale.Scale.one)
+cell := f.terminal_metrics_at_scale(13, scale.Scale.one)
+```
+
+`InitOptions` selects the primary face and its fallbacks:
+
+| Field | Meaning |
+| --- | --- |
+| `font_path` | Path of the primary face. It wins over `font_family`. |
+| `font_family` | A family name, resolved through the bundled fonts and then Fontconfig. |
+| `font_data` | An in-memory primary face. `init` copies it. |
+| `fallback_data` | In-memory fallback faces, tried in order. `init` copies them. |
+| `static_font_data`, `static_fallback_data` | Bytes that live as long as the program, such as `@embed_file`. FreeType reads them in place. |
+
+With no path, family or data, `init` opens the bundled Ioskeley monospace face.
+
+`measure_text_at_scale(text, size, factor)` returns a logical width at an explicit `Scale`. `terminal_metrics_at_scale` returns the `cell_width`, `cell_height` and `baseline` a terminal grid uses.
+
+`Font` measures and draws simple left-to-right text on its own. For bidirectional text, ligatures and combining marks, use a `TextSystem`.
 
 ## Shaping
 
-Import `otter_render.text`. `TextSystem.init(alloc, &mut font)` creates the shaping system. Its methods also take the mutable font explicitly; the system does not store a font pointer.
+Import `otter_render.text`. A `TextSystem` shapes with HarfBuzz and lays out bidirectional text with `otter_render.bidi`, an otr implementation of UAX #9. It does not store the font. Each method takes the font and a `ShapeScratch` as arguments.
 
-Keep a `ShapeScratch.init(alloc)` resource beside the system. Shaped runs and line views borrow scratch storage. Consume or copy them before reshaping with the same scratch.
+```otr
+import std
+import std.mem
+import otter_geo.color
+import otter_geo.rect
+import otter_render.font
+import otter_render.scale
+import otter_render.surface
+import otter_render.text
 
-- `measure` keeps a simple-text fast path.
-- `shape_into`, `draw`, and clipped variants handle shaped glyph runs.
-- `wrap`, `truncate`, and `cursor_rect` support controls and editors.
-- A different font instance returns `TextError.FontMismatch` on shaping paths.
+pub fn main(env: std.Env) !void {
+    var f = try font.Font.init(mem.heap, env.io, .{ font_family: "Inter" })
+    defer f.deinit()
+    var shaper = try text.TextSystem.init(mem.heap, &mut f)
+    defer shaper.deinit()
+    var scratch = text.ShapeScratch.init(mem.heap)
+    defer scratch.deinit()
 
-HarfBuzz performs shaping. `otter_render.bidi` provides native UAX #9 layout using Unicode 17 tables. Do not configure the obsolete itijah backend.
+    var options = text.ShapeOptions{ font_size: 14 }
+    options.set_scale(scale.Scale.from_q120(180))
 
-## Cache-safe drawing
+    label := "Volume: مرحبا 60%"
+    width := try shaper.measure(&mut f, &mut scratch, label, options)
+    cut := try shaper.truncate(&mut f, &mut scratch, label, 80, "...", options)
+    std.io.printf("{} px wide, {} bytes fit in 80 px\n", .{ width, cut.end })
 
-Cached glyph references borrow the font. Use combined `draw_glyph_index`, `draw_char`, and `draw_emoji_glyph` helpers when loading and drawing together would otherwise overlap mutable font borrows.
+    var target = surface.Surface.init_owned(mem.heap, 240, 48, scale.Scale.from_q120(180))
+    defer target.deinit()
+    try shaper.draw(&mut f, &mut scratch, &mut target, label, rect.Point{ x: 8, y: 8 }, options, color.Color.text)
+}
+```
+
+| Method | Returns |
+| --- | --- |
+| `measure` | The logical width of the text. Plain ASCII takes a fast path that skips HarfBuzz. |
+| `draw`, `draw_clipped`, `draw_clipped_transformed` | Nothing. They draw shaped text at a logical origin. |
+| `draw_physical` | The physical advance. It takes a physical pen position, baseline and clip, for callers with their own pixel grid. |
+| `wrap` | A slice of `TextLine` values with `start`, `end` and `width`. |
+| `truncate` | A `TruncateResult` with `end`, `width` and `truncated`. |
+| `cursor_rect` | The caret rectangle for a byte index. |
+| `shape_into` | A `ShapedRun` of glyphs and its advance. |
+
+`ShapeOptions` has a `font_size`, an integer `scale`, and an optional `direction`. Leave `direction` as `null` to detect it from the text. Call `set_scale` to give the exact fractional factor.
+
+The slices that `wrap` and `shape_into` return borrow the scratch. Read them before you call the shaper again with the same scratch.
+
+Pass the font the system was created over. Any other font makes the shaping methods return `TextError.FontMismatch`.
+
+### Truncation with an ellipsis
+
+`otter_render.text.ellipsis.cut` finds where to cut a label so that the prefix and the `...` mark fit a width. It works with any measure that has a `width` method. `FontMeasure` measures with a `Font`.
+
+```otr
+import otter_render.text.ellipsis
+
+var measure = ellipsis.FontMeasure{ f: &mut f, font_size: 12, factor: scale.Scale.one }
+result := ellipsis.cut("a long label", 40, false, 512, &mut measure)
+if result.truncated {
+    // draw the first result.len bytes, then ellipsis.mark
+}
+```
+
+## Glyphs
+
+`load_char` and `load_glyph_index` return a `&Glyph` borrowed from the font's cache. That borrow blocks other `&mut Font` calls while you hold it. To load and draw in one step, call `draw_char`, `draw_glyph_index` or `draw_emoji_glyph`. Each returns whether it drew anything.
 
 ## Lua
 
-`require("otter.render").measure(text, size, scale)` returns logical width. It accepts at most 16 KiB of text per call. The host must register `otter_render_lua.render.module()` before a plugin can require it.
+`otter.render.measure(text, size, scale)` returns the logical width of a string as the shaper measures it.
+
+```lua
+local render = require("otter.render")
+
+local label = "Volume: 60%"
+local width = render.measure(label, 14)
+if width > available then
+  label = "60%"
+end
+```
+
+`size` runs from 1 to 512 and `scale` from 0.5 to 8, with a default of 1. The text can be at most 16 KiB. `measure` raises an error for text that is not valid UTF-8, or when no font is available.
 
 ## Source reference
 
-`otr/font.otr`, `otr/text.otr`, `otr/bidi.otr`, `otr/lua/render.otr` in the component repository.
+`otr/font.otr`, `otr/text.otr`, `otr/text/ellipsis.otr`, `otr/bidi.otr`, `otr/lua/render.otr` in the component repository.

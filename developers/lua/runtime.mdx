@@ -1,66 +1,160 @@
 ---
 title: "Lua runtime safety"
 sidebarTitle: "Runtime safety"
-description: "Understand LuaJIT sandboxing, memory caps, thread-CPU budgets, and privileged script rules."
+description: "How the LuaJIT host loads, sandboxes, budgets, reloads, and unloads plugins and UI scripts."
 ---
 
-Otter Shell's LuaJIT host isolates each plugin in its own `lua_State`. Native code retains ownership of rendering and services. This is an in-process language sandbox, **not an OS process sandbox**. Only install plugins you trust and review their capabilities.
+The otter-lua host gives each plugin and each UI script its own `lua_State`. Native code keeps ownership of rendering and services. The sandbox works inside the host process and is not an OS process sandbox. Install only plugins you trust, and review the capabilities they request.
+
+## How a host starts
+
+A native app creates one `plugins.Host` with the binding modules it wants scripts to reach. This is the smallest host, from the otter-lua README:
+
+```otr
+import std
+import otter_lua.binding
+import otter_lua.plugins
+
+pub fn main(env: std.Env) !void {
+    modules := [0]binding.Module{}
+    var host = try plugins.Host.init(&modules, .{ home: env.get_env("HOME") orelse "" })
+    defer host.deinit()
+    _ = host.run_once(0)
+}
+```
+
+otter-bar passes its real module list and its limits in `otter-bar/otr/lua_host.otr`:
+
+```otr
+h := plugins.Host.init(&mods, .{ runtime: .{ cap_bytes: 16 << 20, jit: self.jit }, home: self.env.get_env("HOME") orelse "", log_stderr: true }) catch |e| {
+    lg.warn("Lua widget host unavailable: {s}", .{ @error_name(e) })
+    return false
+}
+```
+
+The bar creates this host only when a layout names a Lua widget. It then reads each plugin's policy and loads the plugin's directory with the resulting allow-list. This excerpt from `slot_for` in the same file leaves out the font lending around the load:
+
+```otr
+id_text := path.basename(dir.as_str())
+pol := policy.load_policy(self.env, id_text)
+if !pol.enabled {
+    lg.info("skip plugin {s}: disabled in plugins.conf", .{ id_text })
+    return null
+}
+```
+
+`host.load(dir, allow)` returns an id. The host lists the plugin even when it fails to load, and `host.status(id)` and `host.info(id)` say why. An app with its own epoll loop adds `host.poll_fd()` to it and calls `run_once(0)` when the descriptor is readable. The descriptor stays unreadable while every plugin is idle.
+
+UI scripts use `host.Ui` instead. See [the native side of a UI script](/developers/lua/ui-scripts#the-native-side). The [otr quickstart](/otr/quickstart) covers the language in these snippets.
+
+## Plugin lifecycle
+
+1. The host reads `plugin.toml`. An unknown key is an error, so a misspelt key fails the load.
+2. The host grants the capabilities the manifest declares that the allow-list permits.
+3. The host builds a new runtime and runs the entry script. The table the script returns holds its exports. `measure`, `draw`, and `event` must be functions when present.
+4. A module loads the first time the script calls `require("otter.<name>")`. A plugin that never asks for a module runs none of its code.
+5. `run_once` waits on one epoll for timers, program pipes, file watches, plugin directories, and descriptors that modules added. It then delivers each plugin's queued callbacks in posting order.
+6. The host calls `measure` and `draw` for a widget after the widget asked for a redraw, after a resize, or after an event.
+
+Each load or reload creates a new instance with a fresh runtime. Timers, programs, watches, callbacks, and module subscriptions belong to the instance. The host releases them when it unloads or replaces the instance.
 
 ## Sandbox
 
-The runtime opens base, table, string, math, and bit libraries. It removes dynamic code-loading and environment escape APIs, including `load`, `loadstring`, `loadfile`, `dofile`, `string.dump`, `newproxy`, `collectgarbage`, `getfenv`, `setfenv`, and `module`.
+The runtime opens the base, table, string, math, and bit libraries. It removes `load`, `loadstring`, `loadfile`, `dofile`, `string.dump`, `newproxy`, `collectgarbage`, `gcinfo`, `getfenv`, `setfenv`, and `module`.
 
-It never opens `io`, `os`, `package`, or `debug`. The `jit` global is removed after compiler setup. LuaJIT FFI is compiled out. Entry chunks and local modules load in text mode; Lua bytecode is refused.
+It never opens `io`, `os`, `package`, or `debug`. It opens `jit` to set up the compiler and then removes the global. LuaJIT's FFI is compiled out of the library. Entry chunks and local modules load in text mode, so the runtime refuses Lua bytecode.
 
-A host-controlled `require` exposes registered native bindings and local Lua modules. Local modules cannot resolve outside the script root. Script files must be regular files, verified on their open descriptors, so a FIFO disguised as `.lua` cannot block a load.
+The host's own `require` serves two kinds of name. `otter.<name>` opens a registered binding module after a capability check. Any other name loads a Lua file beneath the script's directory, after the host resolves symlinks. The host opens script files without blocking and requires a regular file on the opened descriptor. A FIFO named `x.lua` therefore fails at once.
 
-Capability checks limit access to [native bindings](/developers/lua/bindings). They do not confine external programs launched with `spawn`.
+Capability checks limit what a script reaches through [native bindings](/developers/lua/bindings). They do not confine programs that a plugin starts with `spawn`.
 
 ## Memory cap
 
-A tracked Lua allocator enforces `runtime.Options.cap_bytes`, which defaults to 32 MiB, while Lua runs. Host-side state pushes receive headroom to avoid allocation failure escaping into an unprotected Lua panic.
+A tracked allocator counts every Lua allocation against `runtime.Options.cap_bytes` while Lua runs. An allocation past the cap fails with a Lua memory error. The default is 32 MiB. `plugins.Options` lowers it to 16 MiB for each plugin unless the app chooses another value. Pushes the host makes into the state get headroom, so they cannot fail into a Lua panic.
 
-This is a Lua allocation cap, not a cap on total process RSS, native library allocations, or child-process memory. Hosts can choose different runtime options.
+The cap covers Lua allocations only. It does not limit the process's total memory, allocations inside native libraries, or child processes.
 
-Frames are bounded separately: at most 4096 nodes and 64 KiB of text. Built-in timers, processes, file watches, file reads, and captured output also have fixed limits.
+Frames have their own bounds of 4096 nodes and 64 KiB of text. The built-in modules bound timers, programs, file watches, file sizes, and captured output. See [limits on file and process work](/developers/lua/bindings#limits-on-file-and-process-work).
 
-## Thread-CPU watchdog
+## CPU watchdog
 
-Every guarded Lua call uses a per-thread POSIX timer based on **thread CPU time**, not wall-clock time. The default budget is **50 ms**, with a **20 ms grace interval**. A script does not consume its CPU budget merely because the desktop is busy and its thread waits to be scheduled.
+Every call into Lua arms a POSIX timer that counts the calling thread's CPU time. Time a script spends waiting for a core on a busy desktop does not count. `runtime.Options` sets the budget:
 
-- The first expiry requests an interpreter hook that raises a watchdog error.
-- A JIT-compiled trace cannot be interrupted by that hook. If it still runs after the grace interval, the guard aborts back to the protected call and abandons the runtime.
-- The bundled LuaJIT string matcher is patched to poll the stop flag, so expensive pattern matching can raise a normal watchdog error too.
-- If the requested watchdog timer cannot be created, the call is refused rather than run unguarded.
+| Option      | Default | Meaning                                                              |
+| ----------- | ------- | -------------------------------------------------------------------- |
+| `budget_ns` | 50 ms   | CPU time one call may use before the watchdog raises an error.       |
+| `grace_ns`  | 20 ms   | Further CPU time before the host abandons a call stuck in a JIT trace. |
 
-One budget covers an event-delivery batch, not each callback separately. Keep callbacks short and use native asynchronous services instead of long computation inside Lua.
+The watchdog stops a script in one of three ways:
 
-Do not treat the watchdog as a deadline for arbitrary native binding or child-process work. Binding authors must bound their own work and release native resources correctly.
+- The first expiry sets a hook that the interpreter runs at its next instruction. The hook raises an ordinary Lua error, and the state stays usable.
+- A JIT-compiled trace never checks hooks. If the call is still inside a trace after the grace interval, the host jumps back to the protected call and abandons the runtime.
+- The bundled LuaJIT string matcher polls a stop flag on every match step. A backtracking pattern raises the watchdog error as an ordinary Lua error.
 
-## Faults and reload
+The host refuses a budgeted call on a thread whose timer it cannot create. It never runs that call unguarded.
 
-A failed plugin call unloads that plugin, preserves its failure message, and releases its instance-owned timers, process resources, watches, and subscriptions. Other plugins remain loaded. Fixing the files or requesting reload can recover it.
+One budget covers a whole delivery batch, not each callback in it. Keep callbacks short and use the asynchronous services for long work.
 
-Reload is transactional. A candidate gets a new runtime; a previously drawn widget must measure and draw successfully before replacement. Failed candidates keep the old working instance.
+The watchdog does not bound native binding code or child processes. Binding authors bound their own work.
 
-UI scripts similarly load and render a candidate against current host state before replacement. A failed UI update retains the previous frame. An abandoned UI runtime can be rebuilt when new state arrives.
+## Faults
+
+A call into a plugin fails on a Lua error, a watchdog timeout, a JIT-trace abort, or an allocation past the heap cap. The host then unloads that plugin alone. Its status becomes `failed`, and the host keeps its message. Every other plugin keeps running.
+
+The runtime reports these errors to its host:
+
+| Error        | Cause                                                        |
+| ------------ | ------------------------------------------------------------ |
+| `Init`       | The runtime or a binding could not start.                    |
+| `Compile`    | The script has a syntax error.                               |
+| `Script`     | The script raised an error.                                  |
+| `Memory`     | An allocation passed the heap cap.                           |
+| `Timeout`    | The watchdog stopped the call.                               |
+| `Aborted`    | The host abandoned a call stuck in a JIT trace.              |
+| `Incomplete` | The frame left a container open or broke a frame limit.      |
+
+A failed plugin loads again when you fix its files. The host also reloads it on request.
+
+A UI script that fails keeps its previous frame on screen. The host does not run the script again until the state or the script changes. After an `Aborted` call, the host rebuilds the runtime from the script file on the next update that brings new state.
+
+## Hot reload
+
+The plugin host watches each plugin's directory. A change to a `.lua` file or to the manifest reloads the plugin in three steps:
+
+1. The host builds a candidate instance from the files.
+2. A widget that was drawn before must measure and draw in the candidate.
+3. The candidate replaces the running instance.
+
+A candidate that fails leaves the old instance running, and the host records the reason. `require` caches modules per runtime. A reload builds a new runtime, so it picks up module edits. Script locals reset.
+
+UI scripts follow the same rule. See [safe reload](/developers/lua/ui-scripts#safe-reload). Set `<app>_hot_reload = false` in `ui.conf` to stop watching a UI script.
+
+## Status and control files
+
+Settings reads plugin state from a status file and sends requests through a control file. Both live in `$XDG_RUNTIME_DIR/otter-shell/`.
+
+The host app writes `lua-plugins-<app>-$WAYLAND_DISPLAY.status` whenever a plugin loads, reloads, fails, or unloads. For each plugin the file holds its status, message, granted capabilities, heap bytes, reload and failure counts, and recent log lines. The host keeps the last 32 log lines of each plugin.
+
+Settings appends lines to `lua-plugins.control`. `reload <id>` reloads that plugin. `policy` tells the app to read `plugins.conf` again.
 
 ## Privileged surfaces
 
-A host marked privileged rejects user UI code and environment overrides:
+A host that marks its surface privileged accepts only root-owned UI scripts:
 
-- Search only `/usr/local/share/otter-shell/ui` and `/usr/share/otter-shell/ui`.
-- Ignore `OTTER_UI_DIR`, user XDG data locations, and user `ui.conf` choices.
-- Require the script, local modules, and every directory in their paths to be root-owned and writable by no other user.
-- Refuse symlinks in those paths.
-- Recheck the opened file descriptor before reading script contents.
+- It looks only in `/usr/local/share/otter-shell/ui` and `/usr/share/otter-shell/ui`.
+- It ignores `OTTER_UI_DIR`, the user's XDG data directories, and the user's `ui.conf`.
+- The script, every module it requires, and every directory in their paths must belong to root and be writable by no other user.
+- It refuses a path that contains a symlink.
+- It checks the opened descriptor with `fstat` before it reads the script.
 
-These checks apply to privileged **UI-script lookup**. They do not mean an ordinary user plugin runs with elevated privileges.
+These rules apply to UI script lookup on privileged surfaces. A user plugin never gains privileges from them. The plugin host ignores `runtime.Options.privileged`.
 
-## Host integration rules
+## Rules for host and binding code
 
-Lua callbacks run on the host thread through guarded delivery, never directly from C callbacks or worker threads. Bindings use checked generational integer handles instead of exposing pointers. Each instance releases its own native resources on unload/reload.
+The host loop is the only code that enters a plugin's runtime. Lua callbacks run through guarded delivery on the host thread, never from a C callback or a worker thread.
 
-LuaJIT errors unwind past native frames. Native binding code must validate inputs before acquiring resources and must not hold a pending `defer` across a raising LuaJIT call. The runtime's unwind gate checks those call boundaries.
+A LuaJIT error unwinds past native frames and skips otr cleanup. `lj.otr` lists every LuaJIT call that can raise, and the compiler rejects a call to one while a `defer` is pending. Binding code validates its arguments before it takes a resource. Host code reaches raising calls only inside protected calls.
 
-Source references: `otter-lua/otr/runtime.otr` (`Options` and sandbox prelude), `otr/c/guard.c`, `otr/read_file.otr`, `otr/search.otr`, `otr/plugins.otr`, and `vendor/luajit-watchdog.patch`.
+Bindings give Lua checked integer handles in place of pointers. See [writing a binding in otr](/developers/lua/bindings#write-a-binding-in-otr).
+
+Source references: `otter-lua/otr/runtime.otr` (`Options` and the sandbox prelude), `otr/plugins.otr`, `otr/host.otr`, `otr/c/guard.c`, `otr/read_file.otr`, `otr/search.otr`, `otr/runtime/require.otr`, `vendor/luajit-watchdog.patch`, and `otter-bar/otr/lua_host.otr`.

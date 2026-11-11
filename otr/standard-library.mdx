@@ -1,0 +1,351 @@
+---
+title: "Standard library"
+description: "A tour of std: containers, strings, files, processes, networking, JSON, time, crypto and FFI helpers."
+---
+
+The standard library is `std`. Import the root for the common names, and import a submodule to use it by its short name:
+
+```otr
+import std
+import std.list
+import std.string
+
+var xs = list.List(i64).init(std.mem.heap)
+```
+
+`import std` gives you `std.io`, `std.mem`, `std.fmt`, `std.sort`, `std.math`, `std.testing`, and the types `std.Env`, `std.Io`, `std.Future` and `std.Uring`.
+
+To read a module's full API, run `otr doc` on its source in the otr repository:
+
+```bash
+otr doc src/std/std/hash_map.otr
+```
+
+## Module map
+
+| Area | Modules |
+| --- | --- |
+| Output and formatting | `io`, `fmt`, `log` |
+| Memory | `mem`, `arena`, `box`, `arc`, `rc`, `cell`, `bounded` |
+| Containers | `list`, `soa_list`, `hash_map`, `btree`, `deque`, `priority_queue`, `bitset`, `pool` |
+| Text | `string`, `ascii`, `utf8`, `cstr`, `uri`, `base64` |
+| Data formats | `json`, `flate`, `dtoa` |
+| Files and system | `fs`, `path`, `xdg`, `process`, `linux` |
+| Networking | `net`, `tls`, `http`, `socket_stream`, `socket_ancillary` |
+| Concurrency | `sync`, `thread`, the `Io` runtimes |
+| Time | `time`, `datetime`, `tz` |
+| Numbers and algorithms | `math`, `sort`, `rand`, `hash`, `crypto` |
+| C interop | `ffi`, `dl`, `callback` |
+| Testing | `testing`, `testing_allocator`, `debug` |
+| Reflection helpers | `enums` |
+
+## Output and formatting
+
+```otr
+std.io.println("plain line")
+std.io.printf("{} items, {d:.2} average\n", .{ count, avg })
+std.io.eprintf("warning: {}\n", .{ message })
+```
+
+`printf` gathers its output and makes one `write` call for up to 4 KiB, so a line is not interleaved with other writers.
+
+Placeholders take Zig's specifiers, fill, alignment, width and precision. The format string is parsed at compile time.
+
+| Placeholder | Output |
+| --- | --- |
+| `{}` | Any value, in its default form |
+| `{d}` | Decimal. `{d:.2}` rounds to two places |
+| `{x}` | Hexadecimal |
+| `{e}` | Scientific notation |
+| `{c}` | A `u8` as a character |
+| `{u}` | An integer as a Unicode scalar value |
+| `{d:0>4}`, `{d:03}` | Zero-padded to a width |
+| `{s:<12}` | Left-aligned in a width of 12 |
+| `{{`, `}}` | Literal braces |
+
+`io.format(w, fmt, args)` writes to anything with a `write_all` method, including a `String`.
+
+### Logging
+
+```otr
+import std.log
+
+const lg = log.Scoped("net")
+
+lg.info("connected to {}", .{ host })
+lg.warn("retrying in {} ms", .{ delay })
+```
+
+```text
+info(net): connected to example.org
+```
+
+`log.debug`, `log.info`, `log.warn` and `log.err` are the unscoped forms.
+
+## Strings
+
+`string.String` is the owned, growable UTF-8 string.
+
+```otr
+var s = string.String.from(std.mem.heap, "otter")
+defer s.deinit()
+
+s.push_str(" shell")
+s.print(" {d:03}", .{ 7 })
+std.io.printf("{} {} {}\n", .{ s.as_str(), s.len(), s.contains("shell") })
+```
+
+```text
+otter shell 007 15 true
+```
+
+| Method | Purpose |
+| --- | --- |
+| `from`, `from_fmt`, `from_int`, `with_capacity` | Construct |
+| `push`, `push_str`, `push_codepoint`, `print`, `insert` | Grow |
+| `clear`, `truncate`, `remove_range`, `replace`, `pop_codepoint` | Shrink and edit |
+| `as_str`, `len`, `find`, `contains`, `starts_with`, `ends_with`, `eql` | Read |
+| `split`, `tokenize`, `codepoints` | Iterate |
+| `parse_int`, `parse_float` | Convert |
+
+For borrowed text, `std.mem` has the slice forms: `eql`, `starts_with`, `ends_with`, `index_of`, `trim`, `split` and `tokenize`. `std.fmt.parse_int(T, s, base)` and `std.fmt.parse_float(s)` parse numbers.
+
+`utf8` validates and iterates code points. Invalid input is never skipped: iteration yields U+FFFD for each invalid sequence.
+
+## Containers
+
+### List
+
+```otr
+var xs = list.List(i64).init(std.mem.heap)
+defer xs.deinit()
+
+xs.push(5)
+xs.push_slice(&[4]i64{ 3, 9, 1, 7 })
+std.io.printf("{} {}\n", .{ xs[0], xs.len })
+
+for mut v in xs { v.* += 1 }
+last := xs.pop()                      // ?i64
+```
+
+`items()` and `items_mut()` borrow the contents as a slice. `insert`, `ordered_remove`, `swap_remove`, `truncate`, `reserve` and `clear` do what their names say.
+
+Growing a list panics if allocation fails. `try_reserve` returns an error instead.
+
+### Maps
+
+```otr
+var ages = hash_map.StringMap(u32).init(std.mem.heap)
+defer ages.deinit()
+
+_ = ages.put("jade", 3)               // returns the old value, if any
+if ages.get("jade") |age| {
+    std.io.printf("jade {}\n", .{ age.* })
+}
+```
+
+| Type | Notes |
+| --- | --- |
+| `hash_map.HashMap(K, V)` | Unordered. Keys are integers, enums, bools, static strings, or types with `hash` and `eql` methods |
+| `hash_map.StringMap(V)` | String keys. The map owns a copy of each key |
+| `hash_map.ArrayHashMap(K, V)`, `StringArrayHashMap(V)` | Insertion-ordered |
+| `btree.BTreeMap(K, V, less)` | Ordered, with `range(lo, hi)`, `first` and `last` |
+
+`put` returns the previous value. When the value type is a resource, you must consume what `put` hands back:
+
+```otr
+if names.put("one", string.String.from(heap, "uno")) |prev| {
+    prev.deinit()
+}
+```
+
+Iterators borrow the map. Changing a map while you iterate it is a borrow error at compile time. `retain` removes entries while walking.
+
+### Other containers
+
+| Type | Use |
+| --- | --- |
+| `deque.Deque(T)` | Ring buffer |
+| `priority_queue.PriorityQueue(T, less)` | Binary heap |
+| `bitset.StaticBitSet(N)`, `bitset.DynamicBitSet` | Bit sets |
+| `bounded.BoundedList(T, N)`, `bounded.InlineString(N)` | Fixed capacity, no heap |
+| `pool.Pool(T)` | Slots addressed by [generational handles](/otr/memory/regions-pools-and-cells#pools-and-handles) |
+| `list.SoaList(T)` | [Struct-of-arrays](/otr/simd-and-data-layout#struct-of-arrays-layout) list |
+
+### Sorting
+
+```otr
+fn less(a: &i64, b: &i64) bool {
+    return a.* < b.*
+}
+
+std.sort.sort(i64, xs.items_mut(), less)
+```
+
+`sort` is a pattern-defeating quicksort that allocates nothing. `stable_sort` is a merge sort that takes a buffer from an allocator. `lower_bound`, `upper_bound`, `binary_search` and `partition_point` search sorted slices.
+
+## Files and paths
+
+```otr
+file := path.join(heap, fs.temp_dir(), "otr-tour.txt")
+defer file.deinit()
+
+try fs.write_file(heap, file.as_str(), "line one\nline two\n")
+
+text := try fs.read_file(heap, file.as_str())
+defer text.deinit()
+
+var lines = text.split("\n")
+for line in lines {
+    if line.len > 0 { std.io.printf("[{}]\n", .{ line }) }
+}
+
+try fs.delete_file(heap, file.as_str())
+```
+
+| Function | Purpose |
+| --- | --- |
+| `fs.read_file`, `fs.write_file` | Whole-file read and write |
+| `fs.write_file_atomic`, `fs.write_file_durable` | Write through a temporary file and rename, with fsync for the durable form |
+| `fs.exists`, `fs.stat` | Query |
+| `fs.make_dir`, `fs.make_path`, `fs.delete_file`, `fs.delete_dir`, `fs.rename` | Change |
+| `fs.list_dir`, `fs.list_files` | Enumerate |
+| `fs.real_path`, `fs.temp_dir` | Resolve |
+| `fs.Watcher` | inotify, usable as an `io.select` source |
+
+`path` has `join`, `dirname`, `basename`, `stem` and `extension`. `xdg` resolves the XDG base directories.
+
+`linux` holds the lower layer: an owned descriptor `Fd`, `Mapping` for mmap, typed ioctls, and calls that return errors named after errno.
+
+## Processes
+
+```otr
+out := try process.run_output(heap, &[2]str{ "echo", "from a child" })
+defer out.deinit()
+std.io.printf("{}", .{ out.stdout.as_str() })
+
+term := try process.run(heap, &[3]str{ "sh", "-c", "exit 3" })
+switch term {
+    .exited |code| => std.io.printf("exited {}\n", .{ code })
+    .signal |sig| => std.io.printf("signal {}\n", .{ sig })
+}
+```
+
+`process.spawn` returns a `Child` you can wait on, with options for the working directory, environment, a pseudo-terminal from `process.Pty`, and descriptors at chosen numbers. `process.exec` replaces the running program. `process.Signals` delivers signals as an `io.select` source.
+
+## Networking
+
+```otr
+fn serve(io: std.Io, listener: &net.Listener) net.Error!void {
+    conn := try listener.accept(io)
+    defer conn.deinit()
+    var buf: [64]u8 = unsafe { undefined }
+    n := (try conn.read(io, &mut buf[0..])).len
+    try conn.write_all(io, buf[0..n])
+}
+
+listener := try net.listen(io, .{ host: "127.0.0.1" })
+defer listener.deinit()
+
+conn := try net.connect(io, "127.0.0.1", listener.port())
+defer conn.deinit()
+try conn.write_all(io, "ping")
+```
+
+`net.connect` takes an IPv4 or IPv6 address or a host name. `listen_unix` and `connect_unix` are the Unix-socket forms. `connect_start` gives a non-blocking socket for event loops, read and written with `try_read` and `try_write`.
+
+`tls` is a TLS 1.3 client, with TLS 1.2 for servers that lack 1.3. `tls.Stream` is a blocking connection, and `tls.Client` is the protocol with no I/O, for event loops.
+
+`http` is an HTTP/1.1 client with redirects, proxies, timeouts, size limits, and gzip and deflate decoding. `http.fetch` is the blocking call, and `http.Fetch` is the same exchange as a state machine over a non-blocking socket.
+
+## JSON
+
+`json.parse_owned` reads a document straight into a type. It fills the struct's `pub` fields, uses defaults for missing members, and rejects unknown ones unless you ask it to skip them.
+
+```otr
+const Settings = struct {
+    pub theme: string.String
+    pub volumes: list.List(u8)
+    pub dnd: bool = false
+
+    pub fn deinit(self: Settings) void {
+        self.theme.deinit()
+        self.volumes.deinit()
+    }
+}
+
+cfg := try json.parse_owned(Settings, "{\"theme\": \"nord\", \"volumes\": [10, 20]}", .{})
+defer cfg.deinit()
+std.io.printf("{} {} {}\n", .{ cfg.theme.as_str(), cfg.volumes.len, cfg.dnd })
+```
+
+```text
+nord 2 false
+```
+
+| Function | Result |
+| --- | --- |
+| `json.parse(r, text)` | A dynamic `Value(r)` in a region |
+| `json.parse_exact(r, text)` | A dynamic value that keeps each number's kind |
+| `json.parse_as(T, r, text, opts)` | A `T` whose strings and slices live in the region |
+| `json.parse_owned(T, text, opts)` | A `T` with owned `String` and `List` fields |
+| `json.stringify(w, &v, opts)` | Writes any such value, minified or indented |
+
+Pass `.{ unknown_fields: .ignore }` to skip members your struct does not name.
+
+Nothing parsed points into the input text, so you can free the document while the result lives on.
+
+## Time
+
+```otr
+start := time.Instant.now()
+work()
+std.io.printf("{} ms\n", .{ start.elapsed().as_ms() })
+```
+
+`time` has the monotonic clock (`Instant`, `Duration`, `monotonic_ns`) and wall-clock seconds (`unix_seconds`, `unix_ns`).
+
+`datetime` has civil dates, ISO weeks, and `strftime` and `strptime` into caller buffers.
+
+`tz` reads TZif files and POSIX `TZ` rules itself. It has no process-wide state, so you can use any number of zones at once.
+
+## Hashing and cryptography
+
+`hash` has `Crc32`, `Crc32c`, `Fnv1a32`, `Fnv1a64`, `Wyhash`, `XxHash64`, `Sha256` and `Sha1`. Each has `init`, `update`, `final` and a one-shot `hash`.
+
+`crypto` holds what TLS 1.3 and X.509 need, written in otr:
+
+| Area | Contents |
+| --- | --- |
+| Hashes and MACs | SHA-2, MD5 for legacy protocols, HMAC, HKDF, Poly1305, AES-CMAC |
+| Ciphers and AEADs | AES, ChaCha20-Poly1305, XChaCha20-Poly1305, AES-GCM, AES-CCM |
+| Key exchange | X25519, ECDH over P-256 and P-384 |
+| Signatures | Ed25519 signing and verifying, ECDSA and RSA verifying |
+| Certificates | A DER reader, X.509 parsing, host matching, chain building to the system roots |
+
+`crypto.timing_safe_eql` compares in time that depends only on the length. `mem.secure_zero` wipes a buffer in a way the optimiser keeps.
+
+`rand` is the random-number module. `base64` encodes and decodes the standard and URL-safe alphabets.
+
+## Compression
+
+`flate` implements raw DEFLATE, zlib and gzip. `compress` and `decompress` work on whole buffers with a cap on the output. `Inflater.step` and `Deflater.step` are the streaming forms over caller-owned buffers.
+
+## Memory helpers
+
+| Function | Purpose |
+| --- | --- |
+| `mem.splat(N, T, v)` | An array of `N` copies of `v` |
+| `mem.array(N, T, f)` | An array built by calling `f(i)` |
+| `mem.copy(T, dst, src)` | Copy between slices of one length |
+| `mem.take`, `mem.replace` | Move a value out of a slot |
+| `mem.to_bytes`, `mem.from_bytes` | Byte views of plain types |
+| `mem.read_int`, `mem.write_int` | Integers with a given endianness |
+| `mem.split_at_mut` | Two disjoint mutable halves of a slice |
+| `mem.secure_zero` | Wipe secrets |
+
+## C interop helpers
+
+`ffi` has `Context` for callback state, `Owned` and `Ref` for C objects, `CStr`, and `load_table`, which gathers a loaded library's functions into a struct by field name. `dl.Library` loads a shared library at run time. See [C interop](/otr/c-interop).
+
+`callback.Callbacks(Ctx, Args, N)` and `callback.Hook(Ctx, Args)` are stored callbacks that receive their owner as context when they run, instead of storing a pointer to it.

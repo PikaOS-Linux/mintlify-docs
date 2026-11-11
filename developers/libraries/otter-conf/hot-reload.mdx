@@ -4,30 +4,77 @@ sidebarTitle: "Hot reload"
 description: "Reload otr configs once per drained inotify burst and preserve valid state."
 ---
 
-Import `otter_conf.watcher`. `Watcher.init()` creates an owned watcher without allocator arguments.
+Import `otter_conf.watcher`. `Watcher.init()` returns an owned watcher, and `deinit()` releases it.
 
 ## Event-loop integration
 
-1. Call `watch_config_path(path)` to watch the file's parent directory.
-2. Put `get_fd()` into your existing event loop.
-3. On readiness, call `drain_changed()`.
-4. If it returns true, parse one replacement config.
-5. Publish the replacement only after the full parse succeeds.
+1. Call `watch_config_path(path)`. It watches the file's parent directory, and the file need not exist yet.
+2. Add `get_fd()` to the descriptor loop your app already runs.
+3. When the descriptor is readable, call `drain_changed()`. It consumes every pending event.
+4. If it returns true, load the config once.
+5. Replace the running config only after that load succeeds.
 
-Directory watching survives editors that save by atomic rename. `IN_IGNORED` alone does not mean the config changed. Do not reload separately for every event in a burst.
+```otr
+import std
+import std.mem
+import std.runtime
+import otter_conf.loader
+import otter_conf.support
+import otter_conf.text
+import otter_conf.watcher
+import otter_utils.xdg_paths
+
+const Config = struct {
+    pub name: text.Text = text.Text.of("example")
+    pub width: u16 = 640
+
+    pub fn deinit(self: Config) void {
+        support.free_config(Config, self)
+    }
+}
+
+pub fn main(env: std.Env) !void {
+    var buf = xdg_paths.Buf.init()
+    path := xdg_paths.otter_config_path(env, &mut buf, "otter-example.conf") orelse return error.NoConfigHome
+
+    var cfg = try loader.load(Config, mem.heap, path, .{})
+    defer cfg.deinit()
+
+    var w = try watcher.Watcher.init()
+    defer w.deinit()
+    try w.watch_config_path(path)
+
+    for {
+        var fds = [1]runtime.PollFd{
+            .{ fd: w.get_fd(), events: runtime.Poll.read, revents: 0 },
+        }
+        _ = try env.io.poll(&mut fds[0..], null)
+        if !w.drain_changed() { continue }
+
+        // A file that fails to parse leaves the running config in place.
+        next := loader.load(Config, mem.heap, path, .{}) catch continue
+        mem.replace(Config, &mut cfg, next).deinit()
+        std.io.printf("width is now {}\n", .{ cfg.width })
+    }
+}
+```
+
+Editors and `otter-settings` save by renaming a temporary file over the target. That replaces the inode, which ends a watch on the file itself. A watch on the parent directory keeps working. `drain_changed()` counts only events for the file names you registered, and it ignores `IN_IGNORED`.
+
+`add_watch(path)` adds a plain inode watch and `add_directory_watch(path)` watches a directory. `next_event()` and `has_pending_events()` give you the raw `otter_utils.inotify` events when you need them.
 
 ## Imported files
 
-`add_watches_for_imports(paths)` returns an owned list of descriptors. Refresh import watches when a successful reload changes the import graph.
+`add_watches_for_imports(paths)` takes the `paths` list from `loader.load_with_imports`. It calls `watch_config_path` and adds an inode watch for each path, then returns the watch descriptors as an owned `List(i32)`. Call it again after a reload that changes which files the config imports.
 
-For theme files, use `otter_theme.theme_watcher.ThemeWatcher` instead. It tracks the selected layers and imports as one graph.
+Theme files have their own watcher, `otter_theme.theme_watcher.ThemeWatcher`, which follows `theme.conf` and its selected layer files. See [Presets and loading](/developers/libraries/otter-theme/presets-and-loading).
 
-## Metadata alternative
+## Checking modification times
 
-`loader.get_mtime(alloc, path)` returns nanoseconds as `i64`. `has_changed(alloc, path, previous_mtime)` supports code that already checks metadata. Long-running desktop applications should prefer descriptor-driven watches.
+`loader.get_mtime(alloc, path)` returns a file's modification time in nanoseconds as `i64`. `loader.has_changed(alloc, path, previous_mtime)` compares against an earlier value. Use these in one-shot tools. A long-running app should watch a descriptor.
 
-Never normalize or rewrite a file from its reload path. Failed edits retain the previous valid config; a watch event is not permission to replace it with defaults.
+Keep normalization out of the reload path. A reload that rewrites the file triggers its own watch.
 
 ## Source reference
 
-`otr/watcher.otr`, `otr/loader.otr` in the component repository.
+`otr/watcher.otr` and `otr/loader.otr` in the `otter-conf` repository.

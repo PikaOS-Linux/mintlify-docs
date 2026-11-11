@@ -1,0 +1,129 @@
+---
+title: "Closures"
+description: "Explicit capture lists, call kinds, and storing closures as callbacks."
+---
+
+A closure literal names what it captures. The body can use only its parameters, its captures and top-level declarations.
+
+```otr
+limit: i64 = 10
+is_big := fn[limit](x: i64) bool { return x > limit }
+std.io.printf("{} {}\n", .{ is_big(11), is_big(3) })   // true false
+```
+
+The form is `fn [captures] (params) R { body }`. Leave the capture list out when it is empty.
+
+Explicit captures keep to the rule that otr has no hidden behaviour. What a closure holds is visible where you write it, and the borrow checker sees every borrow at the capture list.
+
+## Capture forms
+
+| Capture | Meaning |
+| --- | --- |
+| `name` | Copied if copyable, otherwise moved in |
+| `var name` | As above, and mutable inside the closure |
+| `var name = expr` | A new mutable variable owned by the closure |
+| `name = expr` | Moves the value of `expr` in under a new name |
+| `&name` | A shared borrow |
+| `&mut name` | An exclusive borrow |
+
+```otr
+var total: i64 = 0
+var add = fn[&mut total](x: i64) void { total += x }
+add(5)
+add(7)
+
+var counter = fn[var n = 0](step: i64) i64 {
+    n += step
+    return n
+}
+_ = counter(1)
+std.io.printf("{}\n", .{ counter(2) })   // 3
+```
+
+## Call kinds
+
+The compiler infers one of three kinds from the captures.
+
+| Kind | Called through | When |
+| --- | --- | --- |
+| `fn` | `&F` | No `&mut` or `var` captures, and every by-value capture is copyable |
+| `mut fn` | `&mut F` | It has a `&mut x` or `var` capture |
+| `once fn` | By value. The call consumes it | It captures a resource or a `&mut` by value |
+
+A `fn` closure can be used where a `mut fn` or `once fn` is expected, and a `mut fn` where a `once fn` is.
+
+A closure that changes its own state, like `add` and `counter` above, must be held in a `var`.
+
+## Passing closures to functions
+
+Each closure literal has its own anonymous type. A function that accepts one takes the type as a `comptime` parameter and constrains it with a call kind and signature. Calls are statically dispatched.
+
+```otr
+fn each(comptime F: type, xs: []i64, f: &mut F) void where F: mut fn(i64) void {
+    for x in xs { f(x) }
+}
+
+var total: i64 = 0
+var add = fn[&mut total](x: i64) void { total += x }
+each(@type_of(add), &[3]i64{ 1, 2, 3 }, &mut add)
+std.io.printf("{}\n", .{ total })   // 6
+```
+
+The three constraints are `where F: fn(A) R`, `where F: mut fn(A) R` and `where F: once fn(A) R`.
+
+A closure with no captures coerces to the plain function type `fn(A) R`, so you can pass it where a function value is expected:
+
+```otr
+users.sort_by(fn(a: &User, b: &User) bool { return a.age < b.age })
+```
+
+A captureless closure also coerces to a `callconv(.c)` function pointer, which is how you write a C callback inline.
+
+## Borrowing closures and owning closures
+
+A closure with any `&` or `&mut` capture is a borrowing closure. It follows the same rules as a [ref struct](/otr/memory/ownership-and-borrowing#ref-structs): you can pass it down and return it, but you cannot store it or spawn it.
+
+A closure whose captures are all owned is a value. You can store it, box it and send it to another thread. It is:
+
+- copyable when all its captures are
+- a resource when any capture is a resource
+- `Send` and `Sync` when all its captures are
+
+To discard an owning closure without calling it, call its `deinit()`, which deinitialises its captures.
+
+## Storing callbacks
+
+To keep closures of different types in one field or list, erase the type with `dyn`. The forms are `dyn fn(A) R`, `dyn mut fn(A) R` and `dyn once fn(A) R`, and they appear behind `&`, `&mut` or `Box`.
+
+```otr
+import std
+import std.box
+import std.list
+
+const Handler = box.Box(dyn fn(i64) void)
+
+pub fn main() void {
+    var handlers = list.List(Handler).init(std.mem.heap)
+    defer handlers.deinit()
+
+    prefix: []static u8 = "got"
+    handlers.push(Handler.init(fn[prefix](x: i64) void {
+        std.io.printf("{} {}\n", .{ prefix, x })
+    }))
+
+    for h in handlers.items() { h.get()(7) }   // got 7
+}
+```
+
+A `dyn once fn` runs by value, so you call it through the `Box` that owns it, and the call consumes the box:
+
+```otr
+task := tasks.pop() orelse break
+task(x)
+```
+
+When a stored callback only needs the dispatcher's context and one small datum, such as a pool handle, `callback.Hook(Ctx, Args)` from the standard library is cheaper than a boxed closure. It is a function plus 8 bytes of data, and it is copyable.
+
+## Closures and tasks
+
+`io.spawn` takes an owning `once fn` closure that is `Send`. `io.async` takes a `once fn` that may borrow, and the future it returns holds those borrows until you await or cancel it. See [Concurrency](/otr/concurrency).

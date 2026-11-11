@@ -1,39 +1,157 @@
 ---
 title: "D-Bus clients"
 sidebarTitle: "D-Bus clients"
-description: "otr D-Bus services and the capability gates of their Lua bindings."
+description: "The otr D-Bus connection, the service clients built on it, and their Lua bindings."
 ---
 
-Import service leaves under `otter_desktop.dbus`, for example `mpris`, `upower`, `network_manager`, `logind`, `power_profiles`, or `system_tray`.
+Import service modules from `otter_desktop.dbus`, for example `upower`, `mpris`, `network_manager`, `logind`, `power_profiles` or `system_tray`.
 
-Core `connection`, `message`, and `types` modules wrap basu. Drain available messages: one bus-processing call is not guaranteed to empty the queue.
+## Service clients
 
-## Services
+```otr
+import std
+import std.mem
+import otter_desktop.dbus.connection
+import otter_desktop.dbus.mpris
+import otter_desktop.dbus.power_profiles
 
-The library includes notifications, screensaver inhibition/service support, UDisks, BlueZ, SCX, switcheroo-control, DisplayConfig, portals, accounts, seats, polkit, and fprintd alongside panel services.
+pub fn main() !void {
+    var bus = try connection.Connection.open(mem.heap, .system)
+    defer bus.deinit()
+    if !bus.name_has_owner("org.freedesktop.UPower") {
+        std.io.println("UPower is not running")
+    }
 
-GNOME DisplayConfig support reads current monitor state; it does not expose display reconfiguration. Protocol/service availability remains a runtime concern.
+    var players = try mpris.Mpris.init(mem.heap)
+    defer players.deinit()
+    players.start_monitoring()
+    _ = players.drain()
+    if players.active_player() |p| {
+        std.io.printf("{}: {}%\n", .{ p.short_name(), p.progress() })
+        try players.play_pause()
+    }
 
-## Lua actions
+    var profiles = try power_profiles.PowerProfiles.init(mem.heap)
+    defer profiles.deinit()
+    std.io.printf("profile: {}\n", .{ profiles.active_profile() orelse "unknown" })
+    try profiles.set_active_profile("power-saver")
+}
+```
 
-The host registers only the bindings it intends to expose. Common modules and action gates are:
+Each client owns its connection. The shared methods are:
 
-| Module                                                 | Action capability |
-| ------------------------------------------------------ | ----------------- |
-| `otter.desktop.mpris`                                  | `media`           |
-| `otter.desktop.power_profiles`, `otter.desktop.logind` | `power`           |
-| `otter.desktop.network`                                | `network`         |
-| `otter.desktop.screensaver`                            | `idle-inhibit`    |
-| `otter.desktop.notifications`                          | `notifications`   |
-| `otter.desktop.tray`                                   | `tray`            |
-| `otter.desktop.scx`                                    | `scheduler`       |
-| `otter.desktop.udisks`                                 | `storage`         |
-| `otter.desktop.bluetooth`                              | `bluetooth`       |
+| Method | Use |
+| --- | --- |
+| `init(alloc)` | Connect and read the current state. Returns an error when the bus or service is unavailable. |
+| `start_monitoring()` | Subscribe to change signals. |
+| `poll_fd()` | The descriptor to wait on. |
+| `drain()` | Dispatch everything pending. `process()` dispatches one message. Call `drain` when the descriptor is readable, because one `process` call may leave messages queued. |
+| `generation()` | A counter that changes with the state. |
+| `refresh()` | Read the state again with blocking calls. |
 
-Public-state reads generally need no action capability. Notification send/close/subscription operations are gated, and notification IDs remain scoped to the sending plugin. A tray action validates item identity in addition to its current index.
+A service that is not running is a runtime condition, not a build error. Handle the error from `init` and carry on without the client, as the bar's widgets do.
 
-`subscribe` callbacks are posted to the host loop. Service descriptors are opened lazily and closed after their last using plugin unloads. A lost bus removes its dead descriptor; a later call can reconnect.
+### Available clients
+
+| Module | Service |
+| --- | --- |
+| `upower`, `power_profiles` | Batteries and power profiles. |
+| `mpris` | Media players: `players_view()`, `active_player()`, `play_pause()`, `next()`, `previous()`, `seek(offset_us)`. |
+| `mpris_server`, `mpris_state` | Makes your app an MPRIS player. |
+| `network_manager` | Wi-Fi, Ethernet and VPN state and actions. |
+| `bluez` | Bluetooth adapters and devices. |
+| `system_tray`, `status_notifier_watcher`, `dbus_menu` | StatusNotifierItem icons and their menus. |
+| `notification_client` | Sends a notification. |
+| `notification_service`, `notification_store` | Implements `org.freedesktop.Notifications`, for a notification daemon. |
+| `logind`, `logind_seats`, `power_actions` | Session events, inhibitors, seats, and shutdown, reboot and suspend. |
+| `screensaver`, `screensaver_service` | Idle inhibition, as a client and as the service. |
+| `polkit_agent`, `fprintd`, `accounts_service` | Authentication agent, fingerprint reader and user accounts. |
+| `udisks`, `scx_loader`, `switcheroo` | Storage, the sched_ext loader and GPU selection. |
+| `gnome_display_config` | Reads monitor state and fractional scale from Mutter. It cannot reconfigure displays. |
+| `portal_file_chooser`, `portal_print`, `portal_screencast` | Clients of xdg-desktop-portal interfaces. |
+
+## Send a notification
+
+`notification_client.send` opens a connection, sends one notification and returns its id.
+
+```otr
+import std.mem
+import otter_desktop.dbus.notification_client
+
+id := try notification_client.send(mem.heap, .{
+    app_name: "battery-watch",
+    desktop_entry: "battery-watch",
+    summary: "Battery critical",
+    body: "Plug in now.",
+    urgency: 2,
+})
+```
+
+`Options` also has `replaces_id`, `image_path`, `image`, `timeout_ms`, `actions` and `category`. `send_on(&mut conn, options)` uses a connection you already have.
+
+## Publish an MPRIS player
+
+`mpris_server` owns `org.mpris.MediaPlayer2.<name>` for your app. You publish a typed `mpris_state.PlayerState` with `update`, and the server emits `PropertiesChanged` for the properties that differ. Requests from the bus queue as commands that you take with `next_command()` and apply yourself. A command never changes the published state. Call `seeked` after a jump in position.
+
+## The connection
+
+`connection.Connection` is the transport under every client. Use it directly for a service that has no client module.
+
+```otr
+var bus = try connection.Connection.open(mem.heap, .session)
+defer bus.deinit()
+
+signal := try bus.subscribe_signal("org.freedesktop.DBus", "NameOwnerChanged")
+defer bus.unsubscribe(signal)
+```
+
+To put a connection in your event loop, wait on `poll_fd()` for the events in `poll_events()`, with `timeout_usec()` as the deadline. Then call `drain()` and read `next_event()` until it returns `null`. Each event owns its message, so consume it with `deinit()`.
+
+`call(&mut msg, timeout)` blocks for a reply. `call_async` returns a `CallId`, and the reply arrives later as an event. `cancel_call(id)` drops a call you no longer need. A loop that must stay responsive, such as the bar's, uses `call_async`.
+
+## Lua
+
+A Lua module exists for most clients. Reads need no capability, and actions name one.
+
+```lua
+local mpris = require("otter.desktop.mpris")
+local host = require("otter.host")
+
+mpris.subscribe(function() host.redraw() end)
+
+local player = mpris.active()
+if player and player.playing then
+  print(player.title, player.artist, player.progress)
+end
+
+mpris.play_pause()   -- needs the "media" capability
+```
+
+| Module | Action capability |
+| --- | --- |
+| `otter.desktop.mpris` | `media` |
+| `otter.desktop.power_profiles`, `otter.desktop.logind` | `power` |
+| `otter.desktop.network` | `network` |
+| `otter.desktop.screensaver` | `idle-inhibit` |
+| `otter.desktop.notifications` | `notifications` |
+| `otter.desktop.tray` | `tray` |
+| `otter.desktop.scx` | `scheduler` |
+| `otter.desktop.udisks` | `storage` |
+| `otter.desktop.bluetooth` | `bluetooth` |
+
+`subscribe` callbacks run on the host loop. A module opens its bus connection on first use and closes it when the last plugin using it unloads.
+
+`otter.desktop.notifications` gates every function, including `subscribe`. A plugin can replace or close only the notifications it sent, and it receives only their events:
+
+```lua
+local notifications = require("otter.desktop.notifications")
+
+local id = notifications.send{ summary = "Build finished", body = "otter-bar", timeout = 4000 }
+notifications.subscribe(function(event, sent_id, detail)
+  -- "action" with the action key, or "closed" with the reason
+end)
+```
 
 ## Source reference
 
-`otr/dbus/`, `otr/lua/dbus_mpris.otr`, `otr/lua/dbus_notifications.otr`, `otr/lua/dbus_tray.otr` in the component repository.
+`otr/dbus/` in the component repository, with the transport in `otr/dbus/native/`. The Lua bindings are `otr/lua/dbus_*.otr`.

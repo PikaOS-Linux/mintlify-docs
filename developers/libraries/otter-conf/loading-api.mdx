@@ -4,43 +4,135 @@ sidebarTitle: "Loading API"
 description: "Read and write typed otr configs with explicit resource ownership."
 ---
 
-Import `otter_conf.loader` and `otter_conf.serializer`.
+## App config files
+
+`otter_conf.app_file` holds the rule every Otter Shell app loads its file by. `load_or_create(T, alloc, env, file_name, header)` reads `$XDG_CONFIG_HOME/otter-shell/<file_name>`. Without that file it reads `/etc/otter-shell/<file_name>`, and without either it returns the defaults.
+
+A file that exists but fails to load is logged with its path and skipped. `load_or_create` never overwrites it. When neither file exists, it writes the defaults to the user path so you have a file to edit.
+
+`load_normalized_or_create` does the same and also writes a loaded user file back in normalized form when that changes it. `save_user` writes the user's file and creates the config directory first.
+
+```otr
+import std
+import std.mem
+import otter_conf.app_file
+import otter_conf.loader
+import otter_conf.serializer
+import otter_conf.support
+import otter_conf.text
+
+const Config = struct {
+    pub name: text.Text = text.Text.of("example")
+    pub width: u16 = 640
+
+    pub fn deinit(self: Config) void {
+        support.free_config(Config, self)
+    }
+}
+
+pub fn main(env: std.Env) !void {
+    a := mem.heap
+
+    var cfg = app_file.load_or_create(Config, a, env, "otter-example.conf", "otter-example configuration")
+    defer cfg.deinit()
+
+    cfg.width = 800
+    try app_file.save_user(Config, a, env, "otter-example.conf", "otter-example configuration", &cfg)
+
+    // One file by absolute path, with its size and modification time.
+    system_path := "/etc/otter-shell/otter-example.conf"
+    r := try loader.load_with_metadata(Config, a, system_path, .{ strict_custom_values: true })
+    system, size, mtime := r
+    defer system.deinit()
+    std.io.printf("{} bytes, changed since: {}\n", .{ size, try loader.has_changed(a, system_path, mtime) })
+
+    out := serializer.serialize(Config, a, &cfg, .{ header_comment: "Written by the example" })
+    defer out.deinit()
+    std.io.println(out.as_str())
+}
+```
+
+The serialized text for that config is:
+
+```conf
+# Written by the example
+
+name = "example"
+
+width = 800
+```
 
 ## Loading
 
-| Function                             | Purpose                                       |
-| ------------------------------------ | --------------------------------------------- |
-| `load(T, alloc, path, options)`      | Read one typed file                           |
-| `load_from_slice(T, alloc, content)` | Parse existing bytes                          |
-| `load_with_metadata`                 | Include file size and `mtime_ns: i64`         |
-| `load_with_imports`                  | Resolve imports and return owned import paths |
-| `load_or_create`                     | Load or create defaults                       |
-| `ensure_config_exists`               | Create defaults when absent                   |
+Import `otter_conf.loader`. Paths are absolute unless a function says otherwise.
 
-`loader.LoadOptions` controls `max_file_size` and `strict_custom_values`. Use strict custom parsing when malformed colors or other custom values must reject the whole update.
+| Function | Purpose |
+| --- | --- |
+| `load(T, alloc, path, options)` | Reads one typed file |
+| `load_from_slice(T, alloc, content)` | Parses text you already hold |
+| `load_with_metadata(T, alloc, path, options)` | Returns a `LoadResult(T)` with `config`, `file_size` and `mtime_ns` |
+| `load_with_imports(T, alloc, path, options)` | Resolves `import` lines and returns an `ImportedLoadResult(T)` |
+| `ensure_config_exists(T, alloc, path, options)` | Writes the defaults when nothing is there, and returns true when it wrote them |
+| `get_mtime(alloc, path)`, `has_changed(alloc, path, mtime_ns)` | Modification time in nanoseconds, and a comparison against an earlier one |
 
-`ImportedLoadResult(T)` owns both its config and `List(String)` paths. Its `deinit()` drops both. Destructure the result if you need to move out the config; do not later deinitialize the moved whole result.
+`LoadOptions` has `max_file_size`, which defaults to 64 MiB, and `strict_custom_values`. With `strict_custom_values` set, an invalid color or other custom value fails the load. Without it, that field keeps its default.
+
+`ImportedLoadResult(T)` owns its config and its `paths` list, and `deinit()` drops both. To keep the config and release the rest, destructure the result as the example does with `LoadResult`.
 
 ## Directories
 
-`otter_conf.dir_loader.load_dir` loads matching files. `load_with_overrides` supports base and override directories. `DirLoadResult(T)` owns its entries and configs.
+`otter_conf.dir_loader.load_dir(T, alloc, dir_path, options)` loads every regular file in a directory whose name ends in `options.extension`, which defaults to `.conf`. Set `recursive` to include subdirectories. A file that fails to load fails the whole call.
 
-Use `get_by_filename`, `get_by_field`, or an entry's `filename()` rather than retaining borrowed names across mutation.
+`load_with_overrides(T, alloc, base_dir, override_dir, options)` loads the base directory, replaces each config with the file of the same name in the override directory, and adds the override directory's own files.
+
+`DirLoadResult(T)` owns its entries. Look one up with `get_by_filename(name)` or `get_by_field("field", value)`. Each entry has `config`, `filename()`, `path` and `mtime_ns`. `has_any_changed(alloc)` tells you whether any loaded file changed on disk.
 
 ## Serialization and saves
 
-`serializer.serialize(T, alloc, &cfg, options)` returns an owned `String`; drop it with `deinit()`. `serialize_into` reuses an existing output buffer.
+`serializer.serialize(T, alloc, &cfg, options)` returns an owned `String`. `serialize_into` appends to a `String` you already have, and `serialize_defaults` writes a type's defaults. `SerializeOptions` has `header_comment`, `spacing` and `include_type_comments`.
 
-`loader.save` borrows `&cfg`. `save_relative`, `save_defaults`, and `save_defaults_relative` serve the corresponding path/default cases. Saves and loads coordinate file locking; do not assume every save is an atomic rename.
+`serializer.replace_field(T, "name", alloc, content, &value)` rewrites one top-level key in existing text. It keeps comments, the other lines, their order and line endings.
 
-`normalize.normalize` compares serialized output and writes only when needed. It rejects paths resolving outside the supplied user config root, including symlink escapes. Use normalization at the designated startup/editor boundary, not inside a file-watch reload loop.
+`loader.save(T, alloc, &cfg, path, options)` truncates and writes the file under an exclusive lock. `load` holds a shared lock, so a concurrent load sees the old text or the new text. `save_defaults` writes a type's defaults. `save_relative` and `save_defaults_relative` take a path relative to the working directory and skip the lock.
+
+`normalize.normalize(T, alloc, &cfg, path, root, options)` serializes a loaded config and writes it back only when the text differs. This drops unknown keys and adds missing defaults. It refuses a path that resolves outside `root`, symbolic links included, with `error.OutsideUserConfig`. `normalize.user_root` builds that root from `XDG_CONFIG_HOME` and `HOME`. Normalize at startup or from an editor. A reload path that normalizes triggers its own watch.
 
 ## Lua
 
-`otter_conf_lua` exposes `otter.config`: `dir`, `list`, `read`, and `watch` require `config`. Hosts configure directories before plugins load.
+The `otter_conf_lua` package provides the `otter.config` module for [otter-lua](/developers/libraries/otter-lua) hosts. A plugin needs the `config` capability to call `dir`, `list`, `read` and `watch`.
 
-A host can also register `Typed(T, file).module("otter.config.<app>")`. Typed `get`, `table`, and `watch` require `config`; `set` requires `config-write` and strictly parses before writing the normalized user file. Only modules registered by the host are available.
+```lua
+local log = require("otter.log")
+local config = require("otter.config")
+
+local t = config.read("otter-test.conf")
+log.info("read", t.name, t.count, t.enabled, #t.hosts)
+
+log.info("files", table.concat(config.list(), ","))
+
+config.watch("otter-test.conf", function(name)
+  log.info("changed", name)
+end)
+```
+
+Names are plain `*.conf` file names. `read` uses the user's file, else the one in `/etc/otter-shell`, and follows `import` lines. `watch` returns a handle for `unwatch`.
+
+A host can also register a typed module for one schema with `typed.Typed(T, file, "otter.config.<app>").module(env)`. Its `get(key)`, `table()` and `watch(f)` need `config`. `set(key, value)` needs `config-write`. It parses the value strictly and writes the normalized result to the user's file.
+
+```lua
+local log = require("otter.log")
+local typed = require("otter.config.test")
+
+log.info("count", typed.get("count"), typed.file())
+log.info("second bind", typed.table().binds[2].key)
+
+typed.set("count", 7)
+typed.set("widget_color", "#102030")
+typed.set("bind_1_key", "Escape")
+```
+
+`otter.config.test` is the module name the library's own tests register. A plugin can require only the typed modules its host registered.
 
 ## Source reference
 
-`otr/loader.otr`, `otr/dir_loader.otr`, `otr/serializer.otr`, `otr/normalize.otr`, `otr/lua/` in the component repository.
+`otr/app_file.otr`, `otr/loader.otr`, `otr/dir_loader.otr`, `otr/serializer.otr`, `otr/normalize.otr` and `otr/lua/` in the `otter-conf` repository. The Lua examples follow `otr/lua/tests/reader/init.lua` and `otr/lua/tests/writer/init.lua`.

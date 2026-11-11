@@ -4,18 +4,51 @@ sidebarTitle: "otter-utils"
 description: "otr logging, XDG paths, inotify, process and runtime-state helpers."
 ---
 
-`otter-utils` supplies small Linux and application helpers through `otter_utils.<module>` imports. It has no package root barrel.
+`otter-utils` holds the small Linux and application helpers every Otter Shell package shares. The package name is `otter_utils`. It has no root module, so you import each module by name, as in `import otter_utils.log`.
 
-| Modules                                                       | Purpose                                       |
-| ------------------------------------------------------------- | --------------------------------------------- |
-| `log`                                                         | Scoped logging, counters, periodic reporters  |
-| `fixed_string`                                                | UTF-8-aware bounded configuration text        |
-| `xdg_paths`, `runtime_paths`, `runtime_state`, `legacy_paths` | Shared filesystem locations and session state |
-| `inotify`                                                     | File and directory event watching             |
-| `process`, `command`, `shutdown`                              | Child-process and lifecycle helpers           |
-| `unix_socket`, `runtime_auth`                                 | Local IPC support                             |
+Add it to your package's `otr.toml`:
 
-Use otr standard-library containers and path types instead of `BoundedArray` and `FilePath`, which are not exported. Environment-dependent helpers take `std.Env`; there is no global `io.install` step.
+```toml
+[dependencies]
+otter_utils = { path = "../../otter-utils/otr" }
+```
+
+| Modules | Purpose |
+| --- | --- |
+| `log` | Scoped logging, counters, periodic reporters |
+| `fixed_string` | Bounded inline text that cuts at a UTF-8 boundary |
+| `xdg_paths`, `runtime_paths`, `runtime_state` | Shared filesystem locations and session state |
+| `xdg_data_dirs`, `fsx`, `desktop_entry_key` | XDG data directories, small file reads, `.desktop` keys |
+| `icon_lookup`, `icon_name_index` | XDG icon theme lookup |
+| `inotify` | File and directory event watching |
+| `process`, `command`, `shutdown` | Child-process and lifecycle helpers |
+| `unix_socket`, `runtime_auth`, `single_instance` | Local IPC support |
+| `otfp`, `otfp_client` | The otter-files picker protocol and its non-blocking client |
+| `user_dirs`, `trash` | XDG user directories and the freedesktop home trash |
+| `atomic_file` | Atomic file replacement, whole or streamed |
+| `unicode.segment`, `unicode.case`, `unicode.wtf8` | Grapheme clusters, word characters, cell widths, case mappings, generalized UTF-8 |
+| `byte_size`, `name_order` | Human-readable byte counts and natural filename order |
+| `i18n.locale`, `i18n.template`, `i18n.catalog` | Locale choice, `{NAME}` placeholders and string tables |
+| `build_steps` | Shared steps of each package's `otr/build.otr` |
+
+Helpers that read the environment take a `std.Env`, which your `main` receives.
+
+```otr
+import std
+import otter_utils.log
+import otter_utils.xdg_paths
+
+const lg = log.Scoped("example")
+
+pub fn main(env: std.Env) void {
+    _ = log.set_level_from_env(env, "OTTER_EXAMPLE_LOG")
+
+    var buf = xdg_paths.Buf.init()
+    if xdg_paths.otter_config_path(env, &mut buf, "otter-bar.conf") |p| {
+        lg.info("bar config is {}", .{ p })
+    }
+}
+```
 
 ## Reference pages
 
@@ -26,4 +59,4 @@ Use otr standard-library containers and path types instead of `BoundedArray` and
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml` and `otr/` in the `otter-utils` repository.

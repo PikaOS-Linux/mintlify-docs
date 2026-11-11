@@ -1,32 +1,68 @@
 ---
 title: "App config modules"
 sidebarTitle: "App config modules"
-description: "Application leaf modules and small-tool schemas in the otr packages."
+description: "The per-app schema modules in otter_config_types and the files they map to."
 ---
 
-## Shared application schemas
+## Schema modules
 
-Each module below is imported as `otter_config_types.<name>` and exposes `Config` plus its supporting types.
+Import each module as `otter_config_types.<name>`. It exports `Config`, the supporting types and `file_name`.
 
-| Group                      | Modules                                                                |
-| -------------------------- | ---------------------------------------------------------------------- |
-| Panels and navigation      | `bar`, `launcher`, `dock`, `taskbar`, `overview`                       |
-| Session and authentication | `greeter`, `lock`, `polkit`, `idle`, `logout`                          |
-| Feedback and display       | `notifications`, `osd`, `wallpaper`, `nightlight`, `theme_gen`         |
-| Applications and services  | `term`, `jade`, `transcribe`, `assist`, `monitor`, `search`, `clicker` |
+| Group | Modules |
+| --- | --- |
+| Panels and navigation | `bar`, `launcher`, `dock`, `taskbar`, `overview` |
+| Session and authentication | `greeter`, `lock`, `polkit`, `idle`, `logout` |
+| Feedback and display | `notifications`, `osd`, `wallpaper`, `nightlight`, `theme_gen` |
+| Applications and services | `term`, `jade`, `transcribe`, `assist`, `monitor`, `search`, `clicker`, `files`, `edit` |
+| Media | `music`, `video`, `image_viewer` |
+| Small tools | `calc`, `cal`, `clip`, `emoji`, `note`, `pick`, `rec`, `timer`, `vox`, `weather` |
 
-Struct nesting and field names define the flat config keys. Read the schema rather than deriving a key from a UI label.
+Three more modules support the schemas. `fields` holds editor metadata and theme fallbacks. `bar_migration` rewrites older `otter-bar.conf` files. `media_chrome` holds the limits the media players share for hiding their controls.
 
-## Small tools
+Struct nesting and field names define the flat config keys. `bar.Config` has a `general` section with a `height` field, so the key is `general_height`.
 
-Additional small-tool schemas live in `otter_tools_core.app_configs`, including `Calc`, `Emoji`, `Picker`, `Timer`, `Weather`, `Note`, `Calendar`, `Clip`, `Recorder`, and `Vox`. They are not modules in `otter_config_types`.
+```otr
+import std
+import std.mem
+import otter_conf.loader
+import otter_config_types.bar
+
+pub fn main() !void {
+    cfg := try loader.load_from_slice(bar.Config, mem.heap, "general_height = 40\nclock_time_format = \"%H:%M\"\n")
+    defer cfg.deinit()
+    std.io.printf("{} {}\n", .{ cfg.general.height, cfg.clock.time_format.as_str() })   // 40 %H:%M
+}
+```
 
 ## File names
 
-Do not assume every file is `otter-<app>.conf`. The Lua schema `file(app)` reports the app's actual file name. Greeter uses `/etc/otter-shell/otter-greeter.conf`; user application paths resolve through XDG helpers.
+Use the module's `file_name` when you load a config. Most files are `otter-<app>.conf`, but the notification daemon reads `notifications.conf`.
 
-`defaults` and `parse` Lua tables retain nested sections and use arrays for Dynamic entries. Enum values become tag strings and colors become `#RRGGBBAA` strings.
+```otr
+import otter_conf.app_file
+import otter_config_types.osd
+
+cfg := app_file.load_or_create(osd.Config, mem.heap, env, osd.file_name, "otter-osd configuration")
+```
+
+`app_file.load_or_create` looks in `$XDG_CONFIG_HOME/otter-shell/`, then `/etc/otter-shell/`. The greeter runs before any user session and reads `/etc/otter-shell/otter-greeter.conf` only.
+
+## Values that span fields
+
+The file format is flat, so a few settings that belong together are separate keys. The schema gives them one reading:
+
+- `rec.Rate.of(cfg.rate_control, cfg.crf, cfg.bitrate)` returns a capped constant quality or a fixed bitrate.
+- `rec.Config.audio_capture()` returns the audio source, or null when `audio` is off.
+- `bar.ButtonConfig.icon()` picks the glyph, then the SVG name, then the image file.
+- `bar.BatteryConfig.validate()` makes the parser reject a critical level above the warning level.
+- `bar.LayoutConfig.contains(name)` tells you whether a layout shows a widget. The layout lists alone decide what the bar shows.
+
+## Bar helpers
+
+`bar.widget_names` lists the built-in widget names, read from the sections of `bar.Config`. `Config.static_button(name)` returns a fixed button's config. `bar.extract_custom_button_name(key)` returns the button name inside a custom-button key, borrowed from `key`.
+
+`bar_migration.migrate(content)` returns the rewritten text of an older bar config, or null when the file needs no change. It moves named buttons to indexed `button_N_*` keys and folds `*_enabled` switches into the layout lists.
 
 ## Source reference
 
-`otr/otr.toml`, `otr/lua/config.otr`, `otr/fields.otr` in the component repository.
+`otr/otr.toml`, `otr/bar.otr`, `otr/rec.otr` and `otr/bar_migration.otr` in the `otter-config-types` repository.

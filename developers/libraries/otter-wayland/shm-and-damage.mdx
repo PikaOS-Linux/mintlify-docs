@@ -1,31 +1,114 @@
 ---
 title: "SHM and damage"
 sidebarTitle: "SHM and damage"
-description: "Move mapped pixel ownership safely through otr SHM pool and renderer APIs."
+description: "Shared-memory buffer pools, the CPU renderer, and damage tracking in otter-wayland."
 ---
 
-## SHM ownership
-
-`otter_wayland.shm` owns shared-memory buffers and tracks compositor ownership. Acquisition returns a `Lent` value containing an owned render `Surface` and slot index, not an unbounded borrowed pixel slice.
-
-Return the lent mapping through the pool's attach or unsubmitted-release path. Do not retain a surface after giving it back, reuse a compositor-owned buffer, or treat a release event as a global permission to rewrite all slots.
-
-Pools process release/configure records through the hub. Retired mappings must remain alive until the compositor releases their buffers.
-
-## Damage
-
-`otter_wayland.damage.DamageTracker` accumulates dirty rectangles with double-buffer behavior and a full-redraw fallback when bounded storage overflows.
-
-Use the same logical/physical coordinate conventions for emitted commands, render-culling damage, and Wayland submissions. Exact output scale is not interchangeable with its integer ceiling.
+The modules on this page are split across two packages. `damage` is in `otter_wayland`. `shm` and `renderer` draw into otter-render surfaces, so they are in `otter_wayland_render`.
 
 ## Renderer
 
-`otter_wayland.renderer.Renderer` is a CPU renderer stored by value. It has no heap-allocated vtable API.
+`renderer.Renderer` is what most apps use. It owns a double-buffered pool sized for a surface, lends one buffer at a time, and attaches it with damage.
 
-Rasterization resolves image handles through an image source and borrows font/shaping resources during the call. Follow the pool's acquire/attach lifecycle around that work.
+```otr
+import otter_geo.color
+import otter_wayland.damage
+import otter_wayland.wayland
+import otter_wayland_render.renderer
 
-A move of already-rendered pixels may need submit damage without rendering those pixels again. Keep submit-only damage out of render-culling sets.
+const wl = wayland.wl
+
+fn paint(r: &mut renderer.Renderer, surf: &wl.Surface, tracker: &mut damage.DamageTracker) void {
+    if !tracker.has_damage() and !tracker.is_full_damage() {
+        return
+    }
+    var buf = r.acquire() orelse return
+    s := buf.surface()
+    eff := tracker.get_effective_damage()
+    if eff.full {
+        s.clear(color.Color.surface)
+    } else {
+        for dirty in eff.rects.items() {
+            s.fill_rect_logical(dirty, color.Color.surface)
+        }
+    }
+    r.submit(buf, surf, tracker)
+    tracker.commit_frame()
+    surf.commit()
+}
+```
+
+Create one with `renderer.create_renderer(&conn.hub, shm, width, height, scale)`, where the size is logical and `scale` is the integer buffer scale. Create a new one, or call `resize`, when a configure changes the size or scale.
+
+| Method | Use |
+| --- | --- |
+| `acquire()` | Borrow a free buffer, or `null` while the compositor still holds both. |
+| `buf.surface()` | The `otter_render` `Surface` to draw into. |
+| `submit(buf, surface, tracker)` | Attach the buffer and damage the surface from the tracker. Pass `null` to damage the whole buffer. You commit the surface. |
+| `rollback(buf)` | Give a buffer back without showing it. |
+| `pump(&hub)` | Process `wl_buffer.release` records. Call it after each dispatch. |
+| `is_idle()` | Whether no buffer is lent out and the compositor holds none. |
+
+`acquire` returns `null` until the compositor releases a buffer, so wait for the frame callback before you paint again. The example apps request `surf.frame()` and paint when its `frame_done` record arrives.
+
+## Damage tracking
+
+`damage.DamageTracker` collects the logical rectangles that changed. Because the renderer swaps between two buffers, the buffer you get back is one frame behind. `get_effective_damage()` returns the rectangles of this frame and the previous one, which is what that buffer needs repainted.
+
+```otr
+var tracker = damage.DamageTracker.init()
+
+tracker.add_rect(rect.Rect{ x: 0, y: 0, width: 120, height: 32 })
+tracker.add_rect(rect.Rect{ x: 200, y: 0, width: 40, height: 32 })
+
+if tracker.intersects(widget_area) {
+    redraw_widget()
+}
+```
+
+A new tracker starts fully damaged, because a fresh buffer pair has to be painted whole. `add_rect` adds a rectangle, and `mark_full_damage` covers everything. After more than `max_rects` rectangles, which is 512, the frame becomes fully damaged. Call `commit_frame()` once the frame is submitted.
+
+Pass the same effective rectangles to the rasterizer so that it skips commands outside them:
+
+```otr
+eff := tracker.get_effective_damage()
+rects: ?[]rect.Rect = if eff.full { null } else { eff.rects.items() }
+quad_renderer.rasterize(command_list.DefaultCommandList, &cmds, s, &mut txt, &images, rects, eff.full)
+```
+
+## Buffer pools
+
+`shm.WaylandShmPool(N)` is the layer under the renderer: `N` `wl_buffer` objects over one memfd. `SingleShmPool` and `DoubleShmPool` are the one and two buffer forms. Use a pool directly when you manage buffers yourself, as otter-wallpaper does.
+
+```otr
+import otter_geo.color
+import otter_geo.rect
+import otter_wayland.connection
+import otter_wayland.hub
+import otter_wayland.wayland
+import otter_wayland_render.shm
+
+const wl = wayland.wl
+
+fn show(conn: &connection.Connection, surf: &wl.Surface) !void {
+    wl_shm := hub.lend(wl.Shm, &conn.shm) orelse return error.NoShm
+    var pool = try shm.DoubleShmPool.init(&conn.hub, wl_shm, .{ width: 320, height: 48, scale: 2 })
+    defer pool.deinit()
+
+    if pool.acquire() |l| {
+        var lent = l
+        lent.surface.fill_rect_logical(rect.Rect{ x: 0, y: 0, width: 320, height: 48 }, color.Color.surface)
+        pool.attach(lent, surf, null)
+        surf.commit()
+    }
+    pool.pump(&conn.hub)
+}
+```
+
+`acquire` returns a `Lent` value. Its `surface` owns the slot's mapping while you draw, so no pixel slice can outlive the pool. Give it back with `attach(lent, surface, tracker)` to show it, or `release_unsubmitted(lent)` to discard it. A submitted slot stays busy until `pump` sees the compositor's release.
+
+`shm.BufferPool(N)` is the same idea without `wl_buffer` objects, for offscreen work.
 
 ## Source reference
 
-`otr/shm.otr`, `otr/damage.otr`, `otr/renderer.otr` in the component repository.
+`otr/damage.otr`, `otr/render/renderer.otr`, `otr/render/shm.otr` in the component repository. `otr/ui/draw.otr` in otter-examples is a full paint path.

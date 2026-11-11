@@ -1,41 +1,108 @@
 ---
 title: "Capture and overlays"
 sidebarTitle: "Capture and overlays"
-description: "Native otr capture modules, shared selectors, and output scale tracking."
+description: "Capture outputs, windows and workspaces, and run the shared region and point selector."
 ---
 
-## Capture modules
+Capture modules that decode into images are in the `otter_wayland_render` package: `capture_session`, `capture_stream`, `capture_thumbnails`, `capture_overlay` and `selection_overlay`. The protocol-level parts are in `otter_wayland`: `capture_output`, `capture_buffer`, `capture_formats`, `capture_color` and `capture_hdr`.
 
-Capture lives in flat leaf modules such as `capture_output`, `capture_session`, `capture_buffer`, `capture_formats`, `capture_color`, and `capture_hdr`. The Zig `capture` root namespace is not available.
+## Capture
 
-Capture sources depend on compositor-advertised protocols. Keep source selection, buffer lifetime, and completion/failure events explicit.
+`capture_session.Capturer` takes one-shot captures. Each method takes the connection and an `std.Io`, and output captures also take the `OutputList`.
+
+| Method | Captures | Returns |
+| --- | --- | --- |
+| `capture_all` | Every output, composed into one image. | `Result` with `image`, `origin_x`, `origin_y` |
+| `capture_outputs` | The outputs you list. | `Result` |
+| `capture_toplevel` | One window, by its ext foreign-toplevel handle. | `Image` |
+| `capture_output_raw`, `capture_output_region_raw` | One output or a region of it. | `RawFrame` |
+| `capture_toplevel_raw`, `capture_wlr_toplevel_raw` | One window. | `RawFrame` |
+| `capture_workspace_raw` | A whole workspace. | `RawFrame` |
+| `capture_source_raw` | Any `ext_image_capture_source_v1`. | `RawFrame` |
+
+A `RawFrame` holds the pixels in the compositor's format, with `width`, `height`, `stride`, `format` and `transform`. `capture_buffer` converts raw frames to RGBA.
+
+Set `max_width` and `max_height` on the `Capturer` to ask for frames fitted inside that size. That works where the compositor offers `zoolander-image-copy-capture-size-v1`. Elsewhere frames arrive at full size.
+
+Which sources work depends on the protocols the compositor advertises. A missing one returns `error.NoCaptureManager`.
 
 ### Workspace capture
 
-`Connection` binds `hyprland_workspace_image_capture_source_manager_v1` when the compositor advertises it, as Zoolander and Hyprland do. `Capturer.capture_workspace_raw(conn, io, workspace, include_cursor)` captures a whole `ext.WorkspaceHandleV1` as its output shows it, wallpaper and panels included, even while another workspace is visible. It returns `error.NoCaptureManager` when the protocol is missing.
+`capture_workspace_raw(conn, io, workspace, include_cursor)` captures an `ext.WorkspaceHandleV1` as its output shows it, wallpaper and panels included, even while another workspace is visible. It needs `hyprland-workspace-image-capture-source-v1`, which Zoolander and Hyprland advertise.
 
-## Shared selectors
+### Streams and thumbnails
 
-`selection_overlay` is the shared region/point selection implementation. `capture_overlay` manages its Wayland surface. Apps use the supplied presets for screenshots, product shots, recording, or point selection instead of maintaining separate selectors.
+`capture_stream.Stream` keeps one `ext-image-copy-capture` session open for repeated frames with damage. The portal's ScreenCast feed and otter-rec use it. `capture_thumbnails.Thumbnails` keeps one stream per window for live previews in otter-dock and otter-taskbar. A frame you ask for completes when the window changes, so still windows cost nothing between refreshes.
 
-The overlay composites pixels directly; it is not a Surface Description node tree. Editor integration uses the `selection_overlay.Editor` interface, not a raw callback/context pair.
+## Region and point selection
+
+`selection_overlay.Selector` is the one selector that otter-screenshot, otter-shot, otter-rec and otter-clicker share. It covers every output with a layer surface, shows either a frozen capture or the live desktop, and blocks until the user finishes or cancels.
+
+```otr
+import std
+import otter_wayland.capture_output
+import otter_wayland.connection
+import otter_wayland_render.capture_session
+import otter_wayland_render.selection_overlay
+
+fn pick_region(conn: &mut connection.Connection, io: std.Io, outputs: &capture_output.OutputList) !?selection_overlay.SelectionRect {
+    capturer := capture_session.Capturer{}
+    frozen, origin_x, origin_y := try capturer.capture_all(conn, io, outputs, false)
+
+    var selector = selection_overlay.Selector.init(&conn.hub, outputs.items(), frozen, selection_overlay.preset.screenshot)
+    defer selector.deinit()
+    selector.frozen_origin_x = origin_x
+    selector.frozen_origin_y = origin_y
+    return try selector.run(conn, io, outputs, null)
+}
+
+fn pick_point(conn: &mut connection.Connection, io: std.Io, outputs: &capture_output.OutputList) !void {
+    var selector = selection_overlay.Selector.init(&conn.hub, outputs.items(), null, selection_overlay.preset.clicker)
+    defer selector.deinit()
+    point := (try selector.run_point(conn, io, outputs, null)) orelse return
+    std.io.printf("clicked {},{}\n", .{ point.x, point.y })
+}
+```
+
+`run` returns the dragged rectangle and `run_point` returns a clicked point. Both return `null` when the user cancels. The last argument lends the `SeatState` your app already has. Pass `null` to let the selector bind its own pointer.
+
+Start from a preset and adjust it:
+
+| Preset | Layer namespace | Picture |
+| --- | --- | --- |
+| `preset.screenshot` | `otter-screenshot` | Frozen capture, unshaded |
+| `preset.shot` | `otter-screenshot` | Frozen capture, dimmed |
+| `preset.rec` | `otter-rec` | Frozen capture, dimmed |
+| `preset.clicker` | `otter-clicker` | Live desktop, no shade |
+
+`Style.from_theme(theme)` takes the selection colors from an otter-theme value. Assign the result to `config.style` before you create the selector.
+
+The selector paints straight into shared-memory buffers and damages only the area that changed. It is not a Surface Description tree.
+
+### Editing after selection
+
+`selector.edit(E, conn, io, &mut editor, external)` hands the overlay to an editor after a selection, for annotation tools. `open_editor` does the same for a rectangle you supply. The editor is any type that implements the `selection.editor.Editor` interface: `draw`, `motion`, `button`, `scroll`, `key` and `cursor`. Each input method returns an `EditorAction`.
 
 ## Popup blur
 
-`layer_popup.LayerPopup.set_background_blur_regions(compositor, regions)` stages rounded, surface-local `background_effect.RoundedRegion` panels for the next draw commit. Pass painted panel bounds, not a cascading menu's reserved size. Empty regions clear explicit blur. Single-panel clients can call `set_background_blur` for the whole rounded surface.
+`layer_popup.LayerPopup.set_background_blur_regions(compositor, regions)` stages rounded `background_effect.RoundedRegion` panels, in surface-local coordinates, for the popup's next draw. Pass the bounds of the panels you paint, not the space a cascading menu reserves. An empty slice clears the blur. For a popup with one panel, `set_background_blur(compositor, enabled)` covers the whole rounded surface.
 
-## Outputs and scale
+## Lua
 
-`capture_output.OutputList` is the output state owner. It tracks mode, position, transform, integer scale, and available logical geometry.
+`otter.wayland` has no capture or selector functions. A Lua widget can read the outputs a capture would cover:
 
-Exact scale derives from mode/logical dimensions and snaps to the protocol grid. Integer `wl_output.scale` is a ceiling. Unknown exact scale is reported as unknown, not guessed as 1.
+```lua
+local wayland = require("otter.wayland")
 
-## Lua boundary and verification
+for _, out in ipairs(wayland.outputs()) do
+  print(out.name, out.x, out.y, out.width, out.height, out.scale_q8)
+end
+```
 
-`otter.wayland` exposes output/window/workspace information and selected actions. It does not expose native capture-session or selection-overlay constructors.
+## Testing
 
-Verify capture behavior in isolated headless sessions or direct-render fixtures. Never start a selector or screenshot operation against the developer's real Wayland session during tests.
+Run capture and selector code only in an isolated headless compositor with its own `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`. The library's end-to-end tests in `otr/tests/` start a private headless sway for this.
 
 ## Source reference
 
-`otr/capture_session.otr`, `otr/capture_output.otr`, `otr/selection_overlay.otr`, `otr/capture_overlay.otr`, `otr/lua/wayland.otr` in the component repository.
+`otr/render/capture_session.otr`, `otr/render/capture_stream.otr`, `otr/render/capture_thumbnails.otr`, `otr/render/selection_overlay.otr`, `otr/render/selection/editor.otr`, `otr/render/layer_popup.otr` and `otr/capture_output.otr` in the component repository.

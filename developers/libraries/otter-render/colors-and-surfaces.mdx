@@ -1,35 +1,97 @@
 ---
 title: "Colors and surfaces"
 sidebarTitle: "Colors and surfaces"
-description: "Owned pixel surfaces and exact scale in otr rendering."
+description: "Colors, owned pixel surfaces, and exact output scale in otter-render."
 ---
 
 ## Colors
 
-`otter_render.color` re-exports `otter_geo.color`. Prefer the geometry package when you only need colors. `Color.from_rgba` takes `0xRRGGBBAA`; pixel storage defaults to ARGB8888.
+`otter_render.color` re-exports `otter_geo.color`. Import `otter_geo.color` directly when colors are all you need.
 
-## Owned surfaces
+`Color` is a packed 32-bit value stored as ARGB8888. Build one with `Color.from_rgba(0xRRGGBBAA)`, `Color.from_rgb(0xRRGGBB)`, `Color.init(r, g, b, a)` or `Color.rgb(r, g, b)`. `Color.parse` reads a string and returns an error for bad input.
 
-Import `otter_render.surface`. `Surface` owns either a `List(Color)` or a `linux.Mapping` plus pixel offset.
+```otr
+import otter_geo.color
 
-| Entry point    | Ownership                                    |
-| -------------- | -------------------------------------------- |
-| `init_owned`   | Allocate pixels                              |
-| `from_owned`   | Move an existing pixel list into the surface |
-| `from_mapping` | Move a mapping into the surface              |
-| `into_pixels`  | Move pixel ownership back out                |
-| `deinit`       | Consume the surface and release storage      |
+accent := color.Color.from_rgba(0x3daee9ff)
+dimmed := accent.with_alpha(0x80)
+over_black := color.Color.composite(color.Color.black, dimmed)
+from_config := try color.Color.parse("#3daee9")
+```
 
-Use `pixels()` and `pixels_mut()` for scoped access. A surface is not a borrowed view you can retain after its owner disappears. Examples using `fromPixels` and `subSurface` do not apply to this API.
+## Surfaces
 
-Physical drawing helpers include `fill_rect`, `fill_rect_composite`, and `draw_rect_outline`. Logical-coordinate variants have `_logical` suffixes. `logical_bounds`, `logical_width`, `logical_height`, and coordinate conversion helpers distinguish the two spaces.
+Import `otter_render.surface`. A `Surface` is a pixel buffer with its physical width, height, stride and scale. It owns its pixels: either a heap `List(Color)` or the `linux.Mapping` behind a Wayland shared-memory buffer.
+
+```otr
+import std
+import std.mem
+import otter_geo.color
+import otter_geo.rect
+import otter_render.scale
+import otter_render.surface
+
+pub fn main() void {
+    var s = surface.Surface.init_owned(mem.heap, 300, 200, scale.Scale.from_q120(180))
+    defer s.deinit()
+
+    s.clear(color.Color.black)
+    s.fill_rounded_rect_logical(rect.Rect{ x: 8, y: 8, width: 120, height: 40 }, color.Color.from_rgba(0x3daee9ff), 4)
+    std.io.printf("{}x{} logical, {}x{} physical\n", .{ s.logical_width(), s.logical_height(), s.width, s.height })
+}
+```
+
+| Function | What it does |
+| --- | --- |
+| `init_owned(alloc, width, height, factor)` | Allocates zeroed pixels on the heap. |
+| `from_owned(pixels, width, height, stride, factor)` | Takes an existing `List(Color)` as storage. |
+| `from_mapping(map, offset, width, height, stride, factor)` | Takes a `linux.Mapping`, with the pixels `offset` bytes into it. |
+| `into_pixels()` | Consumes the surface and returns its storage. |
+| `deinit()` | Consumes the surface and frees its storage. |
+
+`pixels()` and `pixels_mut()` lend the raw pixel rows for blits. The fields `width`, `height`, `stride` and `scale` are readable. Change the scale with `set_scale`.
+
+A surface over a shared-memory buffer takes the mapping for the frame and gives it back afterwards:
+
+```otr
+m := try linux.Mapping.anonymous(4096)
+var shm = surface.Surface.from_mapping(m, 0, 16, 16, 16, scale.Scale.one)
+shm.clear(color.Color.black)
+shm.into_pixels().deinit()
+```
+
+### Drawing
+
+`fill_rect`, `fill_rect_composite`, `draw_rect_outline`, `fill_rounded_rect`, `fill_circle` and `draw_circle_outline` take physical pixels. The same names with a `_logical` suffix take logical units and convert through the surface's scale. `fill_rect` overwrites pixels, and `fill_rect_composite` blends by alpha.
+
+`to_physical_rect` converts a logical rectangle by its edges, so rectangles that touch in logical space still touch in device pixels. `bounds()` is physical and `logical_bounds()` is logical.
+
+`blit_rows_vertical(dst_y, src_y, height)` moves rows inside the surface. otter-term uses it to scroll pixels it has already rendered.
+
+Most apps do not call these directly. They record a [command list](/developers/libraries/otter-render/command-list) and rasterize it.
 
 ## Exact scale
 
-Import `otter_render.scale`. `Scale.one`, `Scale.from_int`, `Scale.from_q8`, and `Scale.from_q120` construct explicit scale values. Use `set_scale` instead of assigning internal scale fields.
+Import `otter_render.scale`. A `Scale` holds the output factor as a Q8 fixed-point number, where 256 is 100%.
 
-`integer_ceil()` is not the inverse of exact logical-size conversion. A 150% output may have integer ceiling 2; preserve its exact Q8 factor for sizing and rendering.
+```otr
+import std
+import otter_render.scale
+
+pub fn main() void {
+    factor := scale.Scale.from_q120(180)    // 150% as the compositor reports it
+    std.io.printf("{} {} {}\n", .{ factor.q8, factor.integer_ceil(), factor.up_ceil(101) })
+}
+```
+
+```text
+384 2 152
+```
+
+Construct a scale with `Scale.one`, `Scale.from_int(n)`, `Scale.from_q8(q8)`, `Scale.from_q120(n)` or `Scale.from_float(f)`. `up` and `up_ceil` convert logical to physical. `down` and `down_ceil` go back. `point` and `rect` scale geometry.
+
+`integer_ceil()` returns the integer buffer scale, which is 2 for a 150% output. Dividing a physical size by it does not give the logical size. Use `down` with the exact factor.
 
 ## Source reference
 
-`otr/surface.otr`, `otr/scale.otr`, `otr/color.otr` in the component repository.
+`otr/surface.otr`, `otr/scale.otr`, `otr/color.otr` in the component repository, and `otr/color.otr` in otter-geo.

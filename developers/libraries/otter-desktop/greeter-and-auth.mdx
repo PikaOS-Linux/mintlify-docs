@@ -1,31 +1,130 @@
 ---
 title: "Greeter and auth"
 sidebarTitle: "Greeter and auth"
-description: "Explicit otr PAM conversations, session discovery, and power-service boundaries."
+description: "PAM authentication and sessions, login session discovery, and the D-Bus services a greeter or lock screen needs."
 ---
 
-## PAM authentication
+## Check a password
 
-Native authentication lives under `otter_desktop.pam`. `pam.PamAuth.authenticate(service, user, password)` returns `PamResult`. PAM support is controlled by `enable_pam`.
+PAM support is behind a build option. Build your program with `-D enable_pam=true`, which links libpam.
 
-Session operations use `pam_session.Session(Backend)` with a backend owned by value. Conversations are borrowed through `conv.Conversation` for the duration of a PAM call; no application pointer remains in `appdata_ptr`.
+`pam.PamAuth.authenticate` runs one authentication and account check for a service, user and password. It is what a lock screen needs.
 
-Account checks, credential setup/deletion, and session open/close operations receive a conversation too. `conv.Silent` drops messages and refuses prompts when interaction is not allowed. Test fixtures can select a private PAM configuration directory.
+```otr
+import std
+import otter_desktop.pam.pam
 
-## Session discovery and launch
+pub fn main() void {
+    result := pam.PamAuth.authenticate("otter-lock", "jade", "correct horse")
+    switch result {
+        .success => std.io.println("unlocked")
+        .auth_error => std.io.println("wrong password")
+        .account_error => std.io.println("account not allowed to log in")
+        .service_error => std.io.println("PAM is unavailable")
+    }
+}
+```
 
-`otter_desktop.apps.session_catalog` discovers session entries. `session_launcher` handles session launching. Session discovery does not mean Otter Shell supplies the compositor named by an entry.
+The first argument is the PAM service name, which selects a file in `/etc/pam.d/`.
 
-The greeter uses Hyprland for the login screen only. User sessions select their own compositor/session.
+## Run a full PAM session
 
-## D-Bus authentication and power
+A greeter needs more: prompts driven by PAM, credentials, and an open session. `pam_session.PamSession` keeps one PAM transaction across those steps.
 
-`dbus.logind`, `logind_seats`, `accounts_service`, `power_actions`, `polkit_agent`, and `fprintd` cover the corresponding services. Keep cancellation, prompts, and service errors explicit in the app's lifecycle.
+Each call takes a conversation, which is any type that implements `conv.Conversation`. PAM calls `prompt` when it wants an answer and `message` when it has text to show. The conversation is borrowed for that call only.
 
-## Lua boundary
+```otr
+import std
+import std.mem
+import otter_desktop.apps.session_catalog
+import otter_desktop.pam.conv
+import otter_desktop.pam.pam_session
 
-Lua desktop bindings expose selected status and power operations, not raw PAM conversation or authentication handles. `otter.desktop.logind.suspend`, `reboot`, and `poweroff` require `power`. Never invoke these actions as documentation verification.
+const Prompter = struct {
+    password: []static u8
+
+    pub fn prompt(self: &Prompter, p: conv.Prompt, out: []mut u8) conv.Error!?usize {
+        if self.password.len > out.len {
+            return error.AuthFailed
+        }
+        mem.copy(u8, &mut out[0..self.password.len], self.password)
+        return self.password.len
+    }
+
+    pub fn message(self: &Prompter, p: conv.Prompt) void {
+        std.io.println(p.message)
+    }
+}
+
+pub fn main(env: std.Env) !void {
+    catalog := try session_catalog.Catalog.scan(mem.heap, "/usr/share/wayland-sessions", env.get_env("PATH") orelse "/usr/bin")
+    defer catalog.deinit()
+    for s in catalog.sessions_view() {
+        std.io.printf("{}  {}\n", .{ s.id.as_str(), s.name.as_str() })
+    }
+
+    var session = pam_session.PamSession.init(pam_session.PamBackend.init())
+    defer session.deinit()
+    prompter := Prompter{ password: "correct horse" }
+    try session.authenticate(.{ service: "otter-greeter", username: "jade", seat: "seat0" }, &prompter)
+    if try session.account(&prompter) != .success {
+        return error.AccountFailed
+    }
+    quiet := conv.Silent{}
+    try session.establish_credentials(&quiet)
+    try session.open(&quiet)
+    pam_env := try session.env_list(mem.heap)
+    defer pam_env.deinit()
+}
+```
+
+The greeter calls the steps in this order: `authenticate`, `account`, `establish_credentials`, `open`, then `env_list` for the environment PAM wants in the session. `account` returns a `Result`, which can be `new_auth_token_required` for an expired password. `change_token` handles that case.
+
+`conv.Silent` answers no prompt and drops messages. Use it for steps that must not ask the user anything.
+
+`Metadata` names the service, user and seat, and has optional `vtnr`, `session_type`, `session_class` and `session_desktop` fields.
+
+## Discover and start sessions
+
+`session_catalog.Catalog.scan(alloc, dirs, path_env)` reads session `.desktop` files. `dirs` is a colon-separated list of directories, and `path_env` is the `PATH` used to check that a session's program exists. `default_session(remembered, configured)` picks the entry to preselect.
+
+`session_launcher.EnvBuilder` assembles the environment for the session process from the user, the chosen session and the PAM environment. `drop_privileges(username, uid, gid)` switches to the user before the session starts.
+
+A session entry names a compositor that the user installed. Otter Shell does not ship one. The greeter draws its own login screen on Zoolander.
+
+## Related D-Bus services
+
+| Module | Use |
+| --- | --- |
+| `dbus.logind` | Lock, unlock and sleep events, and inhibitor locks. |
+| `dbus.logind_seats` | Seats and their sessions. |
+| `dbus.accounts_service` | User names, real names and avatars. |
+| `dbus.power_actions` | `request_power_action(.shutdown)`, `.reboot` or `.suspend_`. |
+| `dbus.polkit_agent` | A polkit authentication agent. |
+| `dbus.fprintd` | Fingerprint verification. |
+
+## Password fields
+
+Lock, greeter and polkit prompts share one key map and one text-input setup. See `auth_input` in [otter-ui input](/developers/libraries/otter-ui/input-and-overlays) and `set_content(.password)` in [otter-wayland input](/developers/libraries/otter-wayland/input).
+
+## Lua
+
+Lua has no access to PAM. `otter.desktop.logind` exposes session events to any plugin and power actions to plugins with the `power` capability.
+
+```lua
+local logind = require("otter.desktop.logind")
+
+logind.subscribe(function(event, going)
+  if event == "prepare_for_sleep" and going then
+    -- save state before the machine sleeps
+  end
+end)
+
+logind.suspend()   -- needs the "power" capability
+```
+
+`reboot()` and `poweroff()` act at once. Do not call them to test a plugin.
 
 ## Source reference
 
-`otr/pam/`, `otr/apps/session_catalog.otr`, `otr/apps/session_launcher.otr`, `otr/dbus/logind.otr`, `otr/dbus/polkit_agent.otr` in the component repository.
+`otr/pam/pam.otr`, `otr/pam/pam_session.otr`, `otr/pam/conv.otr`, `otr/apps/session_catalog.otr`, `otr/apps/session_launcher.otr`, `otr/dbus/logind.otr` and `otr/lua/dbus_logind.otr` in the component repository. otter-greeter's `otr/daemon.otr` runs the full sequence.

@@ -4,38 +4,113 @@ sidebarTitle: "Tokens"
 description: "Theme color roles and resolved layout metrics in the otr API."
 ---
 
-Import `otter_theme.theme`. `Theme` holds four sections:
+Import `otter_theme.theme`. `Theme` has four sections:
 
-| Section   | Purpose                                             |
-| --------- | --------------------------------------------------- |
-| `colors`  | Twelve semantic color roles                         |
-| `layout`  | Window/chrome geometry and style choices            |
-| `spacing` | Shared density and spacing values                   |
-| `globals` | Fonts, icons, layer paths, opacity, shared settings |
+| Section | Type | Contents |
+| --- | --- | --- |
+| `colors` | `Colors` | Twelve semantic color roles |
+| `layout` | `Layout` | Indicator style, radii, navigation width, dock panel, window decorations |
+| `spacing` | `Spacing` | Gap steps and the control, row, bar, titlebar and icon sizes |
+| `globals` | `Globals` | Font, icon theme, opacity, blur, `bar_islands` and the three layer paths |
 
-`Color` is the geometry package's color type. Layout and global text fields use `otter_conf.text.Text`, making the complete theme an owned resource.
+`theme.Color` is `otter_geo.color.Color`. `Layout.window_buttons` and the text fields of `Globals` are `otter_conf.text.Text`, which makes the whole theme an owned resource.
 
-## Resolve semantic values
+## Color roles
 
-Call methods on a borrowed theme:
+| Role | Meaning |
+| --- | --- |
+| `background` | Base app and desktop plane |
+| `surface` | Panels, popups, cards and bars |
+| `surface_alt` | Raised, hovered or recessed controls |
+| `foreground` | Primary text and icons |
+| `muted` | Secondary and disabled content |
+| `accent` | Focus, progress, links and active indicators |
+| `on_accent` | Text and icons placed on accent |
+| `selected` | Selected row or control fill |
+| `border` | Dividers and outlines |
+| `success`, `warning`, `danger` | Status colors |
 
-- `surface_color`, `panel_color`, `popup_color`, `widget_color`.
-- `overlay_color`, `shadow_color`, `highlight_edge`, `clear_color`.
-- `bar_background`, `bar_group_background`, `bar_group_border`.
-- `dock_background`, `dock_border`.
-- `label_size`, `title_size`, `display_size`, `secondary_text_size`.
-- Decoration button sizing and padding helpers.
+## Semantic methods
 
-Use these values rather than reproducing opacity or geometry rules in each app. Explicit per-app config overrides still take priority where an app supports them.
+Call these on a borrowed theme. They hold the opacity and structure rules, so each app applies them the same way.
+
+| Method | Result |
+| --- | --- |
+| `surface_color(c)`, `panel_color(c)`, `popup_color(c)`, `widget_color(c)` | `c` with the global `opacity` applied to its alpha |
+| `apply_alpha(c, percent)` | `c` with its alpha scaled to `percent`, 0 to 100 |
+| `overlay_color()`, `shadow_color()`, `highlight_edge()`, `clear_color()` | The dimming scrim, shadow, edge highlight and transparent |
+| `danger_surface()` | `danger` blended into `background` |
+| `bar_background()`, `bar_group_background()`, `bar_group_border()` | Bar colors, which depend on `bar_islands` |
+| `dock_background()`, `dock_border()` | Dock colors, which depend on `layout.dock_panel` |
+| `border_width()`, `pill_radius()` | Shared border width and the radius for pill shapes |
+| `label_size()`, `title_size()`, `display_size()`, `secondary_text_size()` | Text sizes derived from `globals.font_size` |
+| `decoration_button_width()`, `decoration_button_height()`, `decoration_button_padding()` | Titlebar button metrics |
+
+```otr
+import std
+import std.mem
+import otter_theme.color_contrast
+import otter_theme.loader
+import otter_theme.syntax
+
+pub fn main(env: std.Env) void {
+    t := loader.load_theme(env, mem.heap)
+    defer t.deinit()
+
+    window := t.surface_color(t.colors.surface)
+    scrim := t.overlay_color()
+    std.io.printf("{} {} {}\n", .{ window.to_hex_string()[0..], scrim.to_hex_string()[0..], t.label_size() })
+
+    row := t.spacing.row_height
+    radius := t.layout.control_radius
+    ratio := color_contrast.contrast_ratio(t.colors.foreground, t.colors.background)
+    std.io.printf("{} {} {d:.1}\n", .{ row, radius, ratio })
+
+    keyword := syntax.color_of(&t, .keyword)
+    std.io.println(keyword.to_hex_string()[0..])
+}
+```
+
+An app's own config can override a themed value. Schemas declare those fields as `?Color` or `?u16` and resolve them with `otter_config_types.fields.resolve`. See [Patterns](/developers/libraries/otter-config-types/patterns#theme-fallbacks).
+
+## Code colors
+
+`otter_theme.syntax.color_of(&theme, token)` returns the color of one of 14 `Token` values, such as `keyword`, `string`, `comment` and `type_name`. The colors derive from the twelve roles, so code follows the selected palette.
 
 ## Profiles and density
 
-`otter_theme.profiles.current()` and `bank()` each return a fresh theme resource. `compact`, `standard`, and `spacious` are plain `Spacing` constants.
+`otter_theme.profiles.current()` and `profiles.bank()` each return a fresh `Theme` with that layout. `profiles.of(p)` takes a `Profile` enum value. `compact`, `standard` and `spacious` are plain `Spacing` constants.
+
+```otr
+import otter_theme.profiles
+
+var bank = profiles.bank()
+defer bank.deinit()
+bank.spacing = profiles.compact
+std.io.printf("{} {}\n", .{ @tag_name(bank.layout.indicator), bank.spacing.row_height })   // marker_line 40
+```
 
 ## Lua snapshot
 
-`otter.theme.get()` returns `{ generation, colors, layout, spacing, globals, tokens }`. Colors are `0xRRGGBBAA`, suitable for SD drawing. `color(role)` validates role names; it is not an arbitrary field lookup.
+`otter.theme.get()` returns `{ generation, colors, layout, spacing, globals, tokens }`. `tokens` holds the results of the semantic methods, such as `tokens.bar_background` and `tokens.label_size`. Colors are `0xRRGGBBAA` integers, the form `otter.sd` drawing calls take.
+
+```lua
+local theme = require("otter.theme")
+local log = require("otter.log")
+
+local function hex(c) return string.format("%08X", c) end
+
+local t = theme.get()
+log.info("theme", t.generation, hex(t.colors.accent), t.layout.indicator,
+  t.spacing.control_height, t.globals.font_family, hex(t.tokens.bar_background))
+
+log.info("accent", hex(theme.color("accent")))
+log.info("half red", hex(theme.alpha(0xFF0000FF, 50)))
+log.info("contrast", string.format("%.3f", theme.contrast(0x000000FF, 0xFFFFFFFF)))
+```
+
+`color(role)` takes one of the twelve role names and raises on any other string. `surface(c)` applies the global opacity. `alpha(c, percent)` scales a color's alpha. `contrast(a, b)` returns the WCAG ratio.
 
 ## Source reference
 
-`otr/theme.otr`, `otr/profiles.otr`, `otr/lua/theme.otr` in the component repository.
+`otr/theme.otr`, `otr/profiles.otr`, `otr/syntax.otr` and `otr/lua/theme.otr` in the `otter-theme` repository. The Lua example follows `otr/lua/tests/plugins/theme-reader/init.lua`.

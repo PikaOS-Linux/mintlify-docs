@@ -4,11 +4,17 @@ sidebarTitle: "otter-conf"
 description: "Typed otr configuration parsing, serialization, imports, and inotify hot reload."
 ---
 
-`otter-conf` maps flat `key = value` files to defaulted otr structs. Import leaf modules such as `otter_conf.loader`, `otter_conf.parser`, and `otter_conf.serializer`.
+`otter-conf` maps flat `key = value` files to otr structs whose fields all have defaults. The package name is `otter_conf`. It has no root module, so you import `otter_conf.loader`, `otter_conf.serializer` and the other modules by name.
 
-Every field that a configuration file may set must be `pub`. String fields use `otter_conf.text.Text`; structs owning strings need a consuming `deinit`.
+```toml
+[dependencies]
+otter_conf = { path = "../../otter-conf/otr" }
+```
+
+Every field a file may set must be `pub`. String fields use `otter_conf.text.Text`. A struct that owns strings declares a consuming `deinit` that calls `support.free_config`.
 
 ```otr
+import std
 import std.mem
 import otter_conf.loader
 import otter_conf.support
@@ -17,6 +23,7 @@ import otter_conf.text
 const Config = struct {
     pub name: text.Text = text.Text.of("example")
     pub width: u16 = 640
+    pub position: enum { top, bottom } = .top
 
     pub fn deinit(self: Config) void {
         support.free_config(Config, self)
@@ -24,13 +31,29 @@ const Config = struct {
 }
 
 pub fn main() !void {
-    cfg := try loader.load_from_slice(Config, mem.heap, "width = 800")
+    cfg := try loader.load_from_slice(Config, mem.heap, "width = 800\nposition = bottom\n")
     defer cfg.deinit()
-    _ = cfg.width
+    std.io.printf("{} {} {}\n", .{ cfg.name.as_str(), cfg.width, @tag_name(cfg.position) })   // example 800 bottom
 }
 ```
 
-Parsing starts from defaults. Unknown keys are skipped. Nested struct fields flatten into underscore-separated keys.
+Parsing starts from the defaults. The parser skips unknown keys, and a repeated key keeps its last value. Nested struct fields flatten into underscore-separated keys.
+
+| Module | Purpose |
+| --- | --- |
+| `loader` | Load from a file or a slice, with metadata or imports, and save |
+| `app_file` | The rule every app loads its file by: user file, else system file, else defaults |
+| `parser`, `support` | The comptime parser and its error set and helpers |
+| `serializer` | Write a config back as text |
+| `text` | `Text` and `TextList` field types |
+| `dynamic` | Indexed entries such as `button_0_name` |
+| `imports` | `import = "path"` resolution |
+| `dir_loader` | Load every config in a directory |
+| `entries` | Read `key = value` pairs without a schema |
+| `normalize` | Rewrite a user file in normalized form |
+| `watcher` | inotify hot reload |
+
+The `otter_conf_lua` package in `otr/lua/` exposes the same files to Lua as `otter.config`. See [Loading API](/developers/libraries/otter-conf/loading-api#lua).
 
 ## Reference pages
 
@@ -41,4 +64,4 @@ Parsing starts from defaults. Unknown keys are skipped. Nested struct fields fla
 
 ## Source reference
 
-`otr/otr.toml`, `otr/` in the component repository.
+`otr/otr.toml`, `otr/API.md` and `otr/` in the `otter-conf` repository.
