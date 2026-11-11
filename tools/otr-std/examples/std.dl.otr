@@ -1,0 +1,29 @@
+import std
+import std.dl
+
+// The functions wanted from the library, by name; load fills in every field.
+const Math = struct {
+    pub sqrt: fn(f64) f64
+    pub hypot: fn(f64, f64) f64
+}
+
+pub fn main() !void {
+    // The C math library, which every glibc system has.
+    lib := try dl.Library.open("libm.so.6")
+
+    // load promises each named symbol has its field's type, so it is unsafe once;
+    // calls through the table are then safe.
+    math := try unsafe { lib.load(Math) }
+    std.io.printf("sqrt(16) = {}\n", .{ math.sqrt(16.0) })
+    std.io.printf("hypot(3, 4) = {}\n", .{ math.hypot(3.0, 4.0) })
+
+    // lookup finds one function; null when the library has no such symbol.
+    floor := unsafe { lib.lookup(fn(f64) f64, "floor") } orelse return error.Missing
+    std.io.printf("floor(2.7) = {}\n", .{ unsafe { floor(2.7) } })
+    std.io.printf("has no_such_function: {}\n", .{ lib.symbol("no_such_function") != null })
+
+    // An optional library is tried, and the program carries on without it.
+    if dl.Library.open("libnot-installed.so") |_| {} else |err| {
+        std.io.printf("libnot-installed.so: {}\n", .{ err })
+    }
+}

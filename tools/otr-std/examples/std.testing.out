@@ -1,0 +1,7 @@
+test "expect takes any condition" ... ok
+test "expect_equal names the type" ... ok
+test "expect_equal_slices compares contents" ... ok
+test "expect_error checks which error came back" ... ok
+test "hex spells out a test vector" ... ok
+test "failing_allocator proves code does not allocate" ... ok
+6 passed, 0 failed

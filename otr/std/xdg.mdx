@@ -1,0 +1,114 @@
+---
+title: "std.xdg"
+sidebarTitle: "xdg"
+description: "Where programs keep their files, following the XDG Base Directory Specification."
+---
+
+Where programs keep their files, following the XDG Base Directory Specification.
+
+```otr
+import std.xdg
+```
+
+## Example
+
+```otr
+import std
+import std.path
+import std.process
+import std.xdg
+
+fn show(env: std.Env) void {
+    var buf = path.Buf.init()
+    for d in ([5]xdg.Dir{ .config, .data, .cache, .state, .runtime }) {
+        // Null when neither the variable nor HOME gives an absolute path.
+        std.io.printf("{}: {}\n", .{ @tag_name(d), xdg.base(env, d, &mut buf) orelse "(none)" })
+    }
+
+    // An application keeps its files in a directory of its own under a base.
+    if xdg.base(env, .config, &mut buf) |config| {
+        file := path.join(std.mem.heap, config, "my-app/settings.conf")
+        defer file.deinit()
+        std.io.printf("settings file: {}\n", .{ file.as_str() })
+    }
+
+    // Read-only data is searched for in these, after the data base.
+    for dir in xdg.data_dirs(env) {
+        std.io.printf("data dir: {}\n", .{ dir })
+    }
+}
+
+pub fn main(env: std.Env) !void {
+    // The answers depend on the environment, so this example starts itself again
+    // under a fixed one to print the same on every machine. A program calls
+    // xdg.base with the Env that main receives.
+    if env.get_env("XDG_EXAMPLE") == null {
+        self := try process.executable_path(std.mem.heap)
+        defer self.deinit()
+        fixed := [4]str{ "XDG_EXAMPLE=1", "HOME=/home/jade", "XDG_CACHE_HOME=/var/cache/jade", "XDG_DATA_DIRS=/opt/share:/usr/share" }
+        try process.exec(std.mem.heap, &[1]str{ self.as_str() }, .{ env: &fixed })
+    }
+    show(env)
+}
+```
+
+```text
+config: /home/jade/.config
+data: /home/jade/.local/share
+cache: /var/cache/jade
+state: /home/jade/.local/state
+runtime: (none)
+settings file: /home/jade/.config/my-app/settings.conf
+data dir: /opt/share
+data dir: /usr/share
+```
+
+## Dir
+
+```otr
+const Dir = enum
+```
+
+| Variant |
+| --- |
+| <code>config</code> |
+| <code>data</code> |
+| <code>cache</code> |
+| <code>state</code> |
+| <code>runtime</code> |
+
+## base
+
+```otr
+fn base(env: runtime.Env, d: Dir, out: &mut path.Buf) ?str
+```
+
+The base directory `d`: `$XDG_CONFIG_HOME` and so on, or its default under `$HOME`
+(`~/.config`, `~/.local/share`, `~/.cache`, `~/.local/state`), written to `out`.
+Relative values are ignored, as the specification requires. Null when neither is set,
+always so for `runtime` without `$XDG_RUNTIME_DIR`, or when the path is too long.
+
+## data_dirs
+
+```otr
+fn data_dirs(env: runtime.Env) DataDirs
+```
+
+The directories to search for data after `base(.data)`, most important first: the
+absolute entries of `$XDG_DATA_DIRS`, or `/usr/local/share` and `/usr/share`.
+
+## DataDirs
+
+```otr
+const DataDirs = ref struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>parts</code> | <code>mem.Tokenize(u8)</code> | Read-only |
+
+### DataDirs.next
+
+```otr
+fn next(self: &mut DataDirs) ?str
+```

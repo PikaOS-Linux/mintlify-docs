@@ -1,0 +1,66 @@
+---
+title: "std.cstr"
+sidebarTitle: "cstr"
+description: "NUL-terminated C strings."
+---
+
+NUL-terminated C strings.
+
+```otr
+import std.cstr
+```
+
+## Example
+
+```otr
+import std
+import std.bounded
+import std.cstr
+
+extern fn strlen(s: [*]const u8) usize
+
+pub fn main() !void {
+    // to_cstr copies a string into a fixed buffer and adds the NUL that C expects.
+    var buf = bounded.InlineString(32).init()
+    name := try cstr.to_cstr(&mut buf, "otter")
+    std.io.printf("C sees {} bytes\n", .{ unsafe { strlen(name.ptr) } })
+
+    // span reads a C string back as a slice, up to its NUL.
+    back := unsafe { cstr.span(name.ptr) }
+    std.io.printf("back in otr: {}\n", .{ back })
+
+    // C would stop at an embedded NUL, so it is refused rather than truncated.
+    if cstr.to_cstr(&mut buf, "a\x00b") |_| {} else |err| {
+        std.io.printf("embedded NUL: {}\n", .{ err })
+    }
+    var tiny = bounded.InlineString(4).init()
+    if cstr.to_cstr(&mut tiny, "too long for four") |_| {} else |err| {
+        std.io.printf("small buffer: {}\n", .{ err })
+    }
+}
+```
+
+```text
+C sees 5 bytes
+back in otr: otter
+embedded NUL: error.ContainsNul
+small buffer: error.TooLong
+```
+
+## span
+
+```otr
+unsafe fn span(p: [*]const u8) str
+```
+
+The bytes before the first NUL at `p`. Unsafe: `p` must point to a NUL-terminated
+string that outlives every use of the result and does not change meanwhile.
+
+## to_cstr
+
+```otr
+fn to_cstr(out: anytype, s: str) error { TooLong, ContainsNul }! [:0]u8
+```
+
+`s` copied into `out`, an `&mut InlineString(N)` (std.bounded), as a NUL-terminated
+string for C. C would stop reading at a NUL inside `s`, so that is an error too.

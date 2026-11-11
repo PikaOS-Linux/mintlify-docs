@@ -1,0 +1,83 @@
+---
+title: "std.arc"
+sidebarTitle: "arc"
+description: "Shared ownership across threads."
+---
+
+Shared ownership across threads: the value lives until the last `Arc` is dropped.
+
+```otr
+import std.arc
+```
+
+## Example
+
+```otr
+import std
+import std.arc
+import std.sync
+import std.thread
+
+pub fn main() !void {
+    // The mutex guards the value; the Arc lets several threads own the mutex.
+    total := arc.Arc(sync.Mutex(i64)).init(sync.Mutex(i64).init(0))
+    defer total.deinit()
+
+    for i in 0..4 {
+        owner := total.clone()
+        amount := @int_cast(i64, i) + 1
+        t := try thread.spawn(fn[owner, amount]() void {
+            var g = owner.get().lock()
+            g.get().* += amount
+            g.deinit()
+            // Each owner ends its own share; the value lives until the last one.
+            owner.deinit()
+        })
+        t.join()
+    }
+
+    var g = total.get().lock()
+    defer g.deinit()
+    std.io.printf("total {}\n", .{ g.get().* })
+}
+```
+
+```text
+total 10
+```
+
+## Arc
+
+```otr
+fn Arc(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>inner</code> | <code>*Inner</code> | Read-only |
+
+### Arc.init
+
+```otr
+fn init(value: T) Self
+```
+
+### Arc.clone
+
+```otr
+fn clone(self: &Self) Self
+```
+
+Another owner of the same value.
+
+### Arc.get
+
+```otr
+fn get(self: &Self) &T
+```
+
+### Arc.deinit
+
+```otr
+fn deinit(self: Self) void
+```

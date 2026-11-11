@@ -1,0 +1,3 @@
+test "counts what a container allocates and frees" ... ok
+test "an injected failure leaves the container intact" ... ok
+2 passed, 0 failed

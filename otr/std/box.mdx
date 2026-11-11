@@ -1,0 +1,108 @@
+---
+title: "std.box"
+sidebarTitle: "box"
+description: "Box(T) owns one heap value."
+---
+
+`Box(T)` owns one heap value. `Box(dyn I)` owns a value of any type implementing
+interface `I`, with its methods reached through `get()` and `get_mut()`.
+
+```otr
+import std.box
+```
+
+## Example
+
+```otr
+import std
+import std.box
+
+const Shape = interface {
+    fn area(self: &Self) f64
+}
+
+const Rect = struct {
+    w: f64
+    h: f64
+
+    pub fn area(self: &Rect) f64 {
+        return self.w * self.h
+    }
+}
+
+pub fn main() void {
+    var b = box.Box(Rect).init(.{ w: 3, h: 4 })
+    b.get_mut().w = 5
+    std.io.printf("boxed area {d:.1}\n", .{ b.get().area() })
+
+    // into_inner moves the value back out and frees the heap memory.
+    r := b.into_inner()
+    std.io.printf("unboxed {d:.1} x {d:.1}\n", .{ r.w, r.h })
+
+    // Box(dyn I) holds any type that implements the interface.
+    shape := box.Box(dyn Shape).init(Rect{ w: 2, h: 2 })
+    defer shape.deinit()
+    std.io.printf("dyn area {d:.1}\n", .{ shape.get().area() })
+}
+```
+
+```text
+boxed area 20.0
+unboxed 5.0 x 4.0
+dyn area 4.0
+```
+
+## Box
+
+```otr
+fn Box(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>ptr</code> | <code>*T</code> | Read-only |
+
+### Box.init
+
+```otr
+fn init(value: T) Self
+```
+
+### Box.init_with
+
+```otr
+fn init_with(fill: anytype) Self
+```
+
+Boxes the value `fill(out)` writes through `out`, which is the box's memory, so
+a large value is built where it is kept rather than on the stack and copied in:
+`Box(App).init_with(fn[conn](out: &out App) void { out.* = App{ conn: conn, ... } })`.
+
+### Box.get
+
+```otr
+fn get(self: &Self) &T
+```
+
+### Box.get_mut
+
+```otr
+fn get_mut(self: &mut Self) &mut T
+```
+
+### Box.into_inner
+
+```otr
+fn into_inner(self: Self) T
+```
+
+Moves the value out and frees the box.
+
+### Box.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+Cleans up the value where it is, so a large one is not copied out first, and
+frees the box.

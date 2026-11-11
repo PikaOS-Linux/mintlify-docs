@@ -1,0 +1,428 @@
+---
+title: "std.process"
+sidebarTitle: "process"
+description: "The running process, the signals it receives, and the programs it starts."
+---
+
+The running process, the signals it receives, and the programs it starts.
+
+```otr
+import std.process
+```
+
+## Example
+
+```otr
+import std
+import std.process
+
+pub fn main(env: std.Env) !void {
+    heap := std.mem.heap
+
+    // run_output waits for the child and collects what it wrote.
+    out := try process.run_output(heap, &[3]str{ "echo", "hello", "child" })
+    defer out.deinit()
+    std.io.printf("stdout: {}", .{ out.stdout.as_str() })
+
+    // run passes this process's streams through and reports how the child ended.
+    term := try process.run(heap, &[1]str{ "false" })
+    switch term {
+        .exited |code| => std.io.printf("false exited with {}\n", .{ code })
+        .signal |sig| => std.io.printf("false was killed by signal {}\n", .{ sig })
+    }
+
+    // spawn starts a child without waiting; wait collects it later.
+    child := try process.spawn(heap, &[1]str{ "true" }, .{})
+    done := try child.wait(env.io)
+    switch done {
+        .exited |code| => std.io.printf("true exited with {}\n", .{ code })
+        .signal |sig| => std.io.printf("true was killed by signal {}\n", .{ sig })
+    }
+
+    if process.run(heap, &[1]str{ "no-such-program-here" }) |_| {} else |err| {
+        std.io.printf("missing program: {}\n", .{ err })
+    }
+
+    std.io.printf("PATH is set: {}\n", .{ process.get_env("PATH") != null })
+}
+```
+
+```text
+stdout: hello child
+false exited with 1
+true exited with 0
+missing program: error.NotFound
+PATH is set: true
+```
+
+## cpu_count
+
+```otr
+fn cpu_count() usize
+```
+
+How many CPUs are online.
+
+## exit
+
+```otr
+fn exit(code: u8) noreturn
+```
+
+Ends the process with `code` without running cleanup, like a panic (spec O7), but
+as a normal exit status; for command-line tools reporting failure.
+
+## Error
+
+```otr
+const Error = error { NotFound, AccessDenied, SpawnFailed, SystemResources, Canceled }
+```
+
+## Term
+
+```otr
+const Term = union
+```
+
+How a child process ended.
+
+| Field | Type |
+| --- | --- |
+| <code>exited</code> | <code>u8</code> |
+| <code>signal</code> | <code>u8</code> |
+
+## run
+
+```otr
+fn run(alloc: mem.Allocator, argv: anytype) Error!Term
+```
+
+Runs `argv[0]`, looked up in `PATH`, with `argv` as its arguments and this process's
+standard streams and environment, and waits for it to end; inside `Io.Uring` only the
+calling task waits. `argv` is an array or slice of strings; it may
+live in a region, since a region's `[][]r u8` cannot be lent as `[]str` (V1).
+
+## Output
+
+```otr
+const Output = struct
+```
+
+What a child wrote while `run_output` waited for it.
+
+| Field | Type |
+| --- | --- |
+| <code>term</code> | <code>Term</code> |
+| <code>stdout</code> | <code>string.String</code> |
+| <code>stderr</code> | <code>string.String</code> |
+
+### Output.deinit
+
+```otr
+fn deinit(self: Output) void
+```
+
+## run_output
+
+```otr
+fn run_output(alloc: mem.Allocator, argv: anytype) Error!Output
+```
+
+Like `run`, but collects the child's standard output and error instead of passing
+them through.
+
+## run_output_in
+
+```otr
+fn run_output_in(alloc: mem.Allocator, argv: anytype, cwd: str) Error!Output
+```
+
+`run_output`, in directory `cwd`.
+
+## run_output_env
+
+```otr
+fn run_output_env(alloc: mem.Allocator, argv: anytype, cwd: str, env: anytype) Error!Output
+```
+
+`run_output_in`, with `env` (`NAME=value` strings) as the child's whole environment.
+
+## get_env
+
+```otr
+fn get_env(name: str) ?[]static u8
+```
+
+The value of environment variable `name`, or null when it is unset: what `env.get_env`
+reads, for code that is handed no `Env`, as a library's helper that runs on its own.
+
+## env_count
+
+```otr
+fn env_count() usize
+```
+
+Number of environment variables, for `env_var`, as `env.env_count`.
+
+## env_var
+
+```otr
+fn env_var(i: usize) []static u8
+```
+
+Environment variable `i` as `NAME=value`, as `env.env_var`: to hand this process's
+environment on to a child with changes.
+
+## executable_path
+
+```otr
+fn executable_path(alloc: mem.Allocator) Error!string.String
+```
+
+The absolute path of the running program's file.
+
+## find_executable
+
+```otr
+fn find_executable(env: std.Env, name: str, out: []mut u8) ?str
+```
+
+The full path of program `name` as `run` and `spawn` would find it: `name` itself
+when it contains a `/`, otherwise the first executable `dir/name` for the
+directories in `PATH`. The path is written to `out`, which needs room for it and a
+NUL byte; null when there is none.
+
+## ExecOptions
+
+```otr
+const ExecOptions = ref struct
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>env</code> | <code>?[]str = null</code> | The program's whole environment as `NAME=value` strings; null keeps this process's. |
+
+## exec
+
+```otr
+fn exec(alloc: mem.Allocator, argv: anytype, options: ExecOptions) Error!noreturn
+```
+
+Replaces the running program with `argv[0]`, looked up in `PATH`, with `argv` as its
+arguments (execvp(3)), keeping the process id, its descriptors without close-on-exec
+and its blocked signals, as a daemon re-executes itself to give memory and threads
+back. Pending `defer`s do not run, as for `exit`. Returns only when the program
+cannot be started.
+
+## Signal
+
+```otr
+const Signal = enum
+```
+
+The signals `Signals` can receive.
+
+| Variant |
+| --- |
+| <code>hup</code> |
+| <code>int</code> |
+| <code>quit</code> |
+| <code>usr1</code> |
+| <code>usr2</code> |
+| <code>pipe</code> |
+| <code>alrm</code> |
+| <code>term</code> |
+| <code>chld</code> |
+| <code>cont</code> |
+| <code>winch</code> |
+
+## Signals
+
+```otr
+const Signals = struct
+```
+
+Signals received as values instead of interrupting the program (Linux signalfd).
+`init` blocks them on the calling thread, which threads it starts afterwards
+inherit; `Io.Threaded` workers block every signal. Create it early in `main`, before
+starting threads of your own, so no thread is left to take them the default way.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>fd</code> | <code>i32</code> | Read-only |
+| <code>set</code> | <code>SigSet</code> | Read-only |
+
+### Signals.init
+
+```otr
+fn init(sigs: []Signal) Error!Signals
+```
+
+### Signals.next
+
+```otr
+fn next(self: &Signals, io: std.Io) std.Io.Canceled!Signal
+```
+
+Waits for the next signal.
+
+### Signals.poll_fd
+
+```otr
+fn poll_fd(self: &Signals) i32
+```
+
+Ready when a signal is waiting, for `Io.select`.
+
+### Signals.deinit
+
+```otr
+fn deinit(self: Signals) void
+```
+
+Unblocks the signals again; one still pending is then delivered the default way.
+
+## SpawnOptions
+
+```otr
+const SpawnOptions = ref struct
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>env</code> | <code>?[]str = null</code> | The child's whole environment as `NAME=value` strings; null passes this process's on. |
+| <code>cwd</code> | <code>?str = null</code> | The child's working directory; null keeps this process's. |
+| <code>cwd_dir</code> | <code>?&amp;linux.Fd = null</code> | The child's working directory as a directory held open, which it enters with fchdir(2) before anything else: unlike a path, a rename or symlink swapped in since cannot redirect it. Takes precedence over `cwd`. |
+| <code>detached</code> | <code>bool = false</code> | Starts the child in a session of its own, away from this process's terminal and its signals, and lets it keep running when its `Child` is dropped. |
+| <code>setsid</code> | <code>bool = false</code> | Starts the child in a session of its own, as a shell does for a job, but stops it when its `Child` is dropped, unlike `detached`. |
+| <code>tty</code> | <code>?str = null</code> | The path of a terminal, such as `Pty.path()` or a virtual console, that the child gets as its standard streams and as its controlling terminal, in a session of its own. |
+| <code>fds</code> | <code>?[]FdMap = null</code> | Descriptors the child gets, each at the number given; `.{ child: 1, fd: &p.b }` sends its standard output into a pipe. They take precedence over `tty`. |
+| <code>close_others</code> | <code>bool = false</code> | Closes every other descriptor above 2 in the child. Those std opens are close-on-exec anyway; this also covers ones inherited without that flag. |
+| <code>nofile</code> | <code>?linux.Rlimit = null</code> | The child's descriptor limit, such as the soft limit this process had before raising its own: programs that `select` break above 1024. Null keeps this process's. |
+
+## FdMap
+
+```otr
+const FdMap = ref struct
+```
+
+A descriptor of this process that a child gets as number `child`
+(`SpawnOptions.fds`).
+
+| Field | Type |
+| --- | --- |
+| <code>child</code> | <code>i32</code> |
+| <code>fd</code> | <code>&amp;linux.Fd</code> |
+
+## Pty
+
+```otr
+const Pty = struct
+```
+
+A pseudo-terminal: `master` is the terminal emulator's side, and a child given
+`path()` as its `SpawnOptions.tty` runs on the other.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>master</code> | <code>linux.Fd</code> | Read-only |
+| <code>name</code> | <code>bounded.InlineString(31)</code> | Read-only |
+
+### Pty.open
+
+```otr
+fn open() linux.Error!Pty
+```
+
+Opens a new pseudo-terminal pair (/dev/ptmx).
+
+### Pty.path
+
+```otr
+fn path(self: &Pty) str
+```
+
+The terminal's device, for `SpawnOptions.tty`.
+
+### Pty.set_size
+
+```otr
+fn set_size(self: &Pty, rows: u16, cols: u16) linux.Error!void
+```
+
+Tells the program on the terminal its size in characters (TIOCSWINSZ); it gets
+SIGWINCH.
+
+### Pty.deinit
+
+```otr
+fn deinit(self: Pty) void
+```
+
+## Child
+
+```otr
+const Child = struct
+```
+
+A running program started by `spawn`. Consuming it with `wait` collects how it
+ended. `deinit` stops it with SIGKILL and collects it, so a child never outlives
+the code that started it by accident, unless it was spawned `detached`; then it
+keeps running, and the runtime collects it when it ends.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>id</code> | <code>i32</code> | Read-only |  |
+| <code>fd</code> | <code>i32</code> | Read-only | A pidfd, readable once the child has ended. |
+| <code>detached</code> | <code>bool</code> | Read-only |  |
+
+### Child.wait
+
+```otr
+fn wait(self: Child, io: std.Io) Error!Term
+```
+
+Waits for the child to end; inside `Io.Uring` only the calling task waits. A
+cancelled task stops the child as `deinit` does and returns `error.Canceled`.
+
+### Child.kill
+
+```otr
+fn kill(self: &Child, sig: Signal) void
+```
+
+Sends `sig` to the child.
+
+### Child.pid
+
+```otr
+fn pid(self: &Child) i32
+```
+
+The child's process id, for calls such as `linux.prlimit`. It names the child only
+until it is waited for.
+
+### Child.poll_fd
+
+```otr
+fn poll_fd(self: &Child) i32
+```
+
+Ready once the child has ended, for `Io.select`.
+
+### Child.deinit
+
+```otr
+fn deinit(self: Child) void
+```
+
+## spawn
+
+```otr
+fn spawn(alloc: mem.Allocator, argv: anytype, options: SpawnOptions) Error!Child
+```
+
+Starts `argv[0]`, looked up in `PATH`, with `argv` as its arguments and this
+process's standard streams, without waiting for it. `argv` is an array or slice of
+strings, as for `run`. Signals blocked here, as by `Signals`, are not blocked in the
+child.

@@ -1,0 +1,243 @@
+---
+title: "std.flate_common"
+sidebarTitle: "flate_common"
+description: "Shared RFC 1950/1951/1952 wire types."
+---
+
+Shared RFC 1950/1951/1952 wire types. Codec states own no borrowed buffers.
+
+```otr
+import std.flate_common
+```
+
+## Error
+
+```otr
+const Error = error { Truncated, InvalidData, InvalidHeader, ChecksumMismatch, TooLarge }
+```
+
+## Format
+
+```otr
+const Format = enum
+```
+
+| Variant |
+| --- |
+| <code>raw</code> |
+| <code>zlib</code> |
+| <code>gzip</code> |
+
+## State
+
+```otr
+const State = enum
+```
+
+| Variant |
+| --- |
+| <code>need_input</code> |
+| <code>need_output</code> |
+| <code>done</code> |
+
+## Progress
+
+```otr
+const Progress = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>in_used</code> | <code>usize = 0</code> |
+| <code>out_written</code> | <code>usize = 0</code> |
+| <code>state</code> | <code>State = .need_input</code> |
+
+## Limits
+
+```otr
+const Limits = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>max_input</code> | <code>usize = ~@as(usize, 0)</code> |
+| <code>max_output</code> | <code>usize = ~@as(usize, 0)</code> |
+
+## MemberPolicy
+
+```otr
+const MemberPolicy = enum
+```
+
+| Variant |
+| --- |
+| <code>single</code> |
+| <code>concatenated</code> |
+
+## Level
+
+```otr
+const Level = enum
+```
+
+Native search budgets, not zlib level numbers: o2 searches 32 candidates, o3 128.
+Both use one-byte lazy matching and deterministic 32 KiB block lookahead.
+
+| Variant |
+| --- |
+| <code>o2</code> |
+| <code>o3</code> |
+
+## Action
+
+```otr
+const Action = enum
+```
+
+| Variant |
+| --- |
+| <code>more</code> |
+| <code>finish</code> |
+
+## Checksum
+
+```otr
+const Checksum = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>a</code> | <code>u32 = 1</code> |
+| <code>b</code> | <code>u32 = 0</code> |
+| <code>crc</code> | <code>hash.Crc32 = hash.Crc32.init()</code> |
+| <code>size</code> | <code>u32 = 0</code> |
+
+### Checksum.update
+
+```otr
+simd fn update(self: &mut Checksum, bytes: []u8, format: Format) void
+```
+
+### Checksum.adler
+
+```otr
+fn adler(self: &Checksum) u32
+```
+
+## Bits
+
+```otr
+const Bits = struct
+```
+
+On-demand reads never commit whole-byte lookahead beyond a stream's extent.
+
+| Field | Type |
+| --- | --- |
+| <code>buf</code> | <code>u32 = 0</code> |
+| <code>n</code> | <code>u32 = 0</code> |
+
+### Bits.take
+
+```otr
+fn take(self: &mut Bits, src: []u8, at: &mut usize, k: u32) ?u32
+```
+
+### Bits.align_byte
+
+```otr
+fn align_byte(self: &mut Bits) void
+```
+
+## Alphabet
+
+```otr
+const Alphabet = enum
+```
+
+Canonical count/symbol representation reused from the whole-buffer inflater.
+Under-subscribed trees are legal only for an unused distance alphabet or a single
+length-1 literal/distance code. Code-length alphabets must be complete.
+
+| Variant |
+| --- |
+| <code>literal</code> |
+| <code>distance</code> |
+| <code>code</code> |
+
+## Huffman
+
+```otr
+fn Huffman(comptime alphabet: Alphabet) type
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>counts</code> | <code>[16]u16</code> |  |
+| <code>symbols</code> | <code>[symbol_count]u16</code> |  |
+| <code>symbols_count</code> | <code>usize = 0</code> |  |
+| <code>fast</code> | <code>[root_count]u32</code> |  |
+| <code>secondary</code> | <code>[secondary_count]u32</code> | Long prefixes use bounded subtables; uncached prefixes retain canonical decode. |
+
+### Huffman.symbol
+
+```otr
+fn symbol(self: &Self, value: u32) u16
+```
+
+### Huffman.lookup
+
+```otr
+fn lookup(self: &Self, look: u32) u32
+```
+
+### Huffman.build
+
+```otr
+fn build(self: &mut Self, lengths: []u8, code_lengths: bool, empty_ok: bool) Error!void
+```
+
+## Cursor
+
+```otr
+const Cursor = struct
+```
+
+Partial symbols survive even a split between the fifteenth code bit and its data.
+
+| Field | Type |
+| --- | --- |
+| <code>code</code> | <code>u32 = 0</code> |
+| <code>first</code> | <code>u32 = 0</code> |
+| <code>index</code> | <code>u32 = 0</code> |
+| <code>width</code> | <code>u32 = 1</code> |
+
+### Cursor.decode
+
+```otr
+fn decode(self: &mut Cursor, tree: anytype, bits: &mut Bits, src: []u8, at: &mut usize) Error!?u16
+```
+
+## fixed_lengths
+
+```otr
+fn fixed_lengths(lit: []mut u8, dist: []mut u8) void
+```
+
+## bound
+
+```otr
+fn bound(n: usize, format: Format) Error!usize
+```
+
+Conservative no-flush bound. Overflow is an output limit failure, never a wrapped size.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>length_base</code> | <code>[29]u16&#123; 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 &#125;</code> |
+| <code>length_extra</code> | <code>[29]u8&#123; 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 &#125;</code> |
+| <code>dist_base</code> | <code>[30]u16&#123; 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 &#125;</code> |
+| <code>dist_extra</code> | <code>[30]u8&#123; 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 &#125;</code> |
+| <code>clen_order</code> | <code>[19]u8&#123; 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 &#125;</code> |

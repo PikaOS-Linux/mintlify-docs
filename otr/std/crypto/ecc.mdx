@@ -1,0 +1,163 @@
+---
+title: "std.crypto.ecc"
+sidebarTitle: "crypto.ecc"
+description: "The NIST prime curves P-256 and P-384 (FIPS 186-5, SEC 2), for checking ECDSA signatures and for ECDH key exchange (TLS's secp256r1 and secp384r1 groups)."
+---
+
+The NIST prime curves P-256 and P-384 (FIPS 186-5, SEC 2), for checking ECDSA
+signatures and for ECDH key exchange (TLS's secp256r1 and secp384r1 groups). Both have `a = -3`, so one set of formulas serves both: the complete
+projective addition and doubling of Renes, Costello and Batina (2015, algorithms 4 and
+6), which need no special cases for the identity or for adding a point to itself, so
+no input can steer them onto an unhandled path.
+
+```otr
+import std.crypto.ecc
+```
+
+## Curve
+
+```otr
+fn Curve(comptime C: type) type
+```
+
+### Curve.field_bytes
+
+```otr
+const field_bytes: usize = N * 8
+```
+
+Bytes of a coordinate or a scalar.
+
+### Curve.fp
+
+```otr
+const fp = Field.init(C.p).?
+```
+
+Arithmetic modulo the field prime.
+
+### Curve.order
+
+```otr
+const order = Field.init(C.n).?
+```
+
+Arithmetic modulo the group order.
+
+### Curve.Point
+
+```otr
+const Point = struct
+```
+
+A point in projective coordinates (X:Y:Z), each in Montgomery form; the identity
+is (0:1:0), and any point with Z = 0 is it.
+
+| Field | Type |
+| --- | --- |
+| <code>x</code> | <code>[N]u64</code> |
+| <code>y</code> | <code>[N]u64</code> |
+| <code>z</code> | <code>[N]u64</code> |
+
+### Curve.is_identity
+
+```otr
+fn is_identity(p: &Point) bool
+```
+
+### Curve.decode
+
+```otr
+fn decode(sec1: []u8) ?Point
+```
+
+A public key in SEC 1 form: `04 || X || Y`, or `02`/`03 || X` with the parity
+of Y. Null unless it is a point of the curve other than the identity, with each
+coordinate below the prime.
+
+### Curve.dbl
+
+```otr
+fn dbl(p: &Point) Point
+```
+
+`2p` (algorithm 6).
+
+### Curve.add
+
+```otr
+fn add(p: &Point, q: &Point) Point
+```
+
+`p + q` (algorithm 4).
+
+### Curve.mul_double
+
+```otr
+fn mul_double(u1: &[N]u64, q: &Point, u2: &[N]u64) Point
+```
+
+`u1 * G + u2 * q` for plain (not Montgomery) scalars, by Shamir's trick: one
+doubling per bit, adding G, q or their sum as the two bits say. The scalars are
+public, so the branches leak nothing.
+
+### Curve.mul_secret
+
+```otr
+fn mul_secret(k: &[field_bytes]u8, p: &Point) Point
+```
+
+`k * p` for a secret big-endian scalar `k`, by a Montgomery ladder over the
+complete formulas: every bit costs one addition and one doubling, and its value
+only steers masked swaps, so the time and memory touched say nothing about `k`.
+
+### Curve.valid_scalar
+
+```otr
+fn valid_scalar(k: &[field_bytes]u8) bool
+```
+
+Whether the big-endian `k` is a usable secret scalar: neither zero nor at or
+above the group order. Random bytes fail with probability below 2^-32.
+
+### Curve.ecdh_public
+
+```otr
+fn ecdh_public(k: &[field_bytes]u8) ?[1 + 2 * field_bytes]u8
+```
+
+The uncompressed SEC 1 public key `04 || X || Y` of the secret scalar `k`, or
+null when `k` is not `valid_scalar`.
+
+### Curve.ecdh
+
+```otr
+fn ecdh(k: &[field_bytes]u8, peer: []u8) ?[field_bytes]u8
+```
+
+The ECDH shared secret (SEC 1 §3.3.1): the X coordinate of `k * peer`,
+big-endian, or null when the peer's key is not an uncompressed point of the curve
+or `k` is not `valid_scalar`. Both curves have cofactor 1, so a point that decodes
+generates the whole group and the product of a valid scalar is never the identity.
+
+### Curve.affine_x
+
+```otr
+fn affine_x(p: &Point) ?[N]u64
+```
+
+The affine X of `p` as a plain number, or null for the identity.
+
+| Name | Definition |
+| --- | --- |
+| <code>Curve.N</code> | <code>C.n_limbs</code> |
+| <code>Curve.Field</code> | <code>bigint.Modulus(N)</code> |
+| <code>Curve.identity</code> | <code>Point&#123; x: bigint.zero(N), y: fp.one, z: bigint.zero(N) &#125;</code> |
+| <code>Curve.generator</code> | <code>Point&#123; x: fp.to_mont(&amp;C.gx), y: fp.to_mont(&amp;C.gy), z: fp.one &#125;</code> |
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>P256</code> | <code>Curve(P256Params)</code> |
+| <code>P384</code> | <code>Curve(P384Params)</code> |

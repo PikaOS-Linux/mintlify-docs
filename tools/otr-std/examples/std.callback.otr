@@ -1,0 +1,39 @@
+import std
+import std.callback
+
+const Player = struct {
+    volume: u8
+    shown: u8
+    loud_warnings: u32
+}
+
+fn show(p: &mut Player, volume: u8) void {
+    p.shown = volume
+}
+
+fn warn_loud(p: &mut Player, volume: u8) void {
+    if volume > 80 { p.loud_warnings += 1 }
+}
+
+pub fn main() !void {
+    var player = Player{ volume: 0, shown: 0, loud_warnings: 0 }
+    // Up to 4 handlers, each called with the owner and the new volume.
+    var on_volume = callback.Callbacks(Player, u8, 4).init()
+    _ = try on_volume.connect(show)
+    warn_id := try on_volume.connect(warn_loud)
+
+    on_volume.emit(&mut player, 50)
+    on_volume.emit(&mut player, 90)
+    std.io.printf("shown {} warnings {}\n", .{ player.shown, player.loud_warnings })
+
+    on_volume.disconnect(warn_id)
+    on_volume.emit(&mut player, 100)
+    std.io.printf("shown {} warnings {}\n", .{ player.shown, player.loud_warnings })
+
+    // A Hook stores a function with a small datum, here the step to add.
+    step := callback.Hook(Player, u8).of(u8, fn(p: &mut Player, by: u8, times: u8) void {
+        p.volume += by * times
+    }, 5)
+    step.run(&mut player, 3)
+    std.io.printf("volume {}\n", .{ player.volume })
+}

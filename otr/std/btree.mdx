@@ -1,0 +1,239 @@
+---
+title: "std.btree"
+sidebarTitle: "btree"
+description: "An ordered map that owns its entries."
+---
+
+An ordered map that owns its entries: a B-tree whose nodes hold up to 31 keys in sorted
+order (about 256 bytes of them), so a lookup reads a few contiguous runs of keys
+instead of chasing one pointer per level as a binary tree would. Nodes live in shared column buffers (keys, values,
+child indices, lengths) and refer to each other by `u32` index, so no node stores a
+pointer and freed nodes are reused from a free list. Lookups, insertions and removals
+take O(log n); iteration and range queries walk the keys in order with a fixed-size
+stack. Iterators borrow the map (spec R3), so changing it while one is in use is a
+borrow error (B4, B5).
+
+```otr
+import std.btree
+```
+
+## Example
+
+```otr
+import std
+import std.btree
+
+fn less(a: &u32, b: &u32) bool {
+    return a.* < b.*
+}
+
+pub fn main() void {
+    var years = btree.BTreeMap(u32, []static u8, less).init(std.mem.heap)
+    defer years.deinit()
+
+    _ = years.put(1991, "Linux")
+    _ = years.put(1972, "C")
+    _ = years.put(2015, "Rust")
+    _ = years.put(2009, "Go")
+    _ = years.put(1983, "C++")
+
+    year: u32 = 2009
+    if years.get(&year) |name| {
+        std.io.printf("2009: {}\n", .{ name.* })
+    }
+    if years.first() |e| {
+        std.io.printf("first {} {}\n", .{ e.key.*, e.value.* })
+    }
+    if years.last() |e| {
+        std.io.printf("last {} {}\n", .{ e.key.*, e.value.* })
+    }
+    gone: u32 = 1983
+    _ = years.remove(&gone)
+    std.io.printf("{} left\n", .{ years.len() })
+
+    // Entries come back in key order, whatever order they went in.
+    var all = years.iter()
+    for e in all {
+        std.io.printf("{} {}\n", .{ e.key.*, e.value.* })
+    }
+
+    // range includes the lower bound and excludes the upper one.
+    lo: u32 = 1990
+    hi: u32 = 2010
+    var nineties = years.range(&lo, &hi)
+    for e in nineties {
+        std.io.printf("in range: {}\n", .{ e.value.* })
+    }
+}
+```
+
+```text
+2009: Go
+first 1972 C
+last 2015 Rust
+4 left
+1972 C
+1991 Linux
+2009 Go
+2015 Rust
+in range: Linux
+in range: Go
+```
+
+## Entry
+
+```otr
+fn Entry(comptime K: type, comptime V: type) type
+```
+
+An entry seen through a shared borrow of its map.
+
+| Field | Type |
+| --- | --- |
+| <code>key</code> | <code>&amp;K</code> |
+| <code>value</code> | <code>&amp;V</code> |
+
+## BTreeMap
+
+```otr
+fn BTreeMap(comptime K: type, comptime V: type, comptime less: fn(a: &K, b: &K) bool) type
+```
+
+Keys and values ordered by `less`, a strict weak order: keys neither of which is
+`less` than the other are the same key. Keys and values may be resources, which the
+map deinitialises when it drops them.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>keys</code> | <code>mem.RawBuf(K)</code> | Read-only |  |
+| <code>values</code> | <code>mem.RawBuf(V)</code> | Read-only |  |
+| <code>children</code> | <code>mem.RawBuf(u32)</code> | Read-only |  |
+| <code>meta</code> | <code>mem.RawBuf(u32)</code> | Read-only | Each node's key count, with the top bit set for a leaf, so one load answers both; `none` for a free node, whose first child slot links the free list. |
+| <code>nodes</code> | <code>usize</code> | Read-only | Node slots in use or free, and allocated. |
+| <code>node_cap</code> | <code>usize</code> | Read-only |  |
+| <code>free</code> | <code>u32</code> | Read-only |  |
+| <code>root</code> | <code>u32</code> | Read-only |  |
+| <code>count</code> | <code>usize</code> | Read-only |  |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |  |
+
+### BTreeMap.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### BTreeMap.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+Frees the storage, deinitialising keys and values that are resources (spec O8).
+
+### BTreeMap.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+Removes every entry, keeping the storage.
+
+### BTreeMap.len
+
+```otr
+fn len(self: &Self) usize
+```
+
+### BTreeMap.contains
+
+```otr
+fn contains(self: &Self, k: &K) bool
+```
+
+### BTreeMap.get
+
+```otr
+fn get(self: &Self, k: &K) ?&V
+```
+
+### BTreeMap.get_mut
+
+```otr
+fn get_mut(self: &mut Self, k: &K) ?&mut V
+```
+
+### BTreeMap.first
+
+```otr
+fn first(self: &Self) ?Entry(K, V)
+```
+
+The entry with the least key.
+
+### BTreeMap.last
+
+```otr
+fn last(self: &Self) ?Entry(K, V)
+```
+
+The entry with the greatest key.
+
+### BTreeMap.put
+
+```otr
+fn put(self: &mut Self, k: K, value: V) ?V
+```
+
+Stores `value` under `k` and returns the value it replaces. An equal key already
+present stays; the new one is cleaned up if it is a resource. Full nodes on the
+way down are split first, so the insertion never walks back up.
+
+### BTreeMap.remove
+
+```otr
+fn remove(self: &mut Self, k: &K) ?V
+```
+
+Removes `k` and returns its value. Each node on the way down is first given at
+least `t` keys, by borrowing from a sibling or merging with one, so the removal
+never walks back up.
+
+### BTreeMap.iter
+
+```otr
+fn iter(self: &Self) Iter(Self)
+```
+
+The entries in key order. The map stays borrowed while it is used.
+
+### BTreeMap.range
+
+```otr
+fn range(self: &Self, lo: &K, hi: &K) Iter(Self)
+```
+
+The entries with keys from `lo` (included) to `hi` (excluded), in key order. The
+map stays borrowed while it is used, and so do the bounds.
+
+## Iter
+
+```otr
+fn Iter(comptime M: type) type
+```
+
+The entries of a B-tree map in key order, up to an optional bound: a stack of the nodes
+on the path to the next entry, each with the key it resumes at.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>map</code> | <code>&amp;M</code> | Read-only |
+| <code>end</code> | <code>?&amp;M.Key</code> | Read-only |
+| <code>nodes</code> | <code>[M.max_depth]u32</code> | Read-only |
+| <code>at</code> | <code>[M.max_depth]usize</code> | Read-only |
+| <code>depth</code> | <code>usize</code> | Read-only |
+
+### Iter.next
+
+```otr
+fn next(self: &mut Self) ?Entry(M.Key, M.Value)
+```

@@ -1,0 +1,40 @@
+import std
+import std.rand
+
+pub fn main() void {
+    // A fixed seed gives the same sequence on every run, which keeps tests repeatable.
+    var rng = rand.Rng.init(42)
+    var again = rand.Rng.init(42)
+    std.io.printf("same seed, same numbers: {}\n", .{ rng.next() == again.next() })
+
+    std.io.print("dice:")
+    for _ in 0..8 {
+        std.io.printf(" {}", .{ rng.below(6) + 1 })
+    }
+    std.io.print("\n")
+
+    var counts = [3]u32{ 0, 0, 0 }
+    var sum: f64 = 0.0
+    for _ in 0..3000 {
+        counts[rng.below(3)] += 1
+        sum += rng.float()
+    }
+    std.io.printf("3000 draws below 3: {} {} {}\n", .{ counts[0], counts[1], counts[2] })
+    std.io.printf("mean of floats in [0, 1): {d:.2}\n", .{ sum / 3000.0 })
+
+    // Fisher-Yates shuffle.
+    var deck = [6]u8{ 1, 2, 3, 4, 5, 6 }
+    var i: usize = deck.len - 1
+    for i > 0 {
+        j := rng.below(i + 1)
+        tmp := deck[i]
+        deck[i] = deck[j]
+        deck[j] = tmp
+        i -= 1
+    }
+    std.io.print("shuffled:")
+    for card in deck {
+        std.io.printf(" {}", .{ card })
+    }
+    std.io.print("\n")
+}

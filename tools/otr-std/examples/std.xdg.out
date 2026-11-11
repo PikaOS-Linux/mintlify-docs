@@ -1,0 +1,8 @@
+config: /home/jade/.config
+data: /home/jade/.local/share
+cache: /var/cache/jade
+state: /home/jade/.local/state
+runtime: (none)
+settings file: /home/jade/.config/my-app/settings.conf
+data dir: /opt/share
+data dir: /usr/share

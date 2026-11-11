@@ -1,0 +1,396 @@
+---
+title: "std.hash"
+sidebarTitle: "hash"
+description: "Checksums and hashes over bytes."
+---
+
+Checksums and hashes over bytes. Each hasher is a value with `init`, `update` for the
+next part of the input, and `final`, which leaves the hasher as it was, so a running
+digest can be read and fed on; `hash` digests one slice at once. CRC-32 and CRC-32C
+use the CPU's carry-less multiply and crc32 instructions where it has them, and read
+8 bytes per step through tables otherwise (slicing-by-8), as
+SHA-256 and SHA-1 use the SHA instructions where there are some; `Wyhash`
+is what Zig's hash maps use and matches it bit for bit; `XxHash64` is the stable
+xxHash64. `Sha256` and `Sha1` are FIPS 180-4; SHA-1 is broken for signatures and only
+for formats that name it, such as git object ids.
+
+```otr
+import std.hash
+```
+
+## Example
+
+```otr
+import std
+import std.hash
+import std.string
+
+pub fn main() void {
+    data := "hello otter"
+
+    // One-shot hashes of a whole slice.
+    std.io.printf("crc32    {x:0>8}\n", .{ hash.crc32(data) })
+    std.io.printf("fnv1a64  {x:0>16}\n", .{ hash.Fnv1a64.hash(data) })
+    std.io.printf("wyhash   {x:0>16}\n", .{ hash.Wyhash.hash(0, data) })
+    std.io.printf("xxhash64 {x:0>16}\n", .{ hash.XxHash64.hash(0, data) })
+
+    var hex = string.String.init(std.mem.heap)
+    defer hex.deinit()
+    digest := hash.Sha256.hash(data)
+    hash.write_hex(&mut hex, &digest)
+    std.io.printf("sha256   {}\n", .{ hex.as_str() })
+
+    // Streaming: feed the input in parts and get the same digest.
+    var h = hash.Sha256.init()
+    h.update("hello ")
+    h.update("otter")
+    streamed := h.final()
+    std.io.printf("streamed sha256 matches: {}\n", .{ std.mem.eql(u8, &streamed, &digest) })
+
+    var crc = hash.Crc32.init()
+    crc.update("hello ")
+    crc.update("otter")
+    std.io.printf("streamed crc32 matches: {}\n", .{ crc.final() == hash.crc32(data) })
+}
+```
+
+```text
+crc32    fb596ff2
+fnv1a64  2545374bc75a86ed
+wyhash   9b625a3966330e42
+xxhash64 596fd7ea1af58076
+sha256   8bfd001789db99cd9ec1a4a832c43670b7a8e7d06f7ee9460799682c4725fa5e
+streamed sha256 matches: true
+streamed crc32 matches: true
+```
+
+## Crc32
+
+```otr
+const Crc32 = Crc(0xedb88320)
+```
+
+CRC-32 as zlib, gzip, PNG and Ethernet compute it (polynomial 0x04c11db7, reflected).
+
+## Crc32c
+
+```otr
+const Crc32c = Crc(0x82f63b78)
+```
+
+CRC-32C (Castagnoli, polynomial 0x1edc6f41, reflected), as iSCSI, ext4 and btrfs use.
+
+## crc32
+
+```otr
+fn crc32(bytes: []u8) u32
+```
+
+The CRC-32 of `bytes`.
+
+## crc32c
+
+```otr
+fn crc32c(bytes: []u8) u32
+```
+
+The CRC-32C of `bytes`.
+
+## Crc
+
+```otr
+fn Crc(comptime poly: u32) type
+```
+
+A reflected 32-bit CRC with initial value and final xor `0xffffffff`, for the reversed
+polynomial `poly`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>state</code> | <code>u32</code> | Read-only |
+
+### Crc.init
+
+```otr
+fn init() Self
+```
+
+### Crc.update
+
+```otr
+fn update(self: &mut Self, bytes: []u8) void
+```
+
+### Crc.final
+
+```otr
+fn final(self: &Self) u32
+```
+
+### Crc.hash
+
+```otr
+fn hash(bytes: []u8) u32
+```
+
+## Fnv1a32
+
+```otr
+const Fnv1a32 = struct
+```
+
+32-bit FNV-1a: one xor and one multiply per byte, for short keys.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>state</code> | <code>u32</code> | Read-only |
+
+### Fnv1a32.init
+
+```otr
+fn init() Fnv1a32
+```
+
+### Fnv1a32.update
+
+```otr
+fn update(self: &mut Fnv1a32, bytes: []u8) void
+```
+
+### Fnv1a32.final
+
+```otr
+fn final(self: &Fnv1a32) u32
+```
+
+### Fnv1a32.hash
+
+```otr
+fn hash(bytes: []u8) u32
+```
+
+## Fnv1a64
+
+```otr
+const Fnv1a64 = struct
+```
+
+64-bit FNV-1a.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>state</code> | <code>u64</code> | Read-only |
+
+### Fnv1a64.init
+
+```otr
+fn init() Fnv1a64
+```
+
+### Fnv1a64.update
+
+```otr
+fn update(self: &mut Fnv1a64, bytes: []u8) void
+```
+
+### Fnv1a64.final
+
+```otr
+fn final(self: &Fnv1a64) u64
+```
+
+### Fnv1a64.hash
+
+```otr
+fn hash(bytes: []u8) u64
+```
+
+## Wyhash
+
+```otr
+const Wyhash = struct
+```
+
+Wyhash (final version 4), the hash of Zig's `std.hash.Wyhash` and hash maps: about a
+multiply per 8 bytes, and good enough for hash tables and checksums of trusted data.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>a</code> | <code>u64</code> | Read-only |  |
+| <code>b</code> | <code>u64</code> | Read-only |  |
+| <code>s0</code> | <code>u64</code> | Read-only |  |
+| <code>s1</code> | <code>u64</code> | Read-only |  |
+| <code>s2</code> | <code>u64</code> | Read-only |  |
+| <code>total_len</code> | <code>u64</code> | Read-only |  |
+| <code>buf</code> | <code>[48]u8</code> | Read-only | The last block seen, kept whole: the final step reads up to 16 bytes before the unprocessed tail. |
+| <code>buf_len</code> | <code>usize</code> | Read-only |  |
+
+### Wyhash.init
+
+```otr
+fn init(seed: u64) Wyhash
+```
+
+### Wyhash.update
+
+```otr
+fn update(self: &mut Wyhash, input: []u8) void
+```
+
+### Wyhash.final
+
+```otr
+fn final(self: &Wyhash) u64
+```
+
+### Wyhash.hash
+
+```otr
+fn hash(seed: u64, input: []u8) u64
+```
+
+## XxHash64
+
+```otr
+const XxHash64 = struct
+```
+
+xxHash64 (XXH64), whose digests are stable across versions and implementations.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>v1</code> | <code>u64</code> | Read-only |
+| <code>v2</code> | <code>u64</code> | Read-only |
+| <code>v3</code> | <code>u64</code> | Read-only |
+| <code>v4</code> | <code>u64</code> | Read-only |
+| <code>seed</code> | <code>u64</code> | Read-only |
+| <code>total_len</code> | <code>u64</code> | Read-only |
+| <code>buf</code> | <code>[32]u8</code> | Read-only |
+| <code>buf_len</code> | <code>usize</code> | Read-only |
+
+### XxHash64.init
+
+```otr
+fn init(seed: u64) XxHash64
+```
+
+### XxHash64.update
+
+```otr
+fn update(self: &mut XxHash64, input: []u8) void
+```
+
+### XxHash64.final
+
+```otr
+fn final(self: &XxHash64) u64
+```
+
+### XxHash64.hash
+
+```otr
+fn hash(seed: u64, input: []u8) u64
+```
+
+## Sha256
+
+```otr
+const Sha256 = struct
+```
+
+SHA-256 (FIPS 180-4), 32-byte digests.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>s</code> | <code>[8]u32</code> | Read-only |
+| <code>total_len</code> | <code>u64</code> | Read-only |
+| <code>buf</code> | <code>[64]u8</code> | Read-only |
+| <code>buf_len</code> | <code>usize</code> | Read-only |
+
+### Sha256.init
+
+```otr
+fn init() Sha256
+```
+
+### Sha256.update
+
+```otr
+fn update(self: &mut Sha256, input: []u8) void
+```
+
+### Sha256.final
+
+```otr
+fn final(self: &Sha256) [32]u8
+```
+
+### Sha256.hash
+
+```otr
+fn hash(input: []u8) [32]u8
+```
+
+Compresses the whole blocks straight from `input` and pads its tail, with no copy
+through the buffer `update` keeps.
+
+| Name | Definition |
+| --- | --- |
+| <code>Sha256.digest_len</code> | <code>32</code> |
+| <code>Sha256.block_len</code> | <code>64</code> |
+
+## Sha1
+
+```otr
+const Sha1 = struct
+```
+
+SHA-1 (FIPS 180-4), 20-byte digests. Collisions can be made, so it serves only formats
+that require it.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>s</code> | <code>[5]u32</code> | Read-only |
+| <code>total_len</code> | <code>u64</code> | Read-only |
+| <code>buf</code> | <code>[64]u8</code> | Read-only |
+| <code>buf_len</code> | <code>usize</code> | Read-only |
+
+### Sha1.init
+
+```otr
+fn init() Sha1
+```
+
+### Sha1.update
+
+```otr
+fn update(self: &mut Sha1, input: []u8) void
+```
+
+### Sha1.final
+
+```otr
+fn final(self: &Sha1) [20]u8
+```
+
+### Sha1.hash
+
+```otr
+fn hash(input: []u8) [20]u8
+```
+
+Compresses the whole blocks straight from `input` and pads its tail, with no copy
+through the buffer `update` keeps.
+
+| Name | Definition |
+| --- | --- |
+| <code>Sha1.digest_len</code> | <code>20</code> |
+| <code>Sha1.block_len</code> | <code>64</code> |
+
+## write_hex
+
+```otr
+fn write_hex(w: anytype, digest: []u8) void
+```
+
+`digest` in lowercase hexadecimal, written to `w` (anything with `write_all`).

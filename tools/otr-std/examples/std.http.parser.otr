@@ -1,0 +1,26 @@
+import std
+import std.http.parser
+
+pub fn main() !void {
+    // The parser does no I/O: feed it the bytes as they arrive, split anywhere.
+    pieces := [3]str{ "HTTP/1.1 200 OK\r\nContent-Ty", "pe: text/plain\r\nContent-Length: 11\r\n\r\nhello", " otter" }
+
+    var p = parser.Parser.init(std.mem.heap, false, 16 * 1024, 1024 * 1024)
+    errdefer p.deinit()
+    for piece in pieces {
+        used := try p.feed(piece)
+        std.io.printf("fed {} of {} bytes, done: {}\n", .{ used, piece.len, p.done() })
+    }
+    std.io.printf("keeps the connection open: {}\n", .{ p.keeps_open() })
+
+    response := p.into_response()
+    defer response.deinit()
+    std.io.printf("status {}\n", .{ response.status })
+    // Header names match in any case.
+    std.io.printf("type {}\n", .{ response.header("content-type") orelse "unknown" })
+    var headers = response.headers()
+    for h in headers {
+        std.io.printf("  {}: {}\n", .{ h.name, h.value })
+    }
+    std.io.printf("body {}\n", .{ response.body() })
+}

@@ -1,0 +1,45 @@
+import std
+import std.list
+
+const ParseError = error { Empty, NotANumber }
+
+fn parse_digit(s: str) ParseError!u8 {
+    if s.len == 0 {
+        return error.Empty
+    }
+    if s[0] < '0' or s[0] > '9' {
+        return error.NotANumber
+    }
+    return s[0] - '0'
+}
+
+test "expect takes any condition" {
+    try std.testing.expect(1 + 1 == 2)
+}
+
+test "expect_equal names the type" {
+    try std.testing.expect_equal(u8, 7, try parse_digit("7"))
+}
+
+test "expect_equal_slices compares contents" {
+    var xs = list.List(u8).init(std.mem.heap)
+    defer xs.deinit()
+    xs.push_slice("abc")
+    try std.testing.expect_equal_slices(u8, "abc", xs.items())
+}
+
+test "expect_error checks which error came back" {
+    try std.testing.expect_error(error.Empty, parse_digit(""))
+}
+
+test "hex spells out a test vector" {
+    key := std.testing.hex(4, "deadbeef")
+    try std.testing.expect_equal_slices(u8, &[4]u8{ 0xde, 0xad, 0xbe, 0xef }, &key)
+}
+
+test "failing_allocator proves code does not allocate" {
+    // An empty list has no storage; any allocation here would panic.
+    var xs = list.List(u8).init(std.testing.failing_allocator)
+    defer xs.deinit()
+    try std.testing.expect(xs.len == 0)
+}

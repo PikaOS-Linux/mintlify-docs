@@ -1,0 +1,45 @@
+import std
+import std.btree
+
+fn less(a: &u32, b: &u32) bool {
+    return a.* < b.*
+}
+
+pub fn main() void {
+    var years = btree.BTreeMap(u32, []static u8, less).init(std.mem.heap)
+    defer years.deinit()
+
+    _ = years.put(1991, "Linux")
+    _ = years.put(1972, "C")
+    _ = years.put(2015, "Rust")
+    _ = years.put(2009, "Go")
+    _ = years.put(1983, "C++")
+
+    year: u32 = 2009
+    if years.get(&year) |name| {
+        std.io.printf("2009: {}\n", .{ name.* })
+    }
+    if years.first() |e| {
+        std.io.printf("first {} {}\n", .{ e.key.*, e.value.* })
+    }
+    if years.last() |e| {
+        std.io.printf("last {} {}\n", .{ e.key.*, e.value.* })
+    }
+    gone: u32 = 1983
+    _ = years.remove(&gone)
+    std.io.printf("{} left\n", .{ years.len() })
+
+    // Entries come back in key order, whatever order they went in.
+    var all = years.iter()
+    for e in all {
+        std.io.printf("{} {}\n", .{ e.key.*, e.value.* })
+    }
+
+    // range includes the lower bound and excludes the upper one.
+    lo: u32 = 1990
+    hi: u32 = 2010
+    var nineties = years.range(&lo, &hi)
+    for e in nineties {
+        std.io.printf("in range: {}\n", .{ e.value.* })
+    }
+}

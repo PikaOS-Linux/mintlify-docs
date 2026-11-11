@@ -1,0 +1,30 @@
+import std
+import std.list
+
+pub fn main() void {
+    var xs = list.List(i64).init(std.mem.heap)
+    defer xs.deinit()
+
+    xs.push(5)
+    xs.push_slice(&[4]i64{ 3, 9, 1, 7 })
+    xs.insert(0, 4)
+    std.io.printf("len {} first {} last {}\n", .{ xs.len, xs[0], xs[xs.len - 1] })
+
+    for mut x in xs {
+        x.* *= 10
+    }
+    removed := xs.ordered_remove(1)
+    popped := xs.pop() orelse 0
+    std.io.printf("removed {} popped {}\n", .{ removed, popped })
+
+    xs.sort_by(fn(a: &i64, b: &i64) bool { return a.* < b.* })
+    var sum: i64 = 0
+    for x in xs.items() {
+        std.io.printf("{} ", .{ x })
+        sum += x
+    }
+    std.io.printf("\nsum {}\n", .{ sum })
+
+    xs.clear()
+    std.io.printf("len after clear {}\n", .{ xs.len })
+}

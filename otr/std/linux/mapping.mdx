@@ -1,0 +1,213 @@
+---
+title: "std.linux.mapping"
+sidebarTitle: "linux.mapping"
+description: "Owned shared mappings and SIGBUS-fault tracking."
+---
+
+Owned shared mappings and SIGBUS-fault tracking.
+
+```otr
+import std.linux.mapping
+```
+
+## Example
+
+```otr
+import std
+import std.linux.fd
+import std.linux.mapping
+
+pub fn main() !void {
+    // Zeroed private memory, viewed as bytes or as whole values of a plain type.
+    var scratch = try mapping.Mapping.anonymous(4096)
+    defer scratch.deinit()
+    words := scratch.as_slice_mut(u32)
+    words[1] = 0x01020304
+    std.io.printf("{} words, byte 4 is {}\n", .{ words.len, scratch.bytes()[4] })
+
+    // Memory as a file, the way a buffer is shared with another process.
+    file := try fd.memfd("example", 4096)
+    defer file.deinit()
+
+    var writer = try mapping.Mapping.shared(&file, 4096, 0, true)
+    defer writer.deinit()
+    reader := try mapping.Mapping.shared(&file, 4096, 0, false)
+    defer reader.deinit()
+
+    // Both mappings are the same pages, so a write through one shows in the other.
+    std.mem.copy(u8, &mut writer.bytes_mut()[0..5], "otter")
+    std.io.printf("reader sees: {}\n", .{ reader.bytes()[0..5] })
+
+    // The file sees it too.
+    var buf: [5]u8
+    std.io.printf("file holds: {}\n", .{ try file.pread(&out buf, 0) })
+}
+```
+
+```text
+1024 words, byte 4 is 4
+reader sees: otter
+file holds: otter
+```
+
+## Mapping
+
+```otr
+const Mapping = struct
+```
+
+Memory mapped by mmap and unmapped by `deinit`. Its bytes are only reached through
+the borrows below, so none outlives the mapping. A mapping of a file is valid only
+while the file is at least as long; touching a page past its end ends the process
+with SIGBUS. Another process sharing the memory may change it at any time, so read
+it as untrusted input.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>ptr</code> | <code>[*]u8</code> | Read-only |
+| <code>len</code> | <code>usize</code> | Read-only |
+| <code>writable</code> | <code>bool</code> | Read-only |
+
+### Mapping.anonymous
+
+```otr
+fn anonymous(len: usize) Error!Mapping
+```
+
+`len` bytes of zeroed private memory.
+
+### Mapping.shared
+
+```otr
+fn shared(fd: &Fd, len: usize, offset: u64, writable: bool) Error!Mapping
+```
+
+`len` bytes of the file `fd` from `offset` (a multiple of the page size), shared
+with every other mapping of it; writable when `fd` was opened for writing.
+
+### Mapping.private
+
+```otr
+fn private(fd: &Fd, len: usize, offset: u64) Error!Mapping
+```
+
+`len` bytes of the file `fd` from `offset` (a multiple of the page size), read-only and
+private to this mapping, as a sealed memfd must be mapped, such as the keymap a
+compositor sends with wl_keyboard.keymap from version 7 on: kernels before 6.6
+refuse to map one shared, even read-only.
+
+### Mapping.bytes
+
+```otr
+fn bytes(self: &Mapping) []u8
+```
+
+### Mapping.bytes_mut
+
+```otr
+fn bytes_mut(self: &mut Mapping) []mut u8
+```
+
+The bytes, writable; panics for a read-only mapping.
+
+### Mapping.as_slice
+
+```otr
+fn as_slice(self: &Mapping, comptime T: type) []T
+```
+
+The bytes as whole values of `T`, a plain type (a number, vector or array of
+them) that any bit pattern is a valid value of. Pages are aligned for every such
+`T`.
+
+### Mapping.as_slice_mut
+
+```otr
+fn as_slice_mut(self: &mut Mapping, comptime T: type) []mut T
+```
+
+`as_slice`, writable; panics for a read-only mapping.
+
+### Mapping.guarded
+
+```otr
+fn guarded(fd: &Fd, len: usize, offset: u64) Error!Guarded
+```
+
+`shared`, read-only, for memory another process may shrink under it, as a Wayland
+client may truncate the shm pool it handed over: reading past the end the file has
+then reads zeros instead of killing the program with SIGBUS, and `faulted` says so.
+
+### Mapping.guarded_writable
+
+```otr
+fn guarded_writable(fd: &Fd, len: usize, offset: u64) Error!Guarded
+```
+
+Shared writable mapping with fault tracking. Readonly fallback must still use
+`guarded`; its public writable flag is never upgraded by fault replacement.
+
+### Mapping.deinit
+
+```otr
+fn deinit(self: Mapping) void
+```
+
+## Guarded
+
+```otr
+const Guarded = struct
+```
+
+A mapping made by `Mapping.guarded`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>map</code> | <code>Mapping</code> | Read-only |
+| <code>slot</code> | <code>i32</code> | Read-only |
+
+### Guarded.bytes
+
+```otr
+fn bytes(self: &Guarded) []u8
+```
+
+### Guarded.bytes_mut
+
+```otr
+fn bytes_mut(self: &mut Guarded) []mut u8
+```
+
+Writable view with the same readonly check as Mapping.bytes_mut.
+
+### Guarded.clone_resized
+
+```otr
+fn clone_resized(self: &Guarded, new_len: usize) Error!Guarded
+```
+
+Retains the original mapping and guard while creating another shared VMA.
+
+### Guarded.resize
+
+```otr
+fn resize(self: &mut Guarded, new_len: usize) Error!void
+```
+
+Clones the existing shared VMA before commit, preserving its permissions even
+after F_SEAL_FUTURE_WRITE. One spare guard slot is needed during replacement.
+
+### Guarded.faulted
+
+```otr
+fn faulted(self: &Guarded) bool
+```
+
+Whether the other process shrank the memory while this one read it, so that what
+was read past the new end is zeros rather than its data.
+
+### Guarded.deinit
+
+```otr
+fn deinit(self: Guarded) void
+```

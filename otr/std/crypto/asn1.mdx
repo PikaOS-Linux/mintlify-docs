@@ -1,0 +1,269 @@
+---
+title: "std.crypto.asn1"
+sidebarTitle: "crypto.asn1"
+description: "A reader for DER (X.690), the encoding of certificates, keys and ECDSA signatures."
+---
+
+A reader for DER (X.690), the encoding of certificates, keys and ECDSA signatures.
+Elements are positions in the caller's bytes rather than slices, so parsed records can
+be stored and copied without borrowing what they were read from.
+
+Only DER is accepted: definite minimal lengths, low tag numbers, minimal integers,
+booleans of 0x00 or 0xff, and bit strings whose unused bits are zero. Anything else,
+and every length that runs past its container, is `error.Malformed`, never a panic,
+since the bytes come from the network.
+
+```otr
+import std.crypto.asn1
+```
+
+## Error
+
+```otr
+const Error = error { Malformed }
+```
+
+## tag
+
+```otr
+const tag = struct
+```
+
+Identifier octets of the universal and context tags certificates use.
+
+### tag.context
+
+```otr
+fn context(n: u8) u8
+```
+
+`[n]` with constructed contents, as EXPLICIT tags and IMPLICIT SEQUENCEs use.
+
+### tag.context_primitive
+
+```otr
+fn context_primitive(n: u8) u8
+```
+
+`[n]` with primitive contents, as IMPLICIT strings use.
+
+| Name | Definition |
+| --- | --- |
+| <code>tag.boolean</code> | <code>0x01</code> |
+| <code>tag.integer</code> | <code>0x02</code> |
+| <code>tag.bit_string</code> | <code>0x03</code> |
+| <code>tag.octet_string</code> | <code>0x04</code> |
+| <code>tag.null_value</code> | <code>0x05</code> |
+| <code>tag.oid</code> | <code>0x06</code> |
+| <code>tag.utf8_string</code> | <code>0x0c</code> |
+| <code>tag.printable_string</code> | <code>0x13</code> |
+| <code>tag.ia5_string</code> | <code>0x16</code> |
+| <code>tag.utc_time</code> | <code>0x17</code> |
+| <code>tag.generalized_time</code> | <code>0x18</code> |
+| <code>tag.sequence</code> | <code>0x30</code> |
+| <code>tag.set</code> | <code>0x31</code> |
+
+## Element
+
+```otr
+const Element = struct
+```
+
+One element: its identifier octet and where its contents lie.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>tag</code> | <code>u8</code> |  |
+| <code>header</code> | <code>u32</code> | The identifier's offset, so the whole encoding is `der[header..end]`. |
+| <code>start</code> | <code>u32</code> |  |
+| <code>end</code> | <code>u32</code> |  |
+
+### Element.len
+
+```otr
+fn len(self: Element) usize
+```
+
+### Element.bytes
+
+```otr
+fn bytes(self: Element, der: []u8) []u8
+```
+
+The contents.
+
+### Element.raw
+
+```otr
+fn raw(self: Element, der: []u8) []u8
+```
+
+The whole encoding, identifier and length included.
+
+### Element.children
+
+```otr
+fn children(self: Element) Cursor
+```
+
+The elements inside a constructed one, in order.
+
+## Cursor
+
+```otr
+const Cursor = struct
+```
+
+The elements from `pos` to `end`, one after another.
+
+| Field | Type |
+| --- | --- |
+| <code>pos</code> | <code>u32</code> |
+| <code>end</code> | <code>u32</code> |
+
+### Cursor.done
+
+```otr
+fn done(self: Cursor) bool
+```
+
+### Cursor.next
+
+```otr
+fn next(self: &mut Cursor, der: []u8) Error!?Element
+```
+
+The next element, or null at the end.
+
+### Cursor.expect
+
+```otr
+fn expect(self: &mut Cursor, der: []u8, t: u8) Error!Element
+```
+
+The next element, which must exist and carry `t`.
+
+### Cursor.optional
+
+```otr
+fn optional(self: &mut Cursor, der: []u8, t: u8) Error!?Element
+```
+
+The next element when it carries `t`, else null without moving, for OPTIONAL and
+DEFAULT fields.
+
+### Cursor.finish
+
+```otr
+fn finish(self: Cursor) Error!void
+```
+
+Fails unless every element has been read.
+
+## parse
+
+```otr
+fn parse(der: []u8, pos: u32, end: u32) Error!Element
+```
+
+The element at `der[pos..]`, which must end by `end`.
+
+## parse_all
+
+```otr
+fn parse_all(der: []u8) Error!Element
+```
+
+The single element filling all of `der`.
+
+## integer
+
+```otr
+fn integer(der: []u8, el: Element) Error! []u8
+```
+
+The contents of an INTEGER, checked to be minimally encoded.
+
+## unsigned
+
+```otr
+fn unsigned(der: []u8, el: Element) Error! []u8
+```
+
+The magnitude of a non-negative INTEGER, without its sign byte: big-endian, empty for
+zero.
+
+## small_unsigned
+
+```otr
+fn small_unsigned(der: []u8, el: Element) Error!u32
+```
+
+A non-negative INTEGER small enough for a `u32`, such as a version or a path length.
+
+## boolean
+
+```otr
+fn boolean(der: []u8, el: Element) Error!bool
+```
+
+## BitString
+
+```otr
+const BitString = struct
+```
+
+A BIT STRING's bits: `der[start..end]`, of which the last byte's low `unused` bits
+are padding.
+
+| Field | Type |
+| --- | --- |
+| <code>unused</code> | <code>u8</code> |
+| <code>start</code> | <code>u32</code> |
+| <code>end</code> | <code>u32</code> |
+
+### BitString.bytes
+
+```otr
+fn bytes(self: BitString, der: []u8) []u8
+```
+
+## bit_string
+
+```otr
+fn bit_string(der: []u8, el: Element) Error!BitString
+```
+
+## octet_aligned_bits
+
+```otr
+fn octet_aligned_bits(der: []u8, el: Element) Error! []u8
+```
+
+A BIT STRING holding whole bytes, as keys and signatures are.
+
+## is_oid
+
+```otr
+fn is_oid(der: []u8, el: Element, oid: []u8) bool
+```
+
+Whether `el` is the OBJECT IDENTIFIER whose contents are `oid`.
+
+## check_oid
+
+```otr
+fn check_oid(der: []u8, el: Element) Error!void
+```
+
+Checks that `el` is a well-formed OBJECT IDENTIFIER: non-empty, each arc minimal.
+
+## time
+
+```otr
+fn time(der: []u8, el: Element) Error!i64
+```
+
+A UTCTime (`YYMMDDHHMMSSZ`, years 1950 to 2049 as RFC 5280 reads them) or
+GeneralizedTime (`YYYYMMDDHHMMSSZ`), as seconds since the Unix epoch. RFC 5280 allows
+no other forms: no fractions, no offsets, seconds always present.

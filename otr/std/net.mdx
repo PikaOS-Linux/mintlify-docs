@@ -1,0 +1,396 @@
+---
+title: "std.net"
+sidebarTitle: "net"
+description: "TCP over IPv4 and IPv6, and Unix domain sockets."
+---
+
+TCP over IPv4 and IPv6, and Unix domain sockets. Listeners and connections are
+resources: closing one is `deinit`. `connect` takes an address or a host name, which the
+C library's resolver looks up as every other program on the system would (`/etc/hosts`,
+nsswitch, systemd-resolved), giving IPv6 and IPv4 addresses in RFC 6724's order.
+Calls block the calling task; on `Io.Threaded` other tasks keep running on other
+threads (spec §10).
+
+```otr
+import std.net
+```
+
+## Example
+
+```otr
+import std
+import std.net
+
+// Answers one connection with what it was sent, in upper case.
+fn shout_once(io: std.Io, listener: &net.Listener) net.Error!void {
+    conn := try listener.accept(io)
+    defer conn.deinit()
+    var buf: [64]u8
+    got := try conn.read(io, &out buf)
+    for mut b in got {
+        if b.* >= 'a' and b.* <= 'z' { b.* -= 32 }
+    }
+    try conn.write_all(io, got)
+}
+
+pub fn main(env: std.Env) !void {
+    io := env.io
+
+    // Port 0 asks the kernel for a free port; listener.port() tells which.
+    listener := try net.listen(io, .{ host: "127.0.0.1" })
+    defer listener.deinit()
+    server := io.async(fn[io, &listener]() net.Error!void { return shout_once(io, &listener) })
+    // If the client fails, cancelling ends the server's wait in accept.
+    defer server.cancel(io) catch {}
+
+    conn := try net.connect(io, "127.0.0.1", listener.port())
+    defer conn.deinit()
+    try conn.write_all(io, "hello over tcp")
+
+    var buf: [64]u8
+    reply := try conn.read(io, &out buf)
+    std.io.printf("reply: {}\n", .{ reply })
+
+    // The server closed its end, so the next read is empty.
+    rest := try conn.read(io, &out buf)
+    std.io.printf("after close: {} bytes\n", .{ rest.len })
+}
+```
+
+```text
+reply: HELLO OVER TCP
+after close: 0 bytes
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>AddressInUse</code> |  |
+| <code>ConnectionRefused</code> |  |
+| <code>ConnectionReset</code> |  |
+| <code>ConnectionTimedOut</code> | The peer did not answer a connect in the kernel's time (ETIMEDOUT). |
+| <code>NetworkUnreachable</code> | No route leads to the address (EHOSTUNREACH, ENETUNREACH), or this host cannot use its family (EAFNOSUPPORT, EADDRNOTAVAIL), as for IPv6 on a host without it. |
+| <code>InvalidAddress</code> |  |
+| <code>UnknownHost</code> | The resolver found no address for the host name. |
+| <code>EndOfStream</code> |  |
+| <code>Io</code> |  |
+| <code>Canceled</code> |  |
+| <code>WouldBlock</code> | Nonblocking Unix listener backlog full; retry a new connect, not SO_ERROR. |
+
+## Address
+
+```otr
+const Address = struct
+```
+
+An IPv4 or IPv6 address and port, as `resolve` finds them for `connect_start`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>v6</code> | <code>bool</code> |  |
+| <code>ip</code> | <code>[16]u8</code> | In network byte order; an IPv4 address is the first four bytes. |
+| <code>port</code> | <code>u16</code> |  |
+| <code>scope_id</code> | <code>u32</code> | The interface a link-local IPv6 address belongs to, else 0. |
+
+## max_addresses
+
+```otr
+const max_addresses: usize = 8
+```
+
+The most addresses `resolve` keeps for one name.
+
+## ListenOptions
+
+```otr
+const ListenOptions = struct
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>host</code> | <code>[]static u8 = "0.0.0.0"</code> | An IPv4 or IPv6 address to bind: `0.0.0.0` accepts on every IPv4 interface, `::` on every interface. |
+| <code>port</code> | <code>u16 = 0</code> | 0 picks a free port; `Listener.port` tells which. |
+| <code>backlog</code> | <code>i32 = 128</code> |  |
+
+## Listener
+
+```otr
+const Listener = struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>fd</code> | <code>i32</code> | Read-only |
+
+### Listener.port
+
+```otr
+fn port(self: &Listener) u16
+```
+
+The port it accepts on.
+
+### Listener.accept
+
+```otr
+fn accept(self: &Listener, io: std.Io) Error!Conn
+```
+
+Waits for the next connection.
+
+### Listener.poll_fd
+
+```otr
+fn poll_fd(self: &Listener) i32
+```
+
+Ready when a connection is waiting, for `Io.select`.
+
+### Listener.close
+
+```otr
+fn close(self: Listener) void
+```
+
+Closes the socket; the same as `deinit`.
+
+### Listener.deinit
+
+```otr
+fn deinit(self: Listener) void
+```
+
+## Conn
+
+```otr
+const Conn = struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>fd</code> | <code>i32</code> | Read-only |
+
+### Conn.read
+
+```otr
+fn read(self: &Conn, io: std.Io, buf: []out u8) Error! []mut u8
+```
+
+Reads up to `buf.len` bytes into `buf`, which need not hold values yet, and returns
+the part it filled; that is empty when the peer closed the connection.
+
+### Conn.read_exact
+
+```otr
+fn read_exact(self: &Conn, io: std.Io, buf: []mut u8) Error!void
+```
+
+Fills all of `buf`; the peer closing the connection first is `EndOfStream`.
+
+### Conn.write_all
+
+```otr
+fn write_all(self: &Conn, io: std.Io, data: str) Error!void
+```
+
+Writes all of `data`.
+
+### Conn.try_read
+
+```otr
+fn try_read(self: &Conn, buf: []out u8) Error!?[]mut u8
+```
+
+`read` that never waits, for a socket from `connect_start`: null when nothing has
+arrived yet, and an empty slice when the peer closed the connection.
+
+### Conn.try_write
+
+```otr
+fn try_write(self: &Conn, data: str) Error!usize
+```
+
+Writes what the socket takes now of `data`, which is not empty, without waiting;
+0 when its send buffer is full.
+
+### Conn.connect_status
+
+```otr
+fn connect_status(self: &Conn) Error!void
+```
+
+Once a socket from `connect_start` is writable, whether its connection was made:
+the kernel keeps the outcome of a non-blocking connect in SO_ERROR.
+
+### Conn.set_no_delay
+
+```otr
+fn set_no_delay(self: &Conn, on: bool) Error!void
+```
+
+Turns Nagle's algorithm off (TCP_NODELAY), so each write goes out at once instead of
+waiting for the peer to acknowledge the one before. A protocol that writes a request
+in several pieces, as TLS does a record at a time, otherwise waits out the peer's
+delayed acknowledgement, 40 ms on Linux, between them.
+
+### Conn.poll_fd
+
+```otr
+fn poll_fd(self: &Conn) i32
+```
+
+Ready when there is something to read, for `Io.select`.
+
+### Conn.into_fd
+
+```otr
+fn into_fd(self: Conn) linux.Fd
+```
+
+Transfers ownership to the shared socket queue, without duplicating the socket.
+
+### Conn.close
+
+```otr
+fn close(self: Conn) void
+```
+
+Closes the socket; the same as `deinit`.
+
+### Conn.deinit
+
+```otr
+fn deinit(self: Conn) void
+```
+
+## listen
+
+```otr
+fn listen(io: std.Io, options: ListenOptions) Error!Listener
+```
+
+## connect
+
+```otr
+fn connect(io: std.Io, host: str, port: u16) Error!Conn
+```
+
+Connects to `port` on `host`, an IPv4 or IPv6 address or a host name, trying each
+address `resolve` gives in its order until one accepts.
+
+## resolve
+
+```otr
+fn resolve(io: std.Io, host: str, port: u16) Error!bounded.BoundedList(Address, max_addresses)
+```
+
+The addresses of `host`, an IPv4 or IPv6 address or a host name, in the resolver's
+order, with `port`. The lookup blocks the calling task (the C library's resolver
+waits on the network), so an event loop runs it before or beside its loop.
+
+## numeric
+
+```otr
+fn numeric(host: str, port: u16) Error!bounded.BoundedList(Address, max_addresses)
+```
+
+`host` with `port` when `host` is an IPv4 or IPv6 address, found without the resolver;
+`InvalidAddress` for a name.
+
+## Found
+
+```otr
+const Found = struct
+```
+
+What a `Lookup` found.
+
+| Field | Type |
+| --- | --- |
+| <code>addrs</code> | <code>bounded.BoundedList(Address, max_addresses)</code> |
+| <code>err</code> | <code>?Error</code> |
+
+## Lookup
+
+```otr
+const Lookup = struct
+```
+
+A host name looked up without blocking the caller: the C library's resolver, which
+follows nsswitch as `resolve` does, runs on a thread of its own, and `poll_fd` turns
+readable when its answer is in, for an event loop to wait on. Dropping a `Lookup`
+before then is safe: the thread holds its own handle to the answer's channel.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>answer</code> | <code>sync.Channel(Found)</code> | Read-only |
+
+### Lookup.start
+
+```otr
+fn start(host: str, port: u16) Error!Lookup
+```
+
+### Lookup.deinit
+
+```otr
+fn deinit(self: Lookup) void
+```
+
+### Lookup.poll_fd
+
+```otr
+fn poll_fd(self: &Lookup) i32
+```
+
+Readable once the answer is in.
+
+### Lookup.take
+
+```otr
+fn take(self: &mut Lookup) ?Found
+```
+
+The answer, once it is in; null before.
+
+## connect_start
+
+```otr
+fn connect_start(addr: Address) Error!Conn
+```
+
+Starts connecting to `addr` without waiting: the socket is non-blocking, so it is
+read and written with `Conn.try_read` and `Conn.try_write`, and once it is writable
+`Conn.connect_status` tells whether the connection was made. For event loops, and for
+connects with a time limit.
+
+## connect_unix_start
+
+```otr
+fn connect_unix_start(name: str, abstract: bool) Error!Conn
+```
+
+Starts a nonblocking Unix connection using the exact pathname or abstract length.
+An abstract `name` excludes the leading NUL; embedded NULs remain part of its name.
+
+## listen_unix
+
+```otr
+fn listen_unix(io: std.Io, path: str) Error!Listener
+```
+
+Listens on a Unix domain socket created at `path`, which must not exist yet;
+closing the listener leaves the file behind for the caller to delete.
+
+## connect_unix
+
+```otr
+fn connect_unix(io: std.Io, path: str) Error!Conn
+```
+
+Connects to the Unix domain socket at `path`.

@@ -1,0 +1,40 @@
+---
+title: "std.ryu"
+sidebarTitle: "ryu"
+description: "The shortest decimal that reads back as a given float, by Ryu (Ulf Adams, \"Ryū."
+---
+
+The shortest decimal that reads back as a given float, by Ryu (Ulf Adams, "Ryū: fast
+float-to-string conversion", PLDI 2018), which `std.io` writes floats with. It needs
+no allocation and no big integers: two 64x64-bit multiplications by a precomputed
+power of five give the bounds of the rounding interval, and digits are dropped until
+they would leave it.
+
+```otr
+import std.ryu
+```
+
+## Shortest
+
+```otr
+const Shortest = struct
+```
+
+A float's shortest decimal: `digits` times ten to the `exp`, with the fewest digits
+that read back as the float, and the one nearest to it among those.
+
+| Field | Type |
+| --- | --- |
+| <code>digits</code> | <code>u64</code> |
+| <code>exp</code> | <code>i32</code> |
+
+## shortest
+
+```otr
+fn shortest(mantissa: u64, exponent: u32, comptime mbits: u32, comptime bias: i32) Shortest
+```
+
+The shortest decimal for a finite, nonzero float of a binary format with `mbits`
+mantissa bits and exponent `bias` (52 and 1023 for `f64`, 23 and 127 for `f32`, 10
+and 15 for `f16`), given its raw mantissa and exponent fields. The tables are those of
+`f64` and serve the narrower formats too, whose mantissas are shorter.

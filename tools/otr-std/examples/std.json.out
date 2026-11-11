@@ -1,0 +1,11 @@
+nord 2 false
+{
+  "theme": "nord",
+  "volumes": [
+    10,
+    20
+  ],
+  "dnd": false
+}
+port 8080
+[1, 2,] is error.Syntax

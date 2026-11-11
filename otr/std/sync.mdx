@@ -1,0 +1,475 @@
+---
+title: "std.sync"
+sidebarTitle: "sync"
+description: "Synchronisation."
+---
+
+Synchronisation: `Mutex(T)` owns the data it protects, `Atomic` words, and
+`Channel(T)` and `CancelToken` for talking to background tasks.
+
+```otr
+import std.sync
+```
+
+## Example
+
+```otr
+import std
+import std.arc
+import std.sync
+import std.thread
+
+// A top-level constant of a synchronised type is shared by every thread.
+const jobs_done = sync.Atomic.init(0)
+
+pub fn main(env: std.Env) !void {
+    io := env.io
+
+    // Channel: workers send results, main receives them.
+    results := sync.Channel(i64).init(std.mem.heap, 4)
+    defer results.deinit()
+    for i in 1..5 {
+        tx := results.clone()
+        try io.spawn(fn[io, tx, n = @int_cast(i64, i)]() void {
+            defer tx.deinit()
+            _ = jobs_done.fetch_add(1)
+            tx.send(io, n * n) catch {}
+        })
+    }
+    var sum: i64 = 0
+    for _ in 0..4 {
+        sum += (try results.recv(io)) orelse 0
+    }
+    std.io.printf("sum of squares {}, jobs {}\n", .{ sum, jobs_done.load() })
+
+    // Mutex: owns its data; Arc shares it between threads.
+    total := arc.Arc(sync.Mutex(i64)).init(sync.Mutex(i64).init(100))
+    defer total.deinit()
+    other := total.clone()
+    t := try thread.spawn(fn[other]() void {
+        defer other.deinit()
+        var g = other.get().lock()
+        defer g.deinit()
+        g.get().* += 20
+    })
+    t.join()
+    after := total.get().with(fn(v: &mut i64) i64 {
+        v.* += 3
+        return v.*
+    })
+    std.io.printf("total {}\n", .{ after })
+}
+```
+
+```text
+sum of squares 30, jobs 4
+total 123
+```
+
+## Mutex
+
+```otr
+fn Mutex(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>raw</code> | <code>[*]u8</code> | Read-only |
+| <code>value</code> | <code>mem.UnsafeCell(T)</code> | Read-only |
+
+### Mutex.init
+
+```otr
+fn init(value: T) Self
+```
+
+### Mutex.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### Mutex.lock
+
+```otr
+fn lock(self: &Self) Guard(T)
+```
+
+Blocks until the lock is held; the guard releases it when consumed.
+
+### Mutex.with
+
+```otr
+fn with(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f` on the data with the lock held, and returns what `f` returns.
+
+## Guard
+
+```otr
+fn Guard(comptime T: type) type
+```
+
+Access to a locked Mutex's data; `deinit` unlocks (write `defer g.deinit()`).
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>raw</code> | <code>[*]u8</code> | Read-only |
+| <code>cell</code> | <code>&amp;mem.UnsafeCell(T)</code> | Read-only |
+
+### Guard.get
+
+```otr
+fn get(self: &mut Self) &mut T
+```
+
+### Guard.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+## RwLock
+
+```otr
+fn RwLock(comptime T: type) type
+```
+
+Like `Mutex(T)`, but any number of readers may hold the lock at once, while a writer
+holds it alone.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>raw</code> | <code>[*]u8</code> | Read-only |
+| <code>value</code> | <code>mem.UnsafeCell(T)</code> | Read-only |
+
+### RwLock.init
+
+```otr
+fn init(value: T) Self
+```
+
+### RwLock.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### RwLock.read
+
+```otr
+fn read(self: &Self) ReadGuard(T)
+```
+
+Blocks until no writer holds the lock; the guard gives shared access.
+
+### RwLock.write
+
+```otr
+fn write(self: &Self) WriteGuard(T)
+```
+
+Blocks until the lock is free; the guard gives exclusive access.
+
+## ReadGuard
+
+```otr
+fn ReadGuard(comptime T: type) type
+```
+
+Shared access to a read-locked RwLock's data; `deinit` unlocks.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>raw</code> | <code>[*]u8</code> | Read-only |
+| <code>cell</code> | <code>&amp;mem.UnsafeCell(T)</code> | Read-only |
+
+### ReadGuard.get
+
+```otr
+fn get(self: &Self) &T
+```
+
+### ReadGuard.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+## WriteGuard
+
+```otr
+fn WriteGuard(comptime T: type) type
+```
+
+Exclusive access to a write-locked RwLock's data; `deinit` unlocks.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>raw</code> | <code>[*]u8</code> | Read-only |
+| <code>cell</code> | <code>&amp;mem.UnsafeCell(T)</code> | Read-only |
+
+### WriteGuard.get
+
+```otr
+fn get(self: &mut Self) &mut T
+```
+
+### WriteGuard.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+## Atomic
+
+```otr
+const Atomic = struct
+```
+
+A 64-bit word updated atomically; shareable between threads. The plain methods are
+sequentially consistent; `_acquire`, `_release` and `_relaxed` ones order less, for code
+that pairs them itself. Release builds compile every one to the instruction inline.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>value</code> | <code>u64</code> | Read-only |
+
+### Atomic.init
+
+```otr
+fn init(v: u64) Atomic
+```
+
+### Atomic.load
+
+```otr
+fn load(self: &Atomic) u64
+```
+
+### Atomic.store
+
+```otr
+fn store(self: &Atomic, v: u64) void
+```
+
+### Atomic.fetch_add
+
+```otr
+fn fetch_add(self: &Atomic, v: u64) u64
+```
+
+### Atomic.fetch_sub
+
+```otr
+fn fetch_sub(self: &Atomic, v: u64) u64
+```
+
+### Atomic.compare_swap
+
+```otr
+fn compare_swap(self: &Atomic, expected: u64, desired: u64) bool
+```
+
+### Atomic.load_acquire
+
+```otr
+fn load_acquire(self: &Atomic) u64
+```
+
+A load that sees everything written before the `store_release` it reads from.
+
+### Atomic.load_relaxed
+
+```otr
+fn load_relaxed(self: &Atomic) u64
+```
+
+A load ordered with nothing else, for a value only this thread writes or a hint.
+
+### Atomic.store_release
+
+```otr
+fn store_release(self: &Atomic, v: u64) void
+```
+
+A store that publishes everything written before it to an `_acquire` that reads it.
+
+### Atomic.store_relaxed
+
+```otr
+fn store_relaxed(self: &Atomic, v: u64) void
+```
+
+### Atomic.compare_swap_acquire
+
+```otr
+fn compare_swap_acquire(self: &Atomic, expected: u64, desired: u64) bool
+```
+
+`compare_swap` that, when it succeeds, sees what the `store_release` it replaced
+published.
+
+## Channel
+
+```otr
+fn Channel(comptime T: type) type
+```
+
+A queue of at most `cap` values that any number of tasks send to and receive from.
+`clone` gives another handle to the same queue, to move into a task; the queue is
+freed when the last handle is consumed by `deinit`. Unlike a `Future`, a handle can
+be kept in a struct, so a long-running loop can collect the results of background
+tasks with `try_recv` or `Io.select`. Waiting takes an `Io` and, inside `Io.Uring`,
+pauses only the calling task.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>inner</code> | <code>*Inner</code> | Read-only |
+
+### Channel.init
+
+```otr
+fn init(alloc: mem.Allocator, cap: usize) Self
+```
+
+### Channel.clone
+
+```otr
+fn clone(self: &Self) Self
+```
+
+Another handle to the same queue.
+
+### Channel.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+Consumes this handle; the last one frees the queue and any values left in it.
+
+### Channel.send
+
+```otr
+fn send(self: &Self, io: std.Io, value: T) error { Closed, Canceled }!void
+```
+
+Queues `value`, waiting while the queue is full. A closed channel refuses it,
+and deinitialises it when it is a resource.
+
+### Channel.try_send
+
+```otr
+fn try_send(self: &Self, value: T) ?T
+```
+
+Queues `value` if there is room and the channel is open; otherwise gives it back.
+
+### Channel.recv
+
+```otr
+fn recv(self: &Self, io: std.Io) std.Io.Canceled!?T
+```
+
+The oldest value, waiting while the queue is empty; null once the channel is
+closed and every value sent before has been received.
+
+### Channel.try_recv
+
+```otr
+fn try_recv(self: &Self) ?T
+```
+
+The oldest value, or null when the queue is empty.
+
+### Channel.close
+
+```otr
+fn close(self: &Self) void
+```
+
+Refuses further sends and wakes every waiting task; receivers still get the
+values already queued. Every handle must still be consumed by `deinit`.
+
+### Channel.is_closed
+
+```otr
+fn is_closed(self: &Self) bool
+```
+
+### Channel.poll_fd
+
+```otr
+fn poll_fd(self: &Self) i32
+```
+
+Ready while `recv` would not wait, for `Io.select`.
+
+## CancelToken
+
+```otr
+const CancelToken = struct
+```
+
+A flag any thread can raise to ask tasks to stop. `clone` gives another handle to
+move into a task; the last handle consumed by `deinit` frees it. As an `Io.select`
+source it becomes ready once cancelled, which wakes a waiting task.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>inner</code> | <code>*Inner</code> | Read-only |
+
+### CancelToken.init
+
+```otr
+fn init() CancelToken
+```
+
+### CancelToken.clone
+
+```otr
+fn clone(self: &CancelToken) CancelToken
+```
+
+### CancelToken.cancel
+
+```otr
+fn cancel(self: &CancelToken) void
+```
+
+### CancelToken.is_cancelled
+
+```otr
+fn is_cancelled(self: &CancelToken) bool
+```
+
+### CancelToken.poll_fd
+
+```otr
+fn poll_fd(self: &CancelToken) i32
+```
+
+### CancelToken.deinit
+
+```otr
+fn deinit(self: CancelToken) void
+```
+
+## fence
+
+```otr
+fn fence() void
+```
+
+Orders every memory access before it with every one after it, for all threads.
+
+## signal_fence
+
+```otr
+fn signal_fence() void
+```
+
+Orders memory accesses for a signal handler running on this thread, without a hardware
+fence: the compiler keeps the order, which is all one thread needs.

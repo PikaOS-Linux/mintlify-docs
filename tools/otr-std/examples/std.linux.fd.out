@@ -1,0 +1,6 @@
+wrote 23 bytes
+read: first line
+pread at 11: second line
+at end of file: 0 bytes
+pipe: through a pipe
+after unlink: error.NotFound

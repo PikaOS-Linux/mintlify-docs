@@ -1,0 +1,14 @@
+13 bytes, 8 codepoints, valid: true
+U+006E at byte 0 (1 long)
+U+0061 at byte 1 (1 long)
+U+00EF at byte 2 (2 long)
+U+0076 at byte 4 (1 long)
+U+0065 at byte 5 (1 long)
+U+0020 at byte 6 (1 long)
+U+65E5 at byte 7 (3 long)
+U+672C at byte 10 (3 long)
+decoded U+00E9 from 2 bytes
+U+1F9A6 takes 4 bytes: f09fa6a6
+truncate to 3 bytes: na
+boundary at 3: false, at 4: true
+invalid: 1 byte(s) at 2, error.InvalidStartByte

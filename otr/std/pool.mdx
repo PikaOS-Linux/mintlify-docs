@@ -1,0 +1,544 @@
+---
+title: "std.pool"
+sidebarTitle: "pool"
+description: "Generational handles (spec §7.7)."
+---
+
+Generational handles (spec §7.7): a `Handle` names a slot and the generation it was
+issued for, so a handle to a removed value reads as `null` instead of dangling.
+
+```otr
+import std.pool
+```
+
+## Example
+
+```otr
+import std
+import std.pool
+
+const Window = struct {
+    title: []static u8
+    width: i64
+}
+
+pub fn main() void {
+    var windows = pool.Pool(Window).init(std.mem.heap)
+    defer windows.deinit()
+
+    // A handle is a small copyable value that can be stored anywhere.
+    term := windows.insert(.{ title: "term", width: 640 })
+    files := windows.insert(.{ title: "files", width: 800 })
+
+    if windows.get_mut(term) |w| {
+        w.width = 1024
+    }
+    _ = windows.update(files, fn(w: &mut Window) void { w.width += 100 })
+    std.io.printf("{} {}\n", .{ windows.at(term).title, windows.at(term).width })
+    std.io.printf("{} {}\n", .{ windows.at(files).title, windows.at(files).width })
+
+    if windows.remove(term) |gone| {
+        std.io.printf("closed {}\n", .{ gone.title })
+    }
+
+    // The slot is reused, but the old handle no longer matches its generation.
+    editor := windows.insert(.{ title: "editor", width: 900 })
+    std.io.printf("stale handle: {}\n", .{ windows.get(term) == null })
+    if windows.get(editor) |w| {
+        std.io.printf("new window: {}\n", .{ w.title })
+    }
+}
+```
+
+```text
+term 1024
+files 900
+closed term
+stale handle: true
+new window: editor
+```
+
+## Handle
+
+```otr
+fn Handle(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>index</code> | <code>u32</code> | Read-only |
+| <code>generation</code> | <code>u32</code> | Read-only |
+
+## Pool
+
+```otr
+fn Pool(comptime T: type) type
+```
+
+Values that own resources are kept apart from their slots, so they move in and out of
+a freed slot whole; other values sit in their slots, beside the generation that guards
+them, which `get` then reads from one cache line (`bench/pool`).
+
+A slot's generation counts its lives and its parity says whether it holds a value: odd
+while live, even while free, so `get` compares one field and there is no live flag.
+Handles carry odd generations. A slot whose live generation reaches the limit (2^32 - 1,
+after 2^31 lives) is retired instead of reused, so a stale handle can never match a later
+value (ABA); the pool only grows by that slot.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>slots</code> | <code>mem.RawBuf(Slot)</code> | Read-only |
+| <code>len</code> | <code>u32</code> | Read-only |
+| <code>cap</code> | <code>u32</code> | Read-only |
+| <code>free</code> | <code>list.List(u32)</code> | Read-only |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+
+### Pool.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### Pool.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### Pool.insert_with
+
+```otr
+fn insert_with(self: &mut Self, fill: anytype) H
+```
+
+Inserts the value `fill(out)` writes through `out`, the slot's own memory, so a
+large value is built in place rather than on the stack and copied in.
+
+### Pool.insert
+
+```otr
+fn insert(self: &mut Self, value: T) H
+```
+
+### Pool.get
+
+```otr
+fn get(self: &Self, h: H) ?&T
+```
+
+### Pool.get_mut
+
+```otr
+fn get_mut(self: &mut Self, h: H) ?&mut T
+```
+
+### Pool.at
+
+```otr
+fn at(self: &Self, h: H) &T
+```
+
+The value for `h`; panics if it was removed (spec §7.7).
+
+### Pool.set
+
+```otr
+fn set(self: &mut Self, h: H, value: T) void
+```
+
+Replaces the value for `h`; panics if it was removed.
+
+### Pool.update
+
+```otr
+fn update(self: &mut Self, h: H, f: anytype) bool
+```
+
+Calls `f(&mut value)` on the value for `h`; false if it was removed.
+
+### Pool.remove
+
+```otr
+fn remove(self: &mut Self, h: H) ?T
+```
+
+Removes and returns the value; its handles become stale.
+
+### Pool.try_reserve
+
+```otr
+fn try_reserve(self: &mut Self, additional: usize) error { NoMemory, Overflow }!void
+```
+
+Reserves admission and its eventual removal before publishing any value.
+
+### Pool.try_insert
+
+```otr
+fn try_insert(self: &mut Self, value: T) error { NoMemory, Overflow }!H
+```
+
+### Pool.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+## PoolWithGenerationLimit
+
+```otr
+fn PoolWithGenerationLimit(comptime T: type, comptime limit: u32) type
+```
+
+`Pool` whose slots retire once a live generation reaches `limit`, for tests that reach
+the limit without two billion reuses.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>slots</code> | <code>mem.RawBuf(Slot)</code> | Read-only |
+| <code>len</code> | <code>u32</code> | Read-only |
+| <code>cap</code> | <code>u32</code> | Read-only |
+| <code>free</code> | <code>list.List(u32)</code> | Read-only |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+
+### PoolWithGenerationLimit.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### PoolWithGenerationLimit.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### PoolWithGenerationLimit.insert_with
+
+```otr
+fn insert_with(self: &mut Self, fill: anytype) H
+```
+
+Inserts the value `fill(out)` writes through `out`, the slot's own memory, so a
+large value is built in place rather than on the stack and copied in.
+
+### PoolWithGenerationLimit.insert
+
+```otr
+fn insert(self: &mut Self, value: T) H
+```
+
+### PoolWithGenerationLimit.get
+
+```otr
+fn get(self: &Self, h: H) ?&T
+```
+
+### PoolWithGenerationLimit.get_mut
+
+```otr
+fn get_mut(self: &mut Self, h: H) ?&mut T
+```
+
+### PoolWithGenerationLimit.at
+
+```otr
+fn at(self: &Self, h: H) &T
+```
+
+The value for `h`; panics if it was removed (spec §7.7).
+
+### PoolWithGenerationLimit.set
+
+```otr
+fn set(self: &mut Self, h: H, value: T) void
+```
+
+Replaces the value for `h`; panics if it was removed.
+
+### PoolWithGenerationLimit.update
+
+```otr
+fn update(self: &mut Self, h: H, f: anytype) bool
+```
+
+Calls `f(&mut value)` on the value for `h`; false if it was removed.
+
+### PoolWithGenerationLimit.remove
+
+```otr
+fn remove(self: &mut Self, h: H) ?T
+```
+
+Removes and returns the value; its handles become stale.
+
+### PoolWithGenerationLimit.try_reserve
+
+```otr
+fn try_reserve(self: &mut Self, additional: usize) error { NoMemory, Overflow }!void
+```
+
+Reserves admission and its eventual removal before publishing any value.
+
+### PoolWithGenerationLimit.try_insert
+
+```otr
+fn try_insert(self: &mut Self, value: T) error { NoMemory, Overflow }!H
+```
+
+### PoolWithGenerationLimit.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+## SoaPool
+
+```otr
+fn SoaPool(comptime T: type) type
+```
+
+`Pool` with each field of the slots, and of the struct `T`, in its own column
+(spec D1). A `soa` element is not contiguous, so it has no address: `get` and `at`
+return copies, and `set` and `update` write a value back. There is no `get_mut`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>base</code> | <code>?[*]u8</code> | Read-only |
+| <code>len</code> | <code>u32</code> | Read-only |
+| <code>cap</code> | <code>u32</code> | Read-only |
+| <code>free</code> | <code>list.List(u32)</code> | Read-only |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+
+### SoaPool.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### SoaPool.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### SoaPool.insert
+
+```otr
+fn insert(self: &mut Self, value: T) H
+```
+
+### SoaPool.get
+
+```otr
+fn get(self: &Self, h: H) ?T
+```
+
+A copy of the value for `h`, or null if it was removed.
+
+### SoaPool.at
+
+```otr
+fn at(self: &Self, h: H) T
+```
+
+A copy of the value for `h`; panics if it was removed (spec §7.7).
+
+### SoaPool.set
+
+```otr
+fn set(self: &mut Self, h: H, value: T) void
+```
+
+Replaces the value for `h`; panics if it was removed.
+
+### SoaPool.update
+
+```otr
+fn update(self: &mut Self, h: H, f: anytype) bool
+```
+
+Calls `f(&mut copy)` on a copy of the value for `h` and stores the copy back;
+false if it was removed.
+
+### SoaPool.remove
+
+```otr
+fn remove(self: &mut Self, h: H) ?T
+```
+
+Removes and returns the value; its handles become stale.
+
+## SoaPoolWithGenerationLimit
+
+```otr
+fn SoaPoolWithGenerationLimit(comptime T: type, comptime limit: u32) type
+```
+
+`SoaPool` whose slots retire once a live generation reaches `limit`, as
+`PoolWithGenerationLimit`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>base</code> | <code>?[*]u8</code> | Read-only |
+| <code>len</code> | <code>u32</code> | Read-only |
+| <code>cap</code> | <code>u32</code> | Read-only |
+| <code>free</code> | <code>list.List(u32)</code> | Read-only |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+
+### SoaPoolWithGenerationLimit.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### SoaPoolWithGenerationLimit.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### SoaPoolWithGenerationLimit.insert
+
+```otr
+fn insert(self: &mut Self, value: T) H
+```
+
+### SoaPoolWithGenerationLimit.get
+
+```otr
+fn get(self: &Self, h: H) ?T
+```
+
+A copy of the value for `h`, or null if it was removed.
+
+### SoaPoolWithGenerationLimit.at
+
+```otr
+fn at(self: &Self, h: H) T
+```
+
+A copy of the value for `h`; panics if it was removed (spec §7.7).
+
+### SoaPoolWithGenerationLimit.set
+
+```otr
+fn set(self: &mut Self, h: H, value: T) void
+```
+
+Replaces the value for `h`; panics if it was removed.
+
+### SoaPoolWithGenerationLimit.update
+
+```otr
+fn update(self: &mut Self, h: H, f: anytype) bool
+```
+
+Calls `f(&mut copy)` on a copy of the value for `h` and stores the copy back;
+false if it was removed.
+
+### SoaPoolWithGenerationLimit.remove
+
+```otr
+fn remove(self: &mut Self, h: H) ?T
+```
+
+Removes and returns the value; its handles become stale.
+
+## Link
+
+```otr
+fn Link(comptime T: type) type
+```
+
+An element's place in a `Chain`: a field of the element, one per chain it can be in.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>prev</code> | <code>?Handle(T)</code> | Read-only |
+| <code>next</code> | <code>?Handle(T)</code> | Read-only |
+| <code>linked</code> | <code>bool</code> | Read-only |
+
+### Link.init
+
+```otr
+fn init() Self
+```
+
+## Chain
+
+```otr
+fn Chain(comptime T: type, comptime field: []static u8) type
+```
+
+A doubly linked list of a pool's elements through their `Link` field `field`, as C and
+Zig link objects through a member and find the object again with `container_of`: O(1)
+insertion and removal, no allocation, and an element may be in one chain per `Link`
+field. Elements are named by handle, so one removed from the pool while still linked
+ends the chain there instead of being reached.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>head</code> | <code>?H</code> | Read-only |
+| <code>tail</code> | <code>?H</code> | Read-only |
+| <code>len</code> | <code>usize</code> | Read-only |
+
+### Chain.init
+
+```otr
+fn init() Self
+```
+
+### Chain.insert_after
+
+```otr
+fn insert_after(self: &mut Self, p: &mut Pool(T), after: ?H, h: H) void
+```
+
+Links `h` after `after`, or first when `after` is null.
+
+### Chain.push_front
+
+```otr
+fn push_front(self: &mut Self, p: &mut Pool(T), h: H) void
+```
+
+### Chain.push_back
+
+```otr
+fn push_back(self: &mut Self, p: &mut Pool(T), h: H) void
+```
+
+### Chain.remove
+
+```otr
+fn remove(self: &mut Self, p: &mut Pool(T), h: H) void
+```
+
+Unlinks `h`, if it is linked.
+
+### Chain.first
+
+```otr
+fn first(self: &Self) ?H
+```
+
+### Chain.last
+
+```otr
+fn last(self: &Self) ?H
+```
+
+### Chain.next
+
+```otr
+fn next(self: &Self, p: &Pool(T), h: H) ?H
+```
+
+The element after `h`; null at the end, or when `h` has left the pool.
+
+### Chain.prev
+
+```otr
+fn prev(self: &Self, p: &Pool(T), h: H) ?H
+```

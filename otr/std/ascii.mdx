@@ -1,0 +1,129 @@
+---
+title: "std.ascii"
+sidebarTitle: "ascii"
+description: "ASCII character classes and case-insensitive comparison."
+---
+
+ASCII character classes and case-insensitive comparison. Bytes outside ASCII are in no
+class and have no case, so UTF-8 text passes through unchanged.
+
+```otr
+import std.ascii
+```
+
+## Example
+
+```otr
+import std
+import std.ascii
+
+pub fn main() void {
+    std.io.printf("digit '7': {}, alpha '_': {}, space '\\t': {}\n", .{ ascii.is_digit('7'), ascii.is_alpha('_'), ascii.is_space('\t') })
+    std.io.printf("upper of 'q': {c}, lower of 'Q': {c}\n", .{ ascii.to_upper('q'), ascii.to_lower('Q') })
+
+    // Header names compare without regard to case.
+    std.io.printf("same header: {}\n", .{ ascii.eql_ignore_case("Content-Type", "content-type") })
+    std.io.printf("is http: {}\n", .{ ascii.starts_with_ignore_case("HTTP/1.1 200 OK", "http/") })
+    if ascii.index_of_ignore_case("Hello World", "WORLD") |at| {
+        std.io.printf("world at byte {}\n", .{ at })
+    }
+
+    var buf: [32]u8 = unsafe { undefined }
+    std.io.println(ascii.lower_into(&mut buf, "MiXeD Case"))
+
+    var letters: usize = 0
+    for c in "otr 0.2.6, 2026" {
+        letters += @int_from_bool(ascii.is_alpha(c))
+    }
+    std.io.printf("{} letters\n", .{ letters })
+}
+```
+
+```text
+digit '7': true, alpha '_': false, space '\t': true
+upper of 'q': Q, lower of 'Q': q
+same header: true
+is http: true
+world at byte 6
+mixed case
+3 letters
+```
+
+## is_digit
+
+```otr
+fn is_digit(c: u8) bool
+```
+
+## is_upper
+
+```otr
+fn is_upper(c: u8) bool
+```
+
+## is_lower
+
+```otr
+fn is_lower(c: u8) bool
+```
+
+## is_alpha
+
+```otr
+fn is_alpha(c: u8) bool
+```
+
+## is_alnum
+
+```otr
+fn is_alnum(c: u8) bool
+```
+
+## is_space
+
+```otr
+fn is_space(c: u8) bool
+```
+
+Space, tab, newline, carriage return, vertical tab or form feed.
+
+## to_lower
+
+```otr
+fn to_lower(c: u8) u8
+```
+
+## to_upper
+
+```otr
+fn to_upper(c: u8) u8
+```
+
+## eql_ignore_case
+
+```otr
+fn eql_ignore_case(a: str, b: str) bool
+```
+
+## starts_with_ignore_case
+
+```otr
+fn starts_with_ignore_case(s: str, prefix: str) bool
+```
+
+## index_of_ignore_case
+
+```otr
+fn index_of_ignore_case(s: str, needle: str) ?usize
+```
+
+The position of the first occurrence of `needle` in `s`, ignoring case; an empty
+needle is at 0.
+
+## lower_into
+
+```otr
+fn lower_into(out: []mut u8, s: str) str
+```
+
+`s` in lower case, written to the start of `out`, which must be at least as long.

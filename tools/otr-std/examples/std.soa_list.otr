@@ -1,0 +1,39 @@
+import std
+import std.soa_list
+
+const Particle = struct {
+    x: f64
+    speed: f64
+    id: u32
+}
+
+// A soa slice reaches one field of every element as a contiguous column.
+fn step(ps: soa []mut Particle, dt: f64) void {
+    for i in 0..ps.len {
+        ps.x[i] += ps.speed[i] * dt
+    }
+}
+
+pub fn main() void {
+    var ps = soa_list.SoaList(Particle).init(std.mem.heap)
+    defer ps.deinit()
+
+    for i in 0..4 {
+        ps.push(.{ x: 0, speed: @float_from_int(f64, i), id: @int_cast(u32, i) + 100 })
+    }
+    step(ps.items_mut(), 0.5)
+
+    view := ps.items()
+    var total: f64 = 0
+    for x in view.x {
+        total += x
+    }
+    // Indexing a soa slice gathers one element back into a struct.
+    third := view[2]
+    std.io.printf("len {} total x {d:.1}\n", .{ ps.len, total })
+    std.io.printf("id {} x {d:.1}\n", .{ third.id, third.x })
+
+    if ps.pop() |last| {
+        std.io.printf("popped id {}, {} left\n", .{ last.id, ps.len })
+    }
+}

@@ -1,0 +1,29 @@
+import std
+import std.linux.fd
+import std.linux.metadata
+
+pub fn main() !void {
+    file := try fd.memfd("example", 16)
+    defer file.deinit()
+    copy := try file.dup()
+    defer copy.deinit()
+    other := try fd.memfd("example", 16)
+    defer other.deinit()
+
+    // Device and inode together name a file, whatever path or descriptor reached it.
+    a := try metadata.fd_stat(&file)
+    b := try metadata.fd_stat(&copy)
+    c := try metadata.fd_stat(&other)
+    same := a.ino == b.ino and a.dev_major == b.dev_major and a.dev_minor == b.dev_minor
+    std.io.printf("a duplicate is the same file: {}\n", .{ same })
+    std.io.printf("another memfd is the same file: {}\n", .{ a.ino == c.ino })
+
+    // read_link fills the caller's buffer and returns the part it wrote.
+    var buf: [256]u8
+    target := try metadata.read_link("/dev/stdout", &out buf)
+    std.io.printf("/dev/stdout -> {}\n", .{ target })
+
+    if metadata.read_link("/dev/null", &out buf) |_| {} else |err| {
+        std.io.printf("/dev/null is not a link: {}\n", .{ err })
+    }
+}

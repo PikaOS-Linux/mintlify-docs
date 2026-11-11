@@ -1,0 +1,8 @@
+dirname   /home/jade/notes
+basename  todo.tar.gz
+stem      todo.tar
+extension .gz
+[] [log]
+dirname of a bare name is null: true
+/etc/otter-shell/theme.conf
+/usr/share/icons/hicolor

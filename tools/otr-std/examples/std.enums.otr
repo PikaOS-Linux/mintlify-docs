@@ -1,0 +1,40 @@
+import std
+import std.enums
+
+const Perm = enum {
+    read
+    write
+    exec
+    admin
+}
+
+pub fn main() void {
+    std.io.printf("{} permissions\n", .{ enums.count(Perm) })
+
+    // from_name turns text such as a config value into the enum, or null.
+    if enums.from_name(Perm, "write") |p| {
+        std.io.printf("parsed {}\n", .{ @tag_name(p) })
+    }
+    std.io.printf("unknown name: {}\n", .{ enums.from_name(Perm, "delete") == null })
+
+    var user = enums.EnumSet(Perm).init()
+    user.insert(.read)
+    user.insert(.write)
+    var group = enums.EnumSet(Perm).init()
+    group.insert(.read)
+    group.insert(.exec)
+
+    std.io.printf("user can write {} exec {}\n", .{ user.contains(.write), user.contains(.exec) })
+
+    // The iterator yields values in declaration order.
+    std.io.print("either:")
+    for p in user.union_with(group).iter() {
+        std.io.printf(" {}", .{ @tag_name(p) })
+    }
+    std.io.print("\nboth:")
+    for p in user.intersect_with(group).iter() {
+        std.io.printf(" {}", .{ @tag_name(p) })
+    }
+    user.remove(.write)
+    std.io.printf("\nuser has {} left\n", .{ user.count() })
+}

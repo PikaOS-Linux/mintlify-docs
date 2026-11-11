@@ -1,0 +1,30 @@
+import std
+import std.crypto.sha2
+
+fn print_hex(label: str, bytes: []u8) void {
+    std.io.printf("{}: ", .{ label })
+    for b in bytes { std.io.printf("{x:0>2}", .{ b }) }
+    std.io.printf("\n", .{})
+}
+
+pub fn main() void {
+    // One call for a message that is already in memory.
+    whole := sha2.Sha256.hash("hello world")
+    print_hex("sha256", whole[0..])
+
+    // Or feed the message in parts, as when reading a file in chunks.
+    var h = sha2.Sha256.init()
+    h.update("hello ")
+    h.update("world")
+    parts := h.final()
+    std.io.printf("same digest in parts: {}\n", .{ std.mem.eql(u8, whole[0..], parts[0..]) })
+
+    wide := sha2.Sha512.hash("hello world")
+    print_hex("sha512", wide[0..])
+
+    // digest picks the hash at run time and gives a Digest of the right length.
+    for kind in ([3]sha2.Hash{ .sha256, .sha384, .sha512 }) {
+        d := sha2.digest(kind, "hello world")
+        std.io.printf("{} is {} bytes\n", .{ @tag_name(kind), d.bytes().len })
+    }
+}

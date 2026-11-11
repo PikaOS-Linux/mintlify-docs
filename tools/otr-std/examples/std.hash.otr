@@ -1,0 +1,31 @@
+import std
+import std.hash
+import std.string
+
+pub fn main() void {
+    data := "hello otter"
+
+    // One-shot hashes of a whole slice.
+    std.io.printf("crc32    {x:0>8}\n", .{ hash.crc32(data) })
+    std.io.printf("fnv1a64  {x:0>16}\n", .{ hash.Fnv1a64.hash(data) })
+    std.io.printf("wyhash   {x:0>16}\n", .{ hash.Wyhash.hash(0, data) })
+    std.io.printf("xxhash64 {x:0>16}\n", .{ hash.XxHash64.hash(0, data) })
+
+    var hex = string.String.init(std.mem.heap)
+    defer hex.deinit()
+    digest := hash.Sha256.hash(data)
+    hash.write_hex(&mut hex, &digest)
+    std.io.printf("sha256   {}\n", .{ hex.as_str() })
+
+    // Streaming: feed the input in parts and get the same digest.
+    var h = hash.Sha256.init()
+    h.update("hello ")
+    h.update("otter")
+    streamed := h.final()
+    std.io.printf("streamed sha256 matches: {}\n", .{ std.mem.eql(u8, &streamed, &digest) })
+
+    var crc = hash.Crc32.init()
+    crc.update("hello ")
+    crc.update("otter")
+    std.io.printf("streamed crc32 matches: {}\n", .{ crc.final() == hash.crc32(data) })
+}

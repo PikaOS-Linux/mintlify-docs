@@ -1,0 +1,94 @@
+---
+title: "std.crypto.aes_cmac"
+sidebarTitle: "crypto.aes_cmac"
+description: "AES-CMAC (RFC 4493, NIST SP 800-38B), the MAC of SMB 3 signing, with a 16- or 32-byte key and a 16-byte MAC."
+---
+
+AES-CMAC (RFC 4493, NIST SP 800-38B), the MAC of SMB 3 signing, with a 16- or 32-byte key
+and a 16-byte MAC. `init` expands the key and derives the two subkeys once; `update` feeds
+the message in pieces of any length, and `final` reads the MAC without changing the value,
+as `hmac.Hmac` does. `verify` compares a MAC in constant time.
+
+Whole blocks go to `aes.Cipher.cbc_mac` in one call, so with AES-NI the chain stays in the
+runtime's kernel; the last block, whole or not, waits in the value for `final` to mix in
+a subkey.
+
+```otr
+import std.crypto.aes_cmac
+```
+
+## AesCmac
+
+```otr
+fn AesCmac(comptime key_bytes: usize) type
+```
+
+CMAC over AES with a `key_bytes`-byte key, 16 or 32.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>cipher</code> | <code>aes.Cipher(key_bytes, soft)</code> | Read-only |  |
+| <code>k1</code> | <code>[16]u8</code> | Read-only | The subkeys for a whole last block and for a padded one. |
+| <code>k2</code> | <code>[16]u8</code> | Read-only |  |
+| <code>chain</code> | <code>[16]u8</code> | Read-only | The CBC-MAC of the blocks before `last`. |
+| <code>last</code> | <code>[16]u8</code> | Read-only | The message's last 0 to 16 bytes so far. |
+| <code>last_len</code> | <code>usize</code> | Read-only |  |
+
+### AesCmac.init
+
+```otr
+fn init(key: &[key_bytes]u8) Self
+```
+
+### AesCmac.update
+
+```otr
+fn update(self: &mut Self, msg: []u8) void
+```
+
+### AesCmac.final
+
+```otr
+fn final(self: &Self) [16]u8
+```
+
+The MAC of everything given to `update`. The value is left as it was, so a MAC
+of a prefix can be read and the message fed on.
+
+### AesCmac.wipe
+
+```otr
+fn wipe(self: &mut Self) void
+```
+
+Clears the round keys, subkeys and pending state from the value in place; it
+cannot be used again.
+
+### AesCmac.create
+
+```otr
+fn create(key: &[key_bytes]u8, msg: []u8) [16]u8
+```
+
+The MAC of `msg` under `key`.
+
+### AesCmac.verify
+
+```otr
+fn verify(key: &[key_bytes]u8, msg: []u8, mac: &[16]u8) bool
+```
+
+Whether `mac` is the MAC of `msg` under `key`, compared in time that does not
+depend on where they differ.
+
+| Name | Definition |
+| --- | --- |
+| <code>AesCmac.key_len</code> | <code>key_bytes</code> |
+| <code>AesCmac.mac_len</code> | <code>16</code> |
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>AesCmac128</code> | <code>AesCmac(16)</code> |
+| <code>AesCmac256</code> | <code>AesCmac(32)</code> |

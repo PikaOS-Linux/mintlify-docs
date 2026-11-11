@@ -1,0 +1,189 @@
+---
+title: "std.crypto.ca_bundle"
+sidebarTitle: "crypto.ca_bundle"
+description: "Trust anchors and certificate chain verification."
+---
+
+Trust anchors and certificate chain verification. A `Bundle` holds root certificates
+as DER, read from PEM files such as the system's CA bundle; adding one records only
+where it lies and a hash of its subject, and a root is parsed in full only when a
+chain names it as issuer, so loading a few hundred roots costs one base64 pass.
+
+`verify` builds a path from a server's certificate through the intermediates it sent
+to a root, checking every signature, validity period, CA flag, path length, key usage,
+extended key usage and name constraint on the way, and the host name against the leaf
+(RFC 5280 §6 without policy processing; certificates whose critical extensions would
+need it are rejected when parsed). `verify_system` does the same against the system's
+roots, loaded once per process on first use.
+
+```otr
+import std.crypto.ca_bundle
+```
+
+## VerifyError
+
+```otr
+const VerifyError = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>Malformed</code> |  |
+| <code>UnsupportedAlgorithm</code> |  |
+| <code>UnsupportedCriticalExtension</code> |  |
+| <code>UnknownIssuer</code> | No chain leads from the certificate to a trusted root. |
+| <code>SelfSigned</code> | The certificate signs itself and is not a trusted root. |
+| <code>Expired</code> |  |
+| <code>NotYetValid</code> |  |
+| <code>HostnameMismatch</code> |  |
+| <code>NotCa</code> | An issuing certificate is not marked as a CA. |
+| <code>PathLength</code> | More intermediates than an issuer's `pathLenConstraint` allows. |
+| <code>KeyUsage</code> | An issuer's `keyUsage` does not allow signing certificates. |
+| <code>ExtKeyUsage</code> | A certificate's `extKeyUsage` does not allow TLS server authentication. |
+| <code>NameConstraint</code> | The leaf or the host names something an issuer's name constraints keep it from. |
+| <code>BadSignature</code> |  |
+| <code>ChainTooLong</code> | More than `max_depth` certificates before a root. |
+
+## LoadError
+
+```otr
+const LoadError = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>NoSystemBundle</code> | None of the places the system keeps its roots holds a readable certificate. |
+
+## max_depth
+
+```otr
+const max_depth: usize = 10
+```
+
+Certificates in a chain before its root, the leaf included.
+
+## Bundle
+
+```otr
+const Bundle = struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+| <code>der</code> | <code>list.List(u8)</code> | Read-only |
+| <code>entries</code> | <code>list.List(Entry)</code> | Read-only |
+
+### Bundle.init
+
+```otr
+fn init(alloc: mem.Allocator) Bundle
+```
+
+### Bundle.deinit
+
+```otr
+fn deinit(self: Bundle) void
+```
+
+### Bundle.len
+
+```otr
+fn len(self: &Bundle) usize
+```
+
+The number of roots.
+
+### Bundle.cert
+
+```otr
+fn cert(self: &Bundle, i: usize) []u8
+```
+
+The DER of root `i`.
+
+### Bundle.add_der
+
+```otr
+fn add_der(self: &mut Bundle, der: []u8) asn1.Error!void
+```
+
+Adds the DER certificate `der` as a root. Only its outline is checked, as far as
+its subject; the rest is parsed when a chain needs it. A certificate already held
+is not added twice.
+
+### Bundle.add_pem
+
+```otr
+fn add_pem(self: &mut Bundle, text: []u8) usize
+```
+
+Adds every `CERTIFICATE` block of the PEM text `text`, returning how many were
+added. Blocks that are not valid base64 or not certificates are skipped, as other
+TLS stacks skip them, so one bad entry does not cost the rest of a system bundle.
+
+### Bundle.add_file
+
+```otr
+fn add_file(self: &mut Bundle, alloc: mem.Allocator, path: str) fs.Error!usize
+```
+
+Adds the PEM certificates in the file at `path`.
+
+### Bundle.add_dir
+
+```otr
+fn add_dir(self: &mut Bundle, alloc: mem.Allocator, path: str) fs.Error!usize
+```
+
+Adds the PEM certificates of every file in the directory `path`, such as
+`/etc/ssl/certs`, whose entries are often links to the real files.
+
+### Bundle.load_system
+
+```otr
+fn load_system(env: std.Env, alloc: mem.Allocator) LoadError!Bundle
+```
+
+The system's roots: `SSL_CERT_FILE` and the directories of `SSL_CERT_DIR`
+(separated by `:`) when either is set, as OpenSSL reads them, otherwise the first
+of the usual bundle files that holds any certificate.
+
+### Bundle.contains
+
+```otr
+fn contains(self: &Bundle, der: []u8) bool
+```
+
+Whether `der` is one of the roots.
+
+## verify
+
+```otr
+fn verify(b: &Bundle, chain: [][]u8, host: ?[]u8, now: i64) VerifyError!void
+```
+
+Verifies `chain`, the server's certificate followed by the intermediates it sent (in
+any order, extras ignored), against the roots of `b` at `now` (seconds since the
+epoch), and the leaf against `host` when given. Every issuer the chain offers is tried
+in turn, backtracking from a path that dead-ends (a cross-signed intermediate whose
+first certificate leads to an untrusted or expired root), within `max_signature_checks`.
+When no path is found the error says why the last candidate issuer was refused, or is
+`UnknownIssuer` (`SelfSigned` for a lone self-signed leaf) when none was named.
+
+## max_signature_checks
+
+```otr
+const max_signature_checks: u32 = 64
+```
+
+Signature checks one `verify` may spend on candidate issuers, so a chain that offers
+many look-alike intermediates costs a bounded time.
+
+## verify_system
+
+```otr
+fn verify_system(env: std.Env, chain: [][]u8, host: ?[]u8, now: i64)(LoadError || VerifyError)!void
+```
+
+`verify` against the system's roots (`Bundle.load_system`), loading them on first use.

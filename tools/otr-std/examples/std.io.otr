@@ -1,0 +1,31 @@
+import std
+import std.string
+
+const Point = struct {
+    x: i32
+    y: i32
+
+    // A `format` method makes a type printable with `{}`.
+    pub fn format(self: Point, w: anytype) void {
+        std.io.format(w, "({}, {})", .{ self.x, self.y })
+    }
+}
+
+pub fn main() void {
+    std.io.println("plain line")
+    std.io.printf("{} items, {d:.2} average, done: {}\n", .{ 3, 4.5, true })
+    std.io.printf("[{d:>6}] [{d:0>6}] [{s:<8}] [{s:^8}]\n", .{ 42, 42, "left", "mid" })
+    std.io.printf("hex {x}, binary {b}, char {c}, codepoint {u}\n", .{ 255, 5, 'A', 0x3bb })
+    std.io.printf("point {}, optional {}, braces {{}}\n", .{ Point{ x: 3, y: -4 }, @as(?u8, null) })
+
+    // `format` writes to anything with `write_all`, such as a String.
+    var line = string.String.init(std.mem.heap)
+    defer line.deinit()
+    std.io.format(&mut line, "{s}={d}", .{ "width", 1920 })
+    std.io.printf("{} ({} bytes)\n", .{ line.as_str(), line.len() })
+
+    std.io.print("float: ")
+    std.io.print_float(0.1, 64)
+    std.io.print("\n")
+    std.io.eprintf("warning: {} goes to standard error\n", .{ "this" })
+}

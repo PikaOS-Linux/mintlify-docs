@@ -1,0 +1,251 @@
+---
+title: "std.ffi"
+sidebarTitle: "ffi"
+description: "Typed C callback state and scoped C handles."
+---
+
+Typed C callback state and scoped C handles.
+
+```otr
+import std.ffi
+```
+
+## Example
+
+```otr
+import std
+import std.ffi
+import c "stdio.h" as stdio safe {
+    fputs(s: [:0]u8, stream: ffi.Ref(FILE))
+    ftell(stream: ffi.Ref(FILE))
+    rewind(stream: ffi.Ref(FILE))
+}
+import c "stdio.h" as raw
+
+// A C object the program owns: deinit gives it back with fclose.
+const File = ffi.Owned(stdio.FILE, raw.fclose)
+
+pub fn main() !void {
+    p := unsafe { raw.tmpfile() } orelse return error.NoTempFile
+    file := unsafe { File.adopt(p) }
+    defer file.deinit()
+
+    // get lends the object as an ffi.Ref, which the safe list lets C take without unsafe.
+    _ = stdio.fputs("written through C\n", file.get())
+    std.io.printf("C wrote {} bytes\n", .{ stdio.ftell(file.get()) })
+    stdio.rewind(file.get())
+
+    // A string C hands back is read as an ffi.CStr, up to its NUL.
+    var buf: [64]u8 = std.mem.splat(64, u8, 0)
+    line := unsafe { raw.fgets(&mut buf[0], 64, file.get().raw()) } orelse return error.ReadFailed
+    text := unsafe { ffi.CStr.from_raw(line) }
+    std.io.printf("read back: {}", .{ text.get() })
+}
+```
+
+```text
+C wrote 18 bytes
+read back: written through C
+```
+
+## Ref
+
+```otr
+fn Ref(comptime T: type) type
+```
+
+A C object some other owner keeps alive, borrowed for as long as the `Ref` is used:
+what an `Owned(T)` lends, or a pointer a callback is given. C receives it as the bare
+pointer, so an import's `safe` list may restate a `T *` parameter as `ffi.Ref(T)`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>ptr</code> | <code>*T</code> | Read-only |
+
+### Ref.from_raw
+
+```otr
+unsafe fn from_raw(p: *T) Self
+```
+
+Unsafe: `p` must point to a live `T` that stays alive while the `Ref` is used.
+
+### Ref.raw
+
+```otr
+fn raw(self: Self) *T
+```
+
+The pointer, for C calls the import does not list as safe.
+
+### Ref.get
+
+```otr
+fn get(self: Self) &T
+```
+
+The object, to read its fields; C may change those it does not leave to the
+program only during calls into it.
+
+## Owned
+
+```otr
+fn Owned(comptime T: type, comptime free: anytype) type
+```
+
+A C object owned by the program: `deinit` gives it back with `free` (`sd_bus_unref`,
+`g_object_unref`, `wl_display_disconnect`), and `get` lends it as a `Ref` meanwhile.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>ptr</code> | <code>*T</code> | Read-only |
+
+### Owned.adopt
+
+```otr
+unsafe fn adopt(p: *T) Self
+```
+
+Unsafe: `p` must point to a live `T` that this value alone gives back.
+
+### Owned.get
+
+```otr
+fn get(self: &Self) Ref(T)
+```
+
+### Owned.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+## CStr
+
+```otr
+const CStr = ref struct
+```
+
+A C string some other owner keeps alive, borrowed while the `CStr` is used: a callback
+may take C's `const char *` as a `?ffi.CStr` (null when C passes NULL) and read it
+without `unsafe`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>ptr</code> | <code>[*]const u8</code> | Read-only |
+
+### CStr.from_raw
+
+```otr
+unsafe fn from_raw(p: [*]const u8) Self
+```
+
+Unsafe: `p` must point to a NUL-terminated string that stays unchanged while the
+`CStr` is used.
+
+### CStr.get
+
+```otr
+fn get(self: Self) [:0]u8
+```
+
+The bytes before the NUL.
+
+## load_table
+
+```otr
+unsafe fn load_table(comptime T: type, find: anytype) error { Missing }!T
+```
+
+A struct of function fields filled from `find(name)` for each field's name, as Vulkan's
+functions are from `vkGetInstanceProcAddr`: the program's calls through the table are
+then safe, the one promise being this call's. Unsafe: each name must be a function of
+its field's type. The types pass only scalars, which otr passes as C does: integers,
+floats, enums, references, `&out`, raw pointers and C pointer types (`?ffi.Ref(T)`).
+
+## chain
+
+```otr
+fn chain(comptime field: []static u8, head: anytype, next: anytype) Chained(@type_of(head), @type_of(next))
+```
+
+`head` linked to `next` through its `field` pointer, as a Vulkan structure's `pNext`
+chain: `head` and `next` stay borrowed while the chain is used, so the pointer C
+follows is valid for every call `get()` is passed to.
+
+## Chained
+
+```otr
+fn Chained(comptime H: type, comptime N: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>head</code> | <code>H</code> | Read-only |
+| <code>next</code> | <code>N</code> | Read-only |
+
+### Chained.get
+
+```otr
+fn get(self: &Self) &@type_of(self.head.*)
+```
+
+The head, to pass to the C call.
+
+## Mapped
+
+```otr
+fn Mapped(comptime D: type, comptime unmap: anytype) type
+```
+
+Memory a C library maps for the program, as Vulkan's `vkMapMemory` does, viewed as a
+slice until `deinit` gives it back with `unmap(data)`; `data` is what `unmap` needs,
+such as the device and memory handles.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>ptr</code> | <code>[*]u8</code> | Read-only |
+| <code>len</code> | <code>usize</code> | Read-only |
+| <code>data</code> | <code>D</code> | Read-only |
+
+### Mapped.adopt
+
+```otr
+unsafe fn adopt(p: *anyopaque, len: usize, data: D) Self
+```
+
+Unsafe: `p` must point to `len` bytes that only this value uses until `unmap`.
+
+### Mapped.bytes
+
+```otr
+fn bytes(self: &Self) []u8
+```
+
+### Mapped.bytes_mut
+
+```otr
+fn bytes_mut(self: &mut Self) []mut u8
+```
+
+### Mapped.as_slice_mut
+
+```otr
+fn as_slice_mut(self: &mut Self, comptime T: type) []mut T
+```
+
+The memory as whole values of the plain type `T`; panics when it is not aligned
+for `T`.
+
+### Mapped.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>Context</code> | [<code>ffi_context.Context</code>](/otr/std/ffi_context#context) |
+| <code>MutContext</code> | [<code>ffi_context.MutContext</code>](/otr/std/ffi_context#mutcontext) |

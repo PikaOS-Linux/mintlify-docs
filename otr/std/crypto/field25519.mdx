@@ -1,0 +1,157 @@
+---
+title: "std.crypto.field25519"
+sidebarTitle: "crypto.field25519"
+description: "Arithmetic modulo p = 2^255 - 19, the field of Curve25519 and edwards25519, shared by x25519 and ed25519."
+---
+
+Arithmetic modulo p = 2^255 - 19, the field of Curve25519 and edwards25519, shared by
+`x25519` and `ed25519`. Elements are five 51-bit limbs multiplied through `u128`, the
+representation of curve25519-donna and Zig's `std.crypto.ecc.Curve25519`. No operation
+branches on or indexes by an element's value, so X25519's ladder stays constant-time.
+
+```otr
+import std.crypto.field25519
+```
+
+## Fe
+
+```otr
+const Fe = [5]u64
+```
+
+A field element mod p = 2^255 - 19: limb i holds bits 51i to 51i + 50. Limbs of inputs to
+`mul` and `sq` stay below 2^54, so each product sum fits a `u128`.
+
+## from_bytes
+
+```otr
+fn from_bytes(b: &[32]u8) Fe
+```
+
+The element `b` holds little-endian, with its top bit cleared: X25519 ignores that bit
+(RFC 7748 §5) and Ed25519 keeps a sign there. A value of p or more is kept as it is;
+arithmetic mod p treats it as its residue, and `to_bytes` gives the canonical bytes.
+
+## carry
+
+```otr
+fn carry(h: Fe) Fe
+```
+
+Carries every limb into the next, the top one back into the bottom times 19, leaving each
+limb below 2^51 plus a little.
+
+## to_bytes
+
+```otr
+fn to_bytes(h: Fe) [32]u8
+```
+
+The canonical 32 bytes of `h`, fully reduced below p.
+
+## add
+
+```otr
+fn add(a: Fe, b: Fe) Fe
+```
+
+## sub
+
+```otr
+fn sub(a: Fe, b: Fe) Fe
+```
+
+a - b, computed as a + 2p - b so no limb goes negative; `b`'s limbs are below 2^52.
+
+## mul
+
+```otr
+fn mul(a: Fe, b: Fe) Fe
+```
+
+## sq
+
+```otr
+fn sq(a: Fe) Fe
+```
+
+## sq_n
+
+```otr
+fn sq_n(a: Fe, n: u32) Fe
+```
+
+`a` squared `n` times.
+
+## mul_small
+
+```otr
+fn mul_small(a: Fe, comptime k: u64) Fe
+```
+
+`a` times the constant `k`, which is below 2^32 so the carries stay small, such as the
+ladder's (A - 2) / 4 = 121665.
+
+## invert
+
+```otr
+fn invert(z: Fe) Fe
+```
+
+z^(p - 2), the inverse of `z` (zero for zero), in a fixed number of operations.
+
+## pow22523
+
+```otr
+fn pow22523(z: Fe) Fe
+```
+
+z^((p - 5) / 8) = z^(2^252 - 3), the square-root candidate's exponent of RFC 8032 §5.1.3.
+
+## cswap
+
+```otr
+fn cswap(a: &mut Fe, b: &mut Fe, bit: u64) void
+```
+
+Swaps `a` and `b` when `bit` is 1, through a mask, so both cases run the same instructions.
+
+## cmov
+
+```otr
+fn cmov(a: &mut Fe, b: Fe, bit: u64) void
+```
+
+Sets `a` to `b` when `bit` is 1, through a mask, so both cases run the same instructions.
+
+## neg
+
+```otr
+fn neg(a: Fe) Fe
+```
+
+-a, as 0 - a; `a`'s limbs are below 2^52.
+
+## eql
+
+```otr
+fn eql(a: Fe, b: Fe) bool
+```
+
+Whether `a` and `b` are the same element, comparing canonical encodings. Its time
+depends on where they differ, so it is for public values.
+
+## is_odd
+
+```otr
+fn is_odd(a: Fe) bool
+```
+
+Whether the canonical encoding of `a` is odd, the "negative" sign of RFC 8032.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>zero</code> | <code>Fe&#123; 0, 0, 0, 0, 0 &#125;</code> |
+| <code>one</code> | <code>Fe&#123; 1, 0, 0, 0, 0 &#125;</code> |

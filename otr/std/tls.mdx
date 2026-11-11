@@ -1,0 +1,178 @@
+---
+title: "std.tls"
+sidebarTitle: "tls"
+description: "A TLS client."
+---
+
+A TLS client: TLS 1.3 (RFC 8446), and TLS 1.2 (RFC 5246) for servers without it, both
+with ephemeral X25519 or P-256 key exchange and AEAD records only (AES-GCM and
+ChaCha20-Poly1305), so every connection has forward secrecy. There is no renegotiation,
+no RSA key exchange, no session resumption and no client certificate (an empty one is
+sent when a server asks). The server's chain is checked against the system's roots or a
+given `ca_bundle.Bundle`, with the host name and the issuers' name constraints, by
+`std.crypto`.
+
+`Client` is the protocol as a state machine that does no I/O, so an event loop drives it
+as its sockets allow: received bytes go to `recv`, which decrypts application data in
+place in the caller's buffer; bytes to send are read from `pending` and acknowledged
+with `sent`; `seal` encrypts application data in place in the caller's buffer. `Stream`
+is the blocking connection over `std.net` built on it.
+
+```otr
+var s = try tls.Stream.connect(env.io, heap, "example.com", 443, .{ trust: .system{ env } })
+defer s.close(env.io)
+try s.write_all(env.io, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
+n := try s.read(env.io, &mut buf)
+```
+
+The work is split under `std.tls`: `wire` (byte formats), `keys` (key schedule and
+record AEADs), `record` (the record layer), `hello` (hello messages), `peer` (the
+server's chain and signatures) and `client` (the state machine).
+
+```otr
+import std.tls
+```
+
+## Example
+
+```otr
+import std
+import std.tls
+
+pub fn main(env: std.Env) !void {
+    io := env.io
+    host := "example.com"
+
+    // connect makes the TCP connection and completes the handshake. The server's
+    // certificate chain is checked against the system's roots and the host name.
+    var conn = tls.Stream.connect(io, std.mem.heap, host, 443, .{ trust: .system{ env } }) catch |err| {
+        std.io.printf("could not connect to {}: {}\n", .{ host, err })
+        return
+    }
+    defer conn.close(io)
+
+    version := if conn.client().version() == .tls13 { "1.3" } else { "1.2" }
+    std.io.printf("TLS {}, ALPN {}\n", .{ version, conn.client().alpn() orelse "(none)" })
+
+    // From here it is a byte stream: what is written is encrypted, what is read is not.
+    try conn.write_all(io, "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n")
+
+    var buf: [4096]u8 = std.mem.splat(4096, u8, 0)
+    var total: usize = 0
+    for {
+        // 0 means the server closed the connection cleanly.
+        n := try conn.read(io, &mut buf)
+        if n == 0 { break }
+        if total == 0 {
+            line_end := std.mem.index_of(u8, buf[0..n], "\r\n") orelse n
+            std.io.printf("{}\n", .{ buf[0..line_end] })
+        }
+        total += n
+    }
+    std.io.printf("{} bytes received\n", .{ total })
+}
+```
+
+## prefix_len
+
+```otr
+const prefix_len = record.prefix_len
+```
+
+Bytes before application data in `seal`'s buffer, and after it.
+
+## max_plaintext
+
+```otr
+const max_plaintext = record.max_plaintext
+```
+
+The most plaintext one record carries (2^14).
+
+## max_record
+
+```otr
+const max_record = record.max_record
+```
+
+The longest record `recv` accepts; a buffer this long always holds the next record.
+
+## Stream
+
+```otr
+const Stream = struct
+```
+
+A TLS connection over a TCP socket, blocking the calling task.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>conn</code> | <code>net.Conn</code> | Read-only |  |
+| <code>tls</code> | <code>Client</code> | Read-only |  |
+| <code>buf</code> | <code>List(u8)</code> | Read-only | Received bytes: whole records up to `used`, the start of the next up to `filled`. |
+| <code>filled</code> | <code>usize</code> | Read-only |  |
+| <code>used</code> | <code>usize</code> | Read-only |  |
+| <code>plain_start</code> | <code>usize</code> | Read-only | Decrypted application data not yet read, inside `buf[..used]`. |
+| <code>plain_end</code> | <code>usize</code> | Read-only |  |
+| <code>wbuf</code> | <code>List(u8)</code> | Read-only | The record `write_all` seals each chunk in. |
+
+### Stream.connect
+
+```otr
+fn connect(io: std.Io, alloc: mem.Allocator, host: str, port: u16, options: Options) StreamError!Stream
+```
+
+Connects to `port` on `host` and completes the handshake.
+
+### Stream.client
+
+```otr
+fn client(self: &Stream) &Client
+```
+
+The handshake's state: version, suite and ALPN.
+
+### Stream.read
+
+```otr
+fn read(self: &mut Stream, io: std.Io, out: []mut u8) StreamError!usize
+```
+
+Reads application data into `out`, waiting for the next record when none is
+buffered; 0 means the server closed the connection with close_notify.
+
+### Stream.write_all
+
+```otr
+fn write_all(self: &mut Stream, io: std.Io, data: []u8) StreamError!void
+```
+
+Sends all of `data`, in records of at most `max_plaintext` bytes.
+
+### Stream.close
+
+```otr
+fn close(self: Stream, io: std.Io) void
+```
+
+Sends close_notify and closes the socket.
+
+### Stream.deinit
+
+```otr
+fn deinit(self: Stream) void
+```
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>Error</code> | [<code>wire.Error</code>](/otr/std/tls/wire#error) |
+| <code>Trust</code> | [<code>peer.Trust</code>](/otr/std/tls/peer#trust) |
+| <code>Version</code> | [<code>hello.Version</code>](/otr/std/tls/hello#version) |
+| <code>Options</code> | [<code>hello.Options</code>](/otr/std/tls/hello#options) |
+| <code>Client</code> | <code>session.Client</code> |
+| <code>Recv</code> | <code>session.Recv</code> |
+| <code>Range</code> | [<code>record.Range</code>](/otr/std/tls/record#range) |
+| <code>suffix_len</code> | [<code>record.suffix_len</code>](/otr/std/tls/record) |
+| <code>StreamError</code> | <code>Error \|\| net.Error</code> |

@@ -1,0 +1,106 @@
+---
+title: "std.crypto.rsa"
+sidebarTitle: "crypto.rsa"
+description: "RSA signature verification (RFC 8017)."
+---
+
+RSA signature verification (RFC 8017): RSASSA-PKCS1-v1_5 and RSASSA-PSS with MGF1, for
+moduli of 2048 to 4096 bits, as certificates and TLS use them. Keys are given as the
+big-endian modulus and public exponent, as `parse_public_key` finds them in a DER
+`RSAPublicKey`, so a parsed certificate can hand over the slices it holds.
+
+PKCS#1 v1.5 is checked by building the one valid encoding and comparing, never by
+parsing the decrypted block, which is how Bleichenbacher-style forgeries against
+lenient parsers are avoided.
+
+```otr
+import std.crypto.rsa
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>InvalidPublicKey</code> | The modulus or exponent is outside what is supported (2048 to 4096 bits, odd exponent from 3 up, below the modulus). |
+| <code>InvalidSignature</code> |  |
+
+## PublicKey
+
+```otr
+const PublicKey = struct
+```
+
+Where the modulus and exponent lie in a DER `RSAPublicKey`: the magnitudes of the two
+INTEGERs.
+
+| Field | Type |
+| --- | --- |
+| <code>n</code> | <code>asn1.Element</code> |
+| <code>e</code> | <code>asn1.Element</code> |
+
+### PublicKey.modulus
+
+```otr
+fn modulus(self: PublicKey, der: []u8) []u8
+```
+
+### PublicKey.exponent
+
+```otr
+fn exponent(self: PublicKey, der: []u8) []u8
+```
+
+## parse_public_key
+
+```otr
+fn parse_public_key(der: []u8) asn1.Error!PublicKey
+```
+
+The modulus and exponent of the `RSAPublicKey` (a SEQUENCE of two positive INTEGERs)
+that fills `der`.
+
+## verify_pkcs1v15
+
+```otr
+fn verify_pkcs1v15(h: sha2.Hash, n: []u8, e: []u8, msg: []u8, sig: []u8) Error!void
+```
+
+Checks the RSASSA-PKCS1-v1_5 signature `sig` of `msg`, hashed with `h`, under the key
+with modulus `n` and exponent `e`.
+
+## verify_pkcs1v15_digest
+
+```otr
+fn verify_pkcs1v15_digest(h: sha2.Hash, n: []u8, e: []u8, msg_digest: []u8, sig: []u8) Error!void
+```
+
+As `verify_pkcs1v15`, for a message already hashed into `msg_digest`.
+
+## verify_pss
+
+```otr
+fn verify_pss(h: sha2.Hash, n: []u8, e: []u8, msg: []u8, sig: []u8, salt_len: ?usize) Error!void
+```
+
+Checks the RSASSA-PSS signature `sig` of `msg` (RFC 8017 §8.1.2), with `h` for both
+the message digest and MGF1, under the key with modulus `n` and exponent `e`. The salt
+must be `salt_len` bytes, or any length when null.
+
+## verify_pss_digest
+
+```otr
+fn verify_pss_digest(h: sha2.Hash, n: []u8, e: []u8, msg_digest: []u8, sig: []u8, salt_len: ?usize) Error!void
+```
+
+As `verify_pss`, for a message already hashed into `msg_digest`.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>min_bits</code> | <code>2048</code> |
+| <code>max_bits</code> | <code>4096</code> |

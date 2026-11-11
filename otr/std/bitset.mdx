@@ -1,0 +1,406 @@
+---
+title: "std.bitset"
+sidebarTitle: "bitset"
+description: "Sets of small integers as bits in 64-bit words."
+---
+
+Sets of small integers as bits in 64-bit words. `StaticBitSet(N)` is a value holding
+`N` bits inline; `DynamicBitSet` owns a heap buffer whose length is chosen at run time.
+Both answer every query a word at a time: counting is a population count per word, and
+iterating the set bits clears the lowest one per step (`w & (w - 1)`), so neither
+branches per bit. Bits past the length are always clear, so whole-word operations
+need no masking afterwards.
+
+```otr
+import std.bitset
+```
+
+## Example
+
+```otr
+import std
+import std.bitset
+
+pub fn main() void {
+    // StaticBitSet holds its bits inline and needs no allocator.
+    var seen = bitset.StaticBitSet(64).init_empty()
+    seen.set(3)
+    seen.set(17)
+    seen.set(40)
+    seen.toggle(17)
+    seen.set_range_value(8, 12, true)
+    std.io.printf("count {} bit 3 {} bit 17 {}\n", .{ seen.count(), seen.is_set(3), seen.is_set(17) })
+
+    var it = seen.iter()
+    for i in it {
+        std.io.printf("{} ", .{ i })
+    }
+    std.io.println("")
+
+    var mask = bitset.StaticBitSet(64).init_empty()
+    mask.set_range_value(0, 10, true)
+    seen.intersect_with(&mask)
+    std.io.printf("below 10: {}, lowest {}\n", .{ seen.count(), seen.find_first_set() orelse 0 })
+
+    // DynamicBitSet takes its length at run time and owns heap storage.
+    var free = bitset.DynamicBitSet.init_full(std.mem.heap, 100)
+    defer free.deinit()
+    free.unset(0)
+    free.unset(1)
+    std.io.printf("{} of {} free, first free {}\n", .{ free.count(), free.len(), free.find_first_set() orelse 0 })
+}
+```
+
+```text
+count 6 bit 3 true bit 17 false
+3 8 9 10 11 40 
+below 10: 3, lowest 3
+98 of 100 free, first free 2
+```
+
+## pop_count
+
+```otr
+fn pop_count(x: u64) u64
+```
+
+The number of set bits in `x`. The classic bit-slicing sum, which the optimiser turns
+into one `popcnt` instruction on every target otr supports.
+
+## trailing_zeros
+
+```otr
+fn trailing_zeros(x: u64) u64
+```
+
+The number of zero bits below the lowest set bit of `x`; 64 when `x` is 0. Written as
+the population count of the bits below it, which the optimiser turns into `tzcnt`.
+
+## SetBits
+
+```otr
+const SetBits = ref struct
+```
+
+The set bits of a bit set, lowest first.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>words</code> | <code>[]u64</code> | Read-only |  |
+| <code>next_word</code> | <code>usize</code> | Read-only | The word after `current`'s. |
+| <code>current</code> | <code>u64</code> | Read-only | What is left of the word being read. |
+| <code>base</code> | <code>usize</code> | Read-only |  |
+
+### SetBits.next
+
+```otr
+fn next(self: &mut SetBits) ?usize
+```
+
+## StaticBitSet
+
+```otr
+fn StaticBitSet(comptime N: usize) type
+```
+
+`N` bits held inline.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>words</code> | <code>[word_count]u64</code> | Read-only |
+
+### StaticBitSet.init_empty
+
+```otr
+fn init_empty() Self
+```
+
+All `N` bits clear.
+
+### StaticBitSet.init_full
+
+```otr
+fn init_full() Self
+```
+
+All `N` bits set.
+
+### StaticBitSet.len
+
+```otr
+fn len(self: &Self) usize
+```
+
+The number of bits, `N`.
+
+### StaticBitSet.is_set
+
+```otr
+fn is_set(self: &Self, i: usize) bool
+```
+
+### StaticBitSet.set
+
+```otr
+fn set(self: &mut Self, i: usize) void
+```
+
+### StaticBitSet.unset
+
+```otr
+fn unset(self: &mut Self, i: usize) void
+```
+
+### StaticBitSet.toggle
+
+```otr
+fn toggle(self: &mut Self, i: usize) void
+```
+
+### StaticBitSet.set_value
+
+```otr
+fn set_value(self: &mut Self, i: usize, v: bool) void
+```
+
+Sets bit `i` to `v` without a branch.
+
+### StaticBitSet.set_all
+
+```otr
+fn set_all(self: &mut Self, v: bool) void
+```
+
+Sets or clears every bit.
+
+### StaticBitSet.set_range_value
+
+```otr
+fn set_range_value(self: &mut Self, start: usize, end: usize, v: bool) void
+```
+
+Sets bits `start..end` to `v`, a word at a time.
+
+### StaticBitSet.count
+
+```otr
+fn count(self: &Self) usize
+```
+
+The number of set bits.
+
+### StaticBitSet.find_first_set
+
+```otr
+fn find_first_set(self: &Self) ?usize
+```
+
+The lowest set bit.
+
+### StaticBitSet.union_with
+
+```otr
+fn union_with(self: &mut Self, other: &Self) void
+```
+
+Adds the bits of `other`.
+
+### StaticBitSet.intersect_with
+
+```otr
+fn intersect_with(self: &mut Self, other: &Self) void
+```
+
+Keeps only the bits also in `other`.
+
+### StaticBitSet.subtract
+
+```otr
+fn subtract(self: &mut Self, other: &Self) void
+```
+
+Clears the bits set in `other`.
+
+### StaticBitSet.toggle_set
+
+```otr
+fn toggle_set(self: &mut Self, other: &Self) void
+```
+
+Flips the bits set in `other`.
+
+### StaticBitSet.eql
+
+```otr
+fn eql(self: &Self, other: &Self) bool
+```
+
+### StaticBitSet.iter
+
+```otr
+fn iter(self: &Self) SetBits
+```
+
+The set bits, lowest first. The set stays borrowed while it is used.
+
+## DynamicBitSet
+
+```otr
+const DynamicBitSet = struct
+```
+
+A bit set whose length is chosen at run time, in words from an allocator.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>buf</code> | <code>mem.RawBuf(u64)</code> | Read-only |
+| <code>bits</code> | <code>usize</code> | Read-only |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+
+### DynamicBitSet.init_empty
+
+```otr
+fn init_empty(alloc: mem.Allocator, bits: usize) DynamicBitSet
+```
+
+`bits` bits, all clear.
+
+### DynamicBitSet.init_full
+
+```otr
+fn init_full(alloc: mem.Allocator, bits: usize) DynamicBitSet
+```
+
+`bits` bits, all set.
+
+### DynamicBitSet.deinit
+
+```otr
+fn deinit(self: DynamicBitSet) void
+```
+
+### DynamicBitSet.len
+
+```otr
+fn len(self: &DynamicBitSet) usize
+```
+
+The number of bits.
+
+### DynamicBitSet.resize
+
+```otr
+fn resize(self: &mut DynamicBitSet, bits: usize, v: bool) void
+```
+
+Changes the length to `bits`; bits added are `v`.
+
+### DynamicBitSet.is_set
+
+```otr
+fn is_set(self: &DynamicBitSet, i: usize) bool
+```
+
+### DynamicBitSet.set
+
+```otr
+fn set(self: &mut DynamicBitSet, i: usize) void
+```
+
+### DynamicBitSet.unset
+
+```otr
+fn unset(self: &mut DynamicBitSet, i: usize) void
+```
+
+### DynamicBitSet.toggle
+
+```otr
+fn toggle(self: &mut DynamicBitSet, i: usize) void
+```
+
+### DynamicBitSet.set_value
+
+```otr
+fn set_value(self: &mut DynamicBitSet, i: usize, v: bool) void
+```
+
+Sets bit `i` to `v` without a branch.
+
+### DynamicBitSet.set_all
+
+```otr
+fn set_all(self: &mut DynamicBitSet, v: bool) void
+```
+
+Sets or clears every bit.
+
+### DynamicBitSet.set_range_value
+
+```otr
+fn set_range_value(self: &mut DynamicBitSet, start: usize, end: usize, v: bool) void
+```
+
+Sets bits `start..end` to `v`, a word at a time.
+
+### DynamicBitSet.count
+
+```otr
+fn count(self: &DynamicBitSet) usize
+```
+
+The number of set bits.
+
+### DynamicBitSet.find_first_set
+
+```otr
+fn find_first_set(self: &DynamicBitSet) ?usize
+```
+
+The lowest set bit.
+
+### DynamicBitSet.union_with
+
+```otr
+fn union_with(self: &mut DynamicBitSet, other: &DynamicBitSet) void
+```
+
+Adds the bits of `other`, which has the same length; a different length panics.
+
+### DynamicBitSet.intersect_with
+
+```otr
+fn intersect_with(self: &mut DynamicBitSet, other: &DynamicBitSet) void
+```
+
+Keeps only the bits also in `other`, which has the same length.
+
+### DynamicBitSet.subtract
+
+```otr
+fn subtract(self: &mut DynamicBitSet, other: &DynamicBitSet) void
+```
+
+Clears the bits set in `other`, which has the same length.
+
+### DynamicBitSet.toggle_set
+
+```otr
+fn toggle_set(self: &mut DynamicBitSet, other: &DynamicBitSet) void
+```
+
+Flips the bits set in `other`, which has the same length.
+
+### DynamicBitSet.eql
+
+```otr
+fn eql(self: &DynamicBitSet, other: &DynamicBitSet) bool
+```
+
+### DynamicBitSet.iter
+
+```otr
+fn iter(self: &DynamicBitSet) SetBits
+```
+
+The set bits, lowest first. The set stays borrowed while it is used.

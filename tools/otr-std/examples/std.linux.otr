@@ -1,0 +1,35 @@
+import std
+import std.linux
+
+pub fn main() !void {
+    // A pipe and an eventfd, the two usual ways to wake an event loop.
+    pipe := try linux.pipe2(linux.O.nonblock)
+    defer pipe.deinit()
+    wake := try linux.eventfd(0, linux.EFD.nonblock)
+    defer wake.deinit()
+
+    // Each descriptor is registered with a datum that wait hands back.
+    loop := try linux.Epoll.init()
+    defer loop.deinit()
+    try loop.add(&pipe.a, linux.EPOLL.readable, 1)
+    try loop.add(&wake, linux.EPOLL.readable, 2)
+
+    var events: [4]linux.EpollEvent
+    std.io.printf("nothing ready yet: {}\n", .{ (try loop.wait(&out events, 0)).len == 0 })
+
+    _ = try pipe.b.write("ping")
+    try wake.write_u64(3)
+
+    var buf: [16]u8
+    var seen: u64 = 0
+    for ev in try loop.wait(&out events, 0) {
+        seen += ev.data()
+    }
+    // Sum of the two data, whatever order the kernel reported them in.
+    std.io.printf("ready data sum: {}\n", .{ seen })
+    std.io.printf("pipe: {}\n", .{ try pipe.a.read(&out buf) })
+    std.io.printf("eventfd counter: {}\n", .{ try wake.read_u64() })
+
+    try loop.remove(&wake)
+    std.io.printf("after reading: {} ready\n", .{ (try loop.wait(&out events, 0)).len })
+}

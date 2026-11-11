@@ -1,0 +1,274 @@
+---
+title: "std.linux.process"
+sidebarTitle: "linux.process"
+description: "Linux signals, calling-thread masks, resource limits and child status."
+---
+
+Linux signals, calling-thread masks, resource limits and child status.
+
+```otr
+import std.linux.process
+```
+
+## Example
+
+```otr
+import std
+import std.linux.process
+
+pub fn main() !void {
+    // Block the signals first, so they wait to be read instead of ending the program.
+    watched := process.SigSet.of(&[2]i32{ process.SIG.usr1, process.SIG.usr2 })
+    before := try process.block_signals(watched)
+    std.io.printf("usr1 was blocked before: {}\n", .{ before.has(process.SIG.usr1) })
+
+    // A signalfd turns them into values an event loop reads like any other input.
+    signals := try process.signalfd(watched, true)
+    defer signals.deinit()
+    std.io.printf("pending at start: {}\n", .{ (try process.next_signal(&signals)) != null })
+
+    try process.raise(process.SIG.usr1)
+    if try process.next_signal(&signals) |sig| {
+        std.io.printf("got signal {}, usr1 is {}\n", .{ sig, process.SIG.usr1 })
+    }
+    std.io.printf("pending after: {}\n", .{ (try process.next_signal(&signals)) != null })
+    try process.set_signal_mask(before)
+
+    // The soft limit is what applies; the process may raise it up to the hard limit.
+    files := try process.get_rlimit(process.RLIMIT.nofile)
+    std.io.printf("soft limit within hard limit: {}\n", .{ files.cur <= files.max })
+    try process.set_rlimit(process.RLIMIT.nofile, .{ cur: 64, max: files.max })
+    lowered := try process.get_rlimit(process.RLIMIT.nofile)
+    std.io.printf("open file limit now: {}\n", .{ lowered.cur })
+}
+```
+
+```text
+usr1 was blocked before: false
+pending at start: false
+got signal 10, usr1 is 10
+pending after: false
+soft limit within hard limit: true
+open file limit now: 64
+```
+
+## SIG
+
+```otr
+const SIG = struct
+```
+
+Signal numbers.
+
+| Name | Definition |
+| --- | --- |
+| <code>SIG.hup</code> | <code>1</code> |
+| <code>SIG.int</code> | <code>2</code> |
+| <code>SIG.quit</code> | <code>3</code> |
+| <code>SIG.kill</code> | <code>9</code> |
+| <code>SIG.usr1</code> | <code>10</code> |
+| <code>SIG.usr2</code> | <code>12</code> |
+| <code>SIG.pipe</code> | <code>13</code> |
+| <code>SIG.alrm</code> | <code>14</code> |
+| <code>SIG.term</code> | <code>15</code> |
+| <code>SIG.chld</code> | <code>17</code> |
+
+## SigSet
+
+```otr
+const SigSet = extern struct
+```
+
+A set of signals, as the C library's `sigset_t`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>bits</code> | <code>[16]u64</code> | Read-only |
+
+### SigSet.empty
+
+```otr
+fn empty() SigSet
+```
+
+### SigSet.of
+
+```otr
+fn of(signals: []i32) SigSet
+```
+
+### SigSet.add
+
+```otr
+fn add(self: &mut SigSet, sig: i32) void
+```
+
+### SigSet.has
+
+```otr
+fn has(self: &SigSet, sig: i32) bool
+```
+
+## block_signals
+
+```otr
+fn block_signals(set: SigSet) Error!SigSet
+```
+
+Blocks `set` for the calling thread, adding to those blocked; returns the mask before.
+
+## set_signal_mask
+
+```otr
+fn set_signal_mask(set: SigSet) Error!void
+```
+
+Replaces the calling thread's signal mask with `set`.
+
+## signalfd
+
+```otr
+fn signalfd(set: SigSet, nonblock: bool) Error!Fd
+```
+
+A descriptor that reads the signals in `set` as they arrive, once they are blocked
+(`block_signals`), so a loop handles them like any other event; read with
+`next_signal`.
+
+## next_signal
+
+```otr
+fn next_signal(sfd: &Fd) Error!?i32
+```
+
+The next signal a `signalfd` holds, or null when none is pending on a non-blocking one.
+
+## Rlimit
+
+```otr
+const Rlimit = extern struct
+```
+
+A resource limit: the soft limit `cur`, which the process may raise up to the hard
+limit `max`.
+
+| Field | Type |
+| --- | --- |
+| <code>cur</code> | <code>u64</code> |
+| <code>max</code> | <code>u64</code> |
+
+## RLIMIT
+
+```otr
+const RLIMIT = struct
+```
+
+Resources for `get_rlimit`, `set_rlimit` and `prlimit`.
+
+### RLIMIT.nofile
+
+```otr
+const nofile: i32 = 7
+```
+
+Open descriptors: one more than the highest number the process may open.
+
+### RLIMIT.address_space
+
+```otr
+const address_space: i32 = 9
+```
+
+Bytes of virtual address space (RLIMIT_AS).
+
+| Name | Definition |
+| --- | --- |
+| <code>RLIMIT.core</code> | <code>4</code> |
+
+## get_rlimit
+
+```otr
+fn get_rlimit(resource: i32) Error!Rlimit
+```
+
+## set_rlimit
+
+```otr
+fn set_rlimit(resource: i32, limit: Rlimit) Error!void
+```
+
+## prlimit
+
+```otr
+fn prlimit(pid: i32, resource: i32, new: ?Rlimit) Error!Rlimit
+```
+
+Process `pid`'s limit on `resource`, as it was before `new`, if given, replaced it; a
+child started by `process.spawn` is `child.pid()`.
+
+## raise
+
+```otr
+fn raise(sig: i32) Error!void
+```
+
+Sends signal `sig` to the calling thread, which is where `block_signals` blocked it.
+
+## kill
+
+```otr
+fn kill(pid: i32, sig: i32) Error!void
+```
+
+Sends signal `sig` to process `pid` (or to a process group, when negative).
+
+## W
+
+```otr
+const W = struct
+```
+
+Options for `waitpid`.
+
+| Name | Definition |
+| --- | --- |
+| <code>W.nohang</code> | <code>1</code> |
+| <code>W.untraced</code> | <code>2</code> |
+| <code>W.continued</code> | <code>8</code> |
+
+## Wait
+
+```otr
+const Wait = struct
+```
+
+A child's change of state: `pid` is 0 when `W.nohang` found none.
+
+| Field | Type |
+| --- | --- |
+| <code>pid</code> | <code>i32</code> |
+| <code>status</code> | <code>i32</code> |
+
+### Wait.exit_code
+
+```otr
+fn exit_code(self: &Wait) ?u8
+```
+
+The exit code, when the child exited.
+
+### Wait.term_signal
+
+```otr
+fn term_signal(self: &Wait) ?u8
+```
+
+The signal that ended the child, when one did.
+
+## waitpid
+
+```otr
+fn waitpid(pid: i32, options: i32) Error!Wait
+```
+
+Waits for a child of this process to change state; `pid` -1 waits for any.

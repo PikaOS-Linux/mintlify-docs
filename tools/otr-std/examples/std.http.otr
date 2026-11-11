@@ -1,0 +1,36 @@
+import std
+import std.http
+import std.net
+import std.string
+
+// A one-request server, so the example needs no network: it answers any request.
+fn serve_once(io: std.Io, listener: &net.Listener) net.Error!void {
+    conn := try listener.accept(io)
+    defer conn.deinit()
+    var buf: [1024]u8
+    _ = try conn.read(io, &out buf)
+    try conn.write_all(io, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\nConnection: close\r\n\r\nhello otter\n")
+}
+
+pub fn main(env: std.Env) !void {
+    io := env.io
+    heap := std.mem.heap
+
+    listener := try net.listen(io, .{ host: "127.0.0.1" })
+    defer listener.deinit()
+    server := io.async(fn[io, &listener]() net.Error!void { return serve_once(io, &listener) })
+    // If the client fails, cancelling ends the server's wait in accept.
+    defer server.cancel(io) catch {}
+
+    url := string.String.from_fmt(heap, "http://127.0.0.1:{}/greeting", .{ listener.port() })
+    defer url.deinit()
+
+    // `trust` names the roots that https servers are checked against.
+    headers := [1]http.Header{ .{ name: "Accept", value: "text/plain" } }
+    r := try http.fetch(io, heap, .{ url: url.as_str(), headers: &headers }, .{ trust: .system{ env }, timeout_ms: 5000 })
+    defer r.deinit()
+
+    std.io.printf("status {}\n", .{ r.status })
+    std.io.printf("content-type: {}\n", .{ r.header("content-type") orelse "(none)" })
+    std.io.printf("body: {}", .{ r.body() })
+}

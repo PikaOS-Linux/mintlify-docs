@@ -1,0 +1,104 @@
+---
+title: "std.crypto.hkdf"
+sidebarTitle: "crypto.hkdf"
+description: "HKDF (RFC 5869), the key derivation of TLS 1.3."
+---
+
+HKDF (RFC 5869), the key derivation of TLS 1.3: `extract` concentrates input keying
+material into a pseudorandom key, and `expand` stretches that key into as many bytes as
+asked for, bound to an `info` string.
+
+```otr
+import std.crypto.hkdf
+```
+
+## Example
+
+```otr
+import std
+import std.crypto.hkdf
+
+fn print_hex(label: str, bytes: []u8) void {
+    std.io.printf("{}: ", .{ label })
+    for b in bytes { std.io.printf("{x:0>2}", .{ b }) }
+    std.io.printf("\n", .{})
+}
+
+pub fn main() void {
+    // Input keying material, such as a Diffie-Hellman shared secret, is not a key yet.
+    shared_secret := "result of a key exchange"
+    salt := "example salt"
+
+    // extract concentrates it into one pseudorandom key.
+    prk := hkdf.HkdfSha256.extract(salt, shared_secret)
+
+    // expand derives independent keys from it, one per purpose named in `info`.
+    var send_key: [32]u8 = std.mem.splat(32, u8, 0)
+    var recv_key: [32]u8 = std.mem.splat(32, u8, 0)
+    var nonce: [12]u8 = std.mem.splat(12, u8, 0)
+    hkdf.HkdfSha256.expand(&mut send_key[0..], &prk, "client to server")
+    hkdf.HkdfSha256.expand(&mut recv_key[0..], &prk, "server to client")
+    hkdf.HkdfSha256.expand(&mut nonce[0..], &prk, "nonce")
+
+    print_hex("send key", send_key[0..])
+    print_hex("recv key", recv_key[0..])
+    print_hex("nonce", nonce[0..])
+}
+```
+
+```text
+send key: c9fc29f1ed91e05408fe97794dac1a13ca3587d4ac6ecdaf4ffd088cf04dee75
+recv key: d90c9ad65b8014e3df80dba593d7d5abc8ceb2fb4a8089b19f641ce361bcb94d
+nonce: 88ab46ba87e056f344544420
+```
+
+## Hkdf
+
+```otr
+fn Hkdf(comptime H: type) type
+```
+
+HKDF with HMAC over the hash `H`.
+
+### Hkdf.prk_len
+
+```otr
+const prk_len: usize = H.digest_len
+```
+
+The length of the pseudorandom key `extract` gives.
+
+### Hkdf.max_out_len
+
+```otr
+const max_out_len: usize = 255 * H.digest_len
+```
+
+The most `expand` can give: RFC 5869 numbers the blocks with one byte.
+
+### Hkdf.extract
+
+```otr
+fn extract(salt: []u8, ikm: []u8) [H.digest_len]u8
+```
+
+The pseudorandom key from `ikm` and `salt`. An empty salt is a block of zeros,
+which HMAC pads an empty key to anyway, as the RFC asks.
+
+### Hkdf.expand
+
+```otr
+fn expand(out: []mut u8, prk: &[prk_len]u8, info: []u8) void
+```
+
+Fills `out` from the pseudorandom key `prk` and `info`. Panics when `out` is
+longer than `max_out_len`, which callers know from their protocol, not their
+input.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>HkdfSha256</code> | <code>Hkdf(sha2.Sha256)</code> |
+| <code>HkdfSha384</code> | <code>Hkdf(sha2.Sha384)</code> |
+| <code>HkdfSha512</code> | <code>Hkdf(sha2.Sha512)</code> |

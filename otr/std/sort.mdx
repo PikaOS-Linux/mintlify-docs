@@ -1,0 +1,175 @@
+---
+title: "std.sort"
+sidebarTitle: "sort"
+description: "Sorting slices in place, and searching sorted ones."
+---
+
+Sorting slices in place, and searching sorted ones. `sort` is unstable and allocates
+nothing; `stable_sort` keeps equal elements in their order and borrows a buffer of half
+the slice from an allocator. Both take any element type, resources included: elements
+are only moved between places of the slice, never copied or dropped. A comparator that
+is not a strict weak order leaves the elements in some order, but never reads outside
+the slice.
+
+```otr
+import std.sort
+```
+
+## Example
+
+```otr
+import std
+
+const Player = struct {
+    name: []static u8
+    score: u32
+}
+
+pub fn main() void {
+    var xs = [7]i64{ 42, 7, 19, 3, 7, 88, 1 }
+    std.sort.ascending(i64, &mut xs)
+    for x in xs {
+        std.io.printf("{} ", .{ x })
+    }
+    std.io.println("")
+
+    // A closure literal as the comparator is inlined into the sort.
+    less := fn(a: &i64, b: &i64) bool { return a.* < b.* }
+    std.io.printf("sorted {}\n", .{ std.sort.is_sorted(i64, &xs, less) })
+    key: i64 = 19
+    absent: i64 = 50
+    seven: i64 = 7
+    std.io.printf("19 at {}\n", .{ std.sort.binary_search(i64, &xs, &key, less) orelse 0 })
+    std.io.printf("50 missing {}\n", .{ std.sort.binary_search(i64, &xs, &absent, less) == null })
+    std.io.printf("7s at {}..{}\n", .{ std.sort.lower_bound(i64, &xs, &seven, less), std.sort.upper_bound(i64, &xs, &seven, less) })
+
+    var players = [4]Player{
+        .{ name: "ada", score: 70 },
+        .{ name: "bob", score: 95 },
+        .{ name: "cy", score: 70 },
+        .{ name: "dee", score: 80 },
+    }
+    // Highest score first; the stable sort keeps ada ahead of cy.
+    std.sort.stable_sort(Player, std.mem.heap, &mut players, fn(a: &Player, b: &Player) bool { return a.score > b.score })
+    for p in players {
+        std.io.printf("{} {}\n", .{ p.name, p.score })
+    }
+}
+```
+
+```text
+1 3 7 7 19 42 88 
+sorted true
+19 at 4
+50 missing true
+7s at 2..4
+bob 95
+dee 80
+ada 70
+cy 70
+```
+
+## sort
+
+```otr
+fn sort(comptime T: type, items: []mut T, less: anytype) void
+```
+
+Sorts `items` so that `less(&a, &b)` holds for no pair out of order. Not stable.
+Pattern-defeating quicksort, as Zig's and Rust's: a pivot from a median of three (of
+three medians of three for long ranges), insertion sort for short ranges, a pass that
+settles runs equal to the pivot so duplicates cost linear time, a few elements
+shuffled after an unbalanced partition so periodic input cannot keep choosing bad
+pivots, and heapsort once too many partitions came out unbalanced, so it never takes
+quadratic time. Small elements are partitioned without a branch on the comparison,
+large ones a block at a time so that only misplaced elements move. Input in order or in
+reverse order (ties allowed) is found in one pass and costs O(n), and a range that
+looks sorted after a balanced partition that moved nothing is finished by insertion
+sort when only a few elements are out of place. Pass the comparator as a closure
+literal, whose calls inline; a named function is a function pointer, called indirectly.
+
+## ascending
+
+```otr
+fn ascending(comptime T: type, items: []mut T) void
+```
+
+`sort` with `<` on numbers.
+
+## sort_by_key
+
+```otr
+fn sort_by_key(comptime T: type, items: []mut T, key: anytype) void
+```
+
+`sort` ordering elements by `key(&x)` with `<`, so a number or other value with `<`
+picked out of each element: `sort_by_key(Item, xs, fn(x: &Item) u32 { return x.rank })`.
+
+## stable_sort
+
+```otr
+fn stable_sort(comptime T: type, alloc: mem.Allocator, items: []mut T, less: anytype) void
+```
+
+Sorts `items` so that `less(&a, &b)` holds for no pair out of order, keeping equal
+elements in the order they had. A natural merge sort in the manner of powersort: the
+slice is cut into runs already in order (or descending, then reversed back stably),
+each extended to at least 20 elements by insertion sort, and runs are merged in the
+order powersort's merge tree gives, so presorted stretches of any length cost one pass.
+A merge moves the shorter run into a buffer of `items.len / 2` elements from `alloc`
+and takes from either side without a branch; runs already in order are not merged.
+
+## stable_sort_by_key
+
+```otr
+fn stable_sort_by_key(comptime T: type, alloc: mem.Allocator, items: []mut T, key: anytype) void
+```
+
+`stable_sort` ordering elements by `key(&x)` with `<`.
+
+## is_sorted
+
+```otr
+fn is_sorted(comptime T: type, items: []T, less: anytype) bool
+```
+
+Whether no element of `items` is `less` than the one before it.
+
+## partition_point
+
+```otr
+fn partition_point(comptime T: type, items: []T, pred: anytype) usize
+```
+
+The index of the first element of `items` for which `pred(&x)` is false, where every
+element it holds for comes before every one it does not, as in a sorted slice: the
+place a key goes. Halves the range with a select rather than a branch, so a search
+costs `log2(n) + 1` comparisons and no mispredictions; `items.len` when `pred` holds
+for every element, 0 for an empty slice.
+
+## lower_bound
+
+```otr
+fn lower_bound(comptime T: type, items: []T, key: &T, less: anytype) usize
+```
+
+The index of the first element of sorted `items` that is not `less` than `key`: where
+`key` goes before any equal elements.
+
+## upper_bound
+
+```otr
+fn upper_bound(comptime T: type, items: []T, key: &T, less: anytype) usize
+```
+
+The index of the first element of sorted `items` that `key` is `less` than: where
+`key` goes after any equal elements.
+
+## binary_search
+
+```otr
+fn binary_search(comptime T: type, items: []T, key: &T, less: anytype) ?usize
+```
+
+The index of an element of sorted `items` equal to `key` (neither is `less` than the
+other), the first of them when there are several, or null.

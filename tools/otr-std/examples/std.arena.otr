@@ -1,0 +1,42 @@
+import std
+import std.arena
+
+fn Node(comptime r: region) type {
+    return struct {
+        value: i64
+        next: ?&r Node(r)
+    }
+}
+
+pub fn main() void {
+    // Everything allocated from the region is freed together when it ends.
+    region r = arena.Arena.init(std.mem.heap)
+    defer r.deinit()
+
+    var head: ?&r Node(r) = null
+    for i in 0..5 {
+        head = r.new(Node(r){ value: @int_cast(i64, i), next: head })
+    }
+    var sum: i64 = 0
+    var it = head
+    for it != null {
+        node := it.?
+        sum += node.value
+        it = node.next
+    }
+    std.io.printf("linked sum {}\n", .{ sum })
+
+    // Region collections have no deinit of their own.
+    squares := r.list(i64)
+    for i in 1..5 {
+        squares.push(@int_cast(i64, i * i))
+    }
+    names := r.map(u32, []static u8)
+    names.put(7, "seven")
+    text := r.string()
+    text.push_str("in a region")
+    zeros := r.alloc(u8, 16, 0)
+
+    std.io.printf("{} squares, last {}\n", .{ squares.len(), squares.at(3) })
+    std.io.printf("{} {} {}\n", .{ names.get(7) orelse "?", text.as_str(), zeros.len })
+}

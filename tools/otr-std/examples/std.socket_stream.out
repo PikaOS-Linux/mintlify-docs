@@ -1,0 +1,6 @@
+wants to write: true
+flush: progress
+receive: progress
+bytes: hello, here is a counter
+after consume: here is a counter
+counter read through the passed descriptor: 7

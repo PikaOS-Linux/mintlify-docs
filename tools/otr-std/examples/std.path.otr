@@ -1,0 +1,23 @@
+import std
+import std.path
+
+pub fn main() !void {
+    file := "/home/jade/notes/todo.tar.gz"
+    std.io.printf("dirname   {}\n", .{ path.dirname(file) orelse "" })
+    std.io.printf("basename  {}\n", .{ path.basename(file) })
+    std.io.printf("stem      {}\n", .{ path.stem(file) })
+    std.io.printf("extension {}\n", .{ path.extension(file) })
+
+    // A leading dot starts a hidden file's name, not an extension.
+    std.io.printf("[{}] [{}]\n", .{ path.extension(".profile"), path.basename("/var/log/") })
+    std.io.printf("dirname of a bare name is null: {}\n", .{ path.dirname("todo.txt") == null })
+
+    // join puts exactly one slash between its sides.
+    joined := path.join(std.mem.heap, "/etc/otter-shell/", "theme.conf")
+    defer joined.deinit()
+    std.io.println(joined.as_str())
+
+    // join_into builds on the stack and takes any number of parts.
+    var buf = path.Buf.init()
+    std.io.println(try path.join_into(&mut buf, [3]str{ "/usr", "share/icons", "hicolor" }))
+}

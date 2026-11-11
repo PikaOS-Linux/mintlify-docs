@@ -1,0 +1,8 @@
+[name = otter shell]
+key [name] value [otter shell]
+starts with name: true
+eql: true
+<a><b><><c>
+<one><two><three>
+abcd 4 4030201
+took 5, slot empty true

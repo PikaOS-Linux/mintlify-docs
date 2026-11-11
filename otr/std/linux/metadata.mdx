@@ -1,0 +1,82 @@
+---
+title: "std.linux.metadata"
+sidebarTitle: "linux.metadata"
+description: "Allocation-free Linux file metadata and symbolic-link reads."
+---
+
+Allocation-free Linux file metadata and symbolic-link reads.
+
+```otr
+import std.linux.metadata
+```
+
+## Example
+
+```otr
+import std
+import std.linux.fd
+import std.linux.metadata
+
+pub fn main() !void {
+    file := try fd.memfd("example", 16)
+    defer file.deinit()
+    copy := try file.dup()
+    defer copy.deinit()
+    other := try fd.memfd("example", 16)
+    defer other.deinit()
+
+    // Device and inode together name a file, whatever path or descriptor reached it.
+    a := try metadata.fd_stat(&file)
+    b := try metadata.fd_stat(&copy)
+    c := try metadata.fd_stat(&other)
+    same := a.ino == b.ino and a.dev_major == b.dev_major and a.dev_minor == b.dev_minor
+    std.io.printf("a duplicate is the same file: {}\n", .{ same })
+    std.io.printf("another memfd is the same file: {}\n", .{ a.ino == c.ino })
+
+    // read_link fills the caller's buffer and returns the part it wrote.
+    var buf: [256]u8
+    target := try metadata.read_link("/dev/stdout", &out buf)
+    std.io.printf("/dev/stdout -> {}\n", .{ target })
+
+    if metadata.read_link("/dev/null", &out buf) |_| {} else |err| {
+        std.io.printf("/dev/null is not a link: {}\n", .{ err })
+    }
+}
+```
+
+```text
+a duplicate is the same file: true
+another memfd is the same file: false
+/dev/stdout -> /proc/self/fd/1
+/dev/null is not a link: error.Invalid
+```
+
+## Stat
+
+```otr
+const Stat = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>dev_major</code> | <code>u32</code> |
+| <code>dev_minor</code> | <code>u32</code> |
+| <code>rdev_major</code> | <code>u32</code> |
+| <code>rdev_minor</code> | <code>u32</code> |
+| <code>ino</code> | <code>u64</code> |
+
+## fd_stat
+
+```otr
+fn fd_stat(file: &Fd) Error!Stat
+```
+
+Device numbers and inode of the open descriptor, without reopening its path.
+
+## read_link
+
+```otr
+fn read_link(path: str, buf: []out u8) Error! []u8
+```
+
+The link target's written prefix; no NUL is appended to the caller's buffer.

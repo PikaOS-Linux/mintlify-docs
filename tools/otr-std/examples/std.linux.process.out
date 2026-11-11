@@ -1,0 +1,6 @@
+usr1 was blocked before: false
+pending at start: false
+got signal 10, usr1 is 10
+pending after: false
+soft limit within hard limit: true
+open file limit now: 64

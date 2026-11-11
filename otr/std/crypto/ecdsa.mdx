@@ -1,0 +1,71 @@
+---
+title: "std.crypto.ecdsa"
+sidebarTitle: "crypto.ecdsa"
+description: "ECDSA signature verification (FIPS 186-5) over P-256 and P-384, as TLS and X.509 use it."
+---
+
+ECDSA signature verification (FIPS 186-5) over P-256 and P-384, as TLS and X.509 use
+it. Signatures come DER-encoded (`Ecdsa-Sig-Value`, a SEQUENCE of two INTEGERs) or as
+the fixed-width `r || s` of IEEE P1363; both are parsed strictly, so a signature has
+one encoding and malleated encodings are rejected rather than accepted as the same.
+
+```otr
+import std.crypto.ecdsa
+```
+
+## Curve
+
+```otr
+const Curve = enum
+```
+
+| Variant |
+| --- |
+| <code>p256</code> |
+| <code>p384</code> |
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>InvalidPublicKey</code> | The public key is not a point of the curve. |
+| <code>InvalidSignature</code> | The signature is malformed or does not match. |
+
+## verify
+
+```otr
+fn verify(curve: Curve, h: sha2.Hash, public_key: []u8, msg: []u8, sig: []u8) Error!void
+```
+
+Checks the DER signature `sig` of `msg`, hashed with `h`, under the SEC 1 public key
+`public_key` of `curve`.
+
+## verify_digest
+
+```otr
+fn verify_digest(curve: Curve, public_key: []u8, msg_digest: []u8, sig: []u8) Error!void
+```
+
+As `verify`, for a message already hashed into `msg_digest`.
+
+## verify_p1363
+
+```otr
+fn verify_p1363(curve: Curve, h: sha2.Hash, public_key: []u8, msg: []u8, sig: []u8) Error!void
+```
+
+As `verify`, for a P1363 signature: `r` and `s` big-endian, each as wide as the curve's
+order.
+
+## parse_der
+
+```otr
+fn parse_der(sig: []u8) asn1.Error!struct { asn1.Element, asn1.Element }
+```
+
+Where `r` and `s` lie in a DER signature: the magnitudes of two positive minimal
+INTEGERs in a SEQUENCE that fills `sig`.

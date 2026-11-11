@@ -1,0 +1,400 @@
+---
+title: "std.http"
+sidebarTitle: "http"
+description: "An HTTP/1.1 client (RFC 9110, RFC 9112) over std.net and std.tls."
+---
+
+An HTTP/1.1 client (RFC 9110, RFC 9112) over `std.net` and `std.tls`: GET, POST and
+the other methods with headers and a body, responses framed by Content-Length, chunked
+transfer coding or the end of the connection, redirects up to a limit, a time limit
+for connecting and one for the whole exchange, and proxies from `http_proxy`,
+`https_proxy` and `no_proxy` (an https URL goes through the proxy by CONNECT).
+Bodies coded `gzip` or `deflate` are decoded (`std.flate`), and those two are asked
+for, unless `Options.decode` is off; other codings are handed over as they came.
+
+`Fetch` is one exchange as a state machine over a non-blocking socket, for event
+loops: `step` does what the socket allows without waiting, then `fd`, `want_read`,
+`want_write` and `deadline` say what to wait for before calling it again. `fetch` is
+the blocking call built on it. `Parser` reads a response from bytes, with no I/O.
+
+```otr
+var r = try http.fetch(env.io, heap, .{ url: "https://example.com/" }, .{ trust: .system{ env } })
+defer r.deinit()
+io.printf("{} {}\n", .{ r.status, r.body().len })
+```
+
+Host names are looked up by `net.Lookup`, the system's resolver on a thread of its own:
+while it runs, `fd` is its descriptor and `want_read` is set, as for the socket.
+
+`Client` keeps connections open between exchanges with the same server (HTTP/1.1
+persistent connections, RFC 9112 §9.3) and starts each `Fetch` on an idle one when it
+has one, which skips the lookup, the connect and the TLS handshake.
+
+`http.parser` reads responses and `http.url` writes requests; their types are
+re-exported here.
+
+```otr
+import std.http
+```
+
+## Example
+
+```otr
+import std
+import std.http
+import std.net
+import std.string
+
+// A one-request server, so the example needs no network: it answers any request.
+fn serve_once(io: std.Io, listener: &net.Listener) net.Error!void {
+    conn := try listener.accept(io)
+    defer conn.deinit()
+    var buf: [1024]u8
+    _ = try conn.read(io, &out buf)
+    try conn.write_all(io, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\nConnection: close\r\n\r\nhello otter\n")
+}
+
+pub fn main(env: std.Env) !void {
+    io := env.io
+    heap := std.mem.heap
+
+    listener := try net.listen(io, .{ host: "127.0.0.1" })
+    defer listener.deinit()
+    server := io.async(fn[io, &listener]() net.Error!void { return serve_once(io, &listener) })
+    // If the client fails, cancelling ends the server's wait in accept.
+    defer server.cancel(io) catch {}
+
+    url := string.String.from_fmt(heap, "http://127.0.0.1:{}/greeting", .{ listener.port() })
+    defer url.deinit()
+
+    // `trust` names the roots that https servers are checked against.
+    headers := [1]http.Header{ .{ name: "Accept", value: "text/plain" } }
+    r := try http.fetch(io, heap, .{ url: url.as_str(), headers: &headers }, .{ trust: .system{ env }, timeout_ms: 5000 })
+    defer r.deinit()
+
+    std.io.printf("status {}\n", .{ r.status })
+    std.io.printf("content-type: {}\n", .{ r.header("content-type") orelse "(none)" })
+    std.io.printf("body: {}", .{ r.body() })
+}
+```
+
+```text
+status 200
+content-type: text/plain
+body: hello otter
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>TooManyRedirects</code> | More redirects than `Options.max_redirects`. |
+| <code>RedirectRefused</code> | A redirect, or with `https_only` the first URL, that `Options.redirect_policy` does not allow. |
+| <code>ProxyRefused</code> | The proxy answered CONNECT with something other than success. |
+| <code>Timeout</code> | A time limit of `Options` passed. |
+
+## Method
+
+```otr
+const Method = enum
+```
+
+| Variant |
+| --- |
+| <code>get</code> |
+| <code>head</code> |
+| <code>post</code> |
+| <code>put</code> |
+| <code>delete</code> |
+| <code>patch</code> |
+| <code>options</code> |
+
+### Method.name
+
+```otr
+fn name(self: Method) []static u8
+```
+
+## Request
+
+```otr
+const Request = ref struct
+```
+
+What to send. Everything is copied by `Fetch.init`, so it may borrow.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>method</code> | <code>Method = .get</code> |  |
+| <code>url</code> | <code>str</code> |  |
+| <code>headers</code> | <code>[]Header = &amp;[0]Header&#123;&#125;</code> |  |
+| <code>body</code> | <code>str = ""</code> | Sent with a Content-Length, when not empty or when the method is POST, PUT or PATCH. |
+
+## RedirectPolicy
+
+```otr
+const RedirectPolicy = union
+```
+
+Which redirects an exchange follows; any other ends it with `error.RedirectRefused`.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| <code>any</code> |  |  |
+| <code>https_only</code> |  | Only to https URLs, and from an https URL: no hop is ever made in clear text. |
+| <code>same_origin</code> |  | Only to the first URL's scheme, host and port. |
+| <code>check</code> | <code>fn(str, str) bool</code> | `allow(from, to)` decides each hop, given the two absolute URLs. |
+
+## Options
+
+```otr
+const Options = struct
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>trust</code> | <code>tls.Trust</code> |  |
+| <code>proxy</code> | <code>?Proxy = null</code> |  |
+| <code>max_redirects</code> | <code>u8 = 5</code> | Redirects followed before `TooManyRedirects`; 0 hands a redirect back as it came. |
+| <code>redirect_policy</code> | <code>RedirectPolicy = .any</code> |  |
+| <code>connect_timeout_ms</code> | <code>?u64 = 30000</code> | The limit for each connection, from looking up the host to the end of the TLS handshake, in milliseconds; null for none. |
+| <code>timeout_ms</code> | <code>?u64 = null</code> | The limit for the whole exchange, redirects included; null for none. |
+| <code>max_head</code> | <code>usize = 65536</code> |  |
+| <code>max_body</code> | <code>usize = 64 &lt;&lt; 20</code> |  |
+| <code>decode</code> | <code>bool = true</code> | Sends `Accept-Encoding: gzip, deflate` unless the request names its own, and decodes a final response's body coded either way; `Content-Encoding` stays in its header fields. False hands bodies over as they came. |
+
+## Fetch
+
+```otr
+const Fetch = struct
+```
+
+One exchange, redirects included, over a non-blocking socket. After `init`, call
+`step` until it returns true, waiting between calls for `fd` to be readable when
+`want_read` or writable when `want_write`, or for `deadline` to pass; then take the
+response with `into_response`.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |  |
+| <code>trust</code> | <code>tls.Trust</code> | Read-only |  |
+| <code>proxy</code> | <code>?Proxy</code> | Read-only |  |
+| <code>max_redirects</code> | <code>u8</code> | Read-only |  |
+| <code>redirect_policy</code> | <code>RedirectPolicy</code> | Read-only |  |
+| <code>connect_timeout_ns</code> | <code>?u64</code> | Read-only |  |
+| <code>max_head</code> | <code>usize</code> | Read-only |  |
+| <code>max_body</code> | <code>usize</code> | Read-only |  |
+| <code>decode</code> | <code>bool</code> | Read-only |  |
+| <code>total_deadline</code> | <code>?u64</code> | Read-only |  |
+| <code>connect_deadline</code> | <code>?u64</code> | Read-only |  |
+| <code>method</code> | <code>Method</code> | Read-only |  |
+| <code>url</code> | <code>String</code> | Read-only |  |
+| <code>headers</code> | <code>String</code> | Read-only |  |
+| <code>body</code> | <code>List(u8)</code> | Read-only |  |
+| <code>redirects</code> | <code>u8</code> | Read-only |  |
+| <code>first_host</code> | <code>bounded.InlineString(253)</code> | Read-only | Credentials from the URL and the caller's Authorization and Cookie fields go only to the scheme, host and port first asked, as curl keeps them since CVE-2022-27776. |
+| <code>first_secure</code> | <code>bool</code> | Read-only |  |
+| <code>first_port</code> | <code>u16</code> | Read-only |  |
+| <code>connections</code> | <code>u32</code> | Read-only | Bumped for each socket, so a caller can tell a new socket from an old one that was closed and gave its number to the new one. |
+| <code>host</code> | <code>bounded.InlineString(253)</code> | Read-only |  |
+| <code>port</code> | <code>u16</code> | Read-only |  |
+| <code>secure</code> | <code>bool</code> | Read-only |  |
+| <code>via_proxy</code> | <code>bool</code> | Read-only | Through an HTTP proxy, which takes the absolute URL, and through a CONNECT tunnel. |
+| <code>tunnel</code> | <code>bool</code> | Read-only |  |
+| <code>proxy_auth</code> | <code>String</code> | Read-only |  |
+| <code>addrs</code> | <code>bounded.BoundedList(net.Address, net.max_addresses)</code> | Read-only |  |
+| <code>addr_at</code> | <code>usize</code> | Read-only |  |
+| <code>lookup</code> | <code>?net.Lookup</code> | Read-only |  |
+| <code>conn</code> | <code>?net.Conn</code> | Read-only |  |
+| <code>session</code> | <code>?tls.Client</code> | Read-only |  |
+| <code>phase</code> | <code>Phase</code> | Read-only |  |
+| <code>out</code> | <code>List(u8)</code> | Read-only | Bytes to write to the socket, from `out_at` on. |
+| <code>out_at</code> | <code>usize</code> | Read-only |  |
+| <code>req</code> | <code>List(u8)</code> | Read-only | The request, sealed into records into `out` once the handshake is done. |
+| <code>rbuf</code> | <code>List(u8)</code> | Read-only | Bytes read and not yet used: records not yet whole, when over TLS. |
+| <code>parser</code> | <code>Parser</code> | Read-only |  |
+| <code>response</code> | <code>?Response</code> | Read-only |  |
+| <code>want_r</code> | <code>bool</code> | Read-only |  |
+| <code>want_w</code> | <code>bool</code> | Read-only |  |
+| <code>keep_alive</code> | <code>bool</code> | Read-only | Asks the server to keep the connection open, for a `Client`. |
+| <code>spare</code> | <code>?Idle</code> | Read-only | An idle connection to start on, from a `Client`, until `start` takes or drops it. |
+| <code>reused</code> | <code>bool</code> | Read-only | Whether the current connection was an idle one: if it turns out closed before any of the response arrives, the request goes again on a new connection. |
+| <code>kept</code> | <code>?Idle</code> | Read-only | The connection, still open, once a response that keeps it is done. |
+| <code>trailing</code> | <code>bool</code> | Read-only | Bytes came after the response, which a connection kept for the next one must not carry. |
+
+### Fetch.init
+
+```otr
+fn init(io: std.Io, alloc: mem.Allocator, req: Request, options: Options) Error!Fetch
+```
+
+Copies `req` and starts looking the host up (or connecting, for an address).
+`options` is the exchange's.
+
+### Fetch.deinit
+
+```otr
+fn deinit(self: Fetch) void
+```
+
+### Fetch.fd
+
+```otr
+fn fd(self: &Fetch) i32
+```
+
+The descriptor to wait on: the host lookup's while it runs, then the socket; -1
+between connections (never after `init` or `step` return without error, until the
+exchange is done). It changes when a lookup ends or a redirect or the next of a
+host's addresses needs a new connection, and the new descriptor may get the number
+of one closed, which an epoll then no longer watches: `connection` tells them apart.
+
+### Fetch.connection
+
+```otr
+fn connection(self: &Fetch) u32
+```
+
+A count of the descriptors `fd` has given so far, lookups and sockets: when it
+changes, `fd` is a new one to register, whatever its number.
+
+### Fetch.want_read
+
+```otr
+fn want_read(self: &Fetch) bool
+```
+
+### Fetch.want_write
+
+```otr
+fn want_write(self: &Fetch) bool
+```
+
+### Fetch.deadline
+
+```otr
+fn deadline(self: &Fetch) ?u64
+```
+
+When `step` must be called again even if the socket stays quiet, on the
+`time.monotonic_ns` clock: the nearer time limit, or null for none.
+
+### Fetch.into_response
+
+```otr
+fn into_response(self: Fetch) Response
+```
+
+Takes the response once `step` has returned true.
+
+### Fetch.step
+
+```otr
+fn step(self: &mut Fetch, io: std.Io) Error!bool
+```
+
+Moves the exchange on as far as the socket allows without waiting. True when the
+response is complete.
+
+## Idle
+
+```otr
+const Idle = struct
+```
+
+An open connection between exchanges, with the TLS session over it, and the server it
+leads to.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>conn</code> | <code>net.Conn</code> | Read-only |  |
+| <code>session</code> | <code>?tls.Client</code> | Read-only |  |
+| <code>host</code> | <code>bounded.InlineString(253)</code> | Read-only |  |
+| <code>port</code> | <code>u16</code> | Read-only |  |
+| <code>secure</code> | <code>bool</code> | Read-only |  |
+| <code>since</code> | <code>u64</code> | Read-only | When it went idle, on the `time.monotonic_ns` clock. |
+
+### Idle.deinit
+
+```otr
+fn deinit(self: Idle) void
+```
+
+## Client
+
+```otr
+const Client = struct
+```
+
+Exchanges that keep their connections open for the next one with the same server
+(scheme, host and port), so repeated requests skip the lookup, the connect and the
+TLS handshake. `start` begins a `Fetch` on an idle connection when there is one, and
+`finish` takes its response and keeps the connection when the server did (HTTP/1.1,
+no `Connection: close`, a body framed by length or chunks). An idle connection the
+server has closed is noticed and replaced. Proxied exchanges are not kept.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>max_idle</code> | <code>usize = 16</code> | Public | Idle connections kept; the oldest is closed for a newer one. |
+| <code>max_idle_ns</code> | <code>u64 = 30000000000</code> | Public | How long a connection may stay idle, in nanoseconds, before it is not used again. |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |  |
+| <code>idle</code> | <code>List(Idle)</code> | Read-only |  |
+
+### Client.init
+
+```otr
+fn init(alloc: mem.Allocator) Client
+```
+
+### Client.deinit
+
+```otr
+fn deinit(self: Client) void
+```
+
+### Client.start
+
+```otr
+fn start(self: &mut Client, io: std.Io, req: Request, options: Options) Error!Fetch
+```
+
+`Fetch.init` for `req`, on an idle connection to its server when there is one.
+
+### Client.finish
+
+```otr
+fn finish(self: &mut Client, f: Fetch) Response
+```
+
+Takes the response of `f`, done, and keeps its connection if the server did.
+
+### Client.fetch
+
+```otr
+fn fetch(self: &mut Client, io: std.Io, req: Request, options: Options) Error!Response
+```
+
+`http.fetch` through this client's connections.
+
+## fetch
+
+```otr
+fn fetch(io: std.Io, alloc: mem.Allocator, req: Request, options: Options) Error!Response
+```
+
+Sends `req` and waits for the whole response, following redirects.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>Header</code> | [<code>parser.Header</code>](/otr/std/http/parser#header) |
+| <code>Response</code> | [<code>parser.Response</code>](/otr/std/http/parser#response) |
+| <code>HeaderIterator</code> | [<code>parser.HeaderIterator</code>](/otr/std/http/parser#headeriterator) |
+| <code>Parser</code> | [<code>parser.Parser</code>](/otr/std/http/parser#parser) |
+| <code>Url</code> | [<code>url.Url</code>](/otr/std/http/url#url) |
+| <code>Proxy</code> | [<code>url.Proxy</code>](/otr/std/http/url#proxy) |

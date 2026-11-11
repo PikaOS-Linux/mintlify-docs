@@ -1,0 +1,4 @@
+a duplicate is the same file: true
+another memfd is the same file: false
+/dev/stdout -> /proc/self/fd/1
+/dev/null is not a link: error.Invalid

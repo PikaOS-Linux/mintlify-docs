@@ -1,0 +1,5 @@
+same seed, same numbers: true
+dice: 1 6 6 5 1 5 4 5
+3000 draws below 3: 1012 1009 979
+mean of floats in [0, 1): 0.49
+shuffled: 5 1 4 6 3 2

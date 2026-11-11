@@ -1,0 +1,248 @@
+---
+title: "std.deque"
+sidebarTitle: "deque"
+description: "A double-ended queue that owns its elements."
+---
+
+A double-ended queue that owns its elements: a ring buffer whose capacity is a power
+of two, so an index wraps with a mask. Pushing and popping at either end is O(1)
+amortised, and growing keeps the elements where they are when they do not wrap.
+
+```otr
+import std.deque
+```
+
+## Example
+
+```otr
+import std
+import std.deque
+
+pub fn main() void {
+    var jobs = deque.Deque(i64).init(std.mem.heap)
+    defer jobs.deinit()
+
+    jobs.push_back(2)
+    jobs.push_back(3)
+    jobs.push_front(1)
+    jobs.push_front(0)
+    std.io.printf("len {} front {} back {}\n", .{ jobs.len(), jobs.front().?.*, jobs.back().?.* })
+
+    if jobs.get_mut(1) |job| {
+        job.* = 10
+    }
+
+    var it = jobs.iter()
+    for job in it {
+        std.io.printf("{} ", .{ job.* })
+    }
+    std.io.println("")
+
+    // Take from the front as a queue, from the back as a stack.
+    first := jobs.pop_front() orelse -1
+    last := jobs.pop_back() orelse -1
+    std.io.printf("popped {} and {}, {} left\n", .{ first, last, jobs.len() })
+
+    for {
+        job := jobs.pop_front() orelse break
+        std.io.printf("ran {}\n", .{ job })
+    }
+    std.io.printf("empty {}\n", .{ jobs.pop_front() == null })
+}
+```
+
+```text
+len 4 front 0 back 3
+0 10 2 3 
+popped 0 and 3, 2 left
+ran 10
+ran 2
+empty true
+```
+
+## Slices
+
+```otr
+fn Slices(comptime T: type) type
+```
+
+The elements of a deque in order, as the two pieces of the ring they occupy; `second`
+is empty unless the elements wrap.
+
+| Field | Type |
+| --- | --- |
+| <code>first</code> | <code>[]T</code> |
+| <code>second</code> | <code>[]T</code> |
+
+## Deque
+
+```otr
+fn Deque(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>buf</code> | <code>mem.RawBuf(T)</code> | Read-only |
+| <code>head</code> | <code>usize</code> | Read-only |
+| <code>count</code> | <code>usize</code> | Read-only |
+| <code>cap</code> | <code>usize</code> | Read-only |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+
+### Deque.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### Deque.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+Frees the storage, deinitialising the elements first when they are resources (spec O8).
+
+### Deque.len
+
+```otr
+fn len(self: &Self) usize
+```
+
+### Deque.push_back
+
+```otr
+fn push_back(self: &mut Self, item: T) void
+```
+
+### Deque.push_front
+
+```otr
+fn push_front(self: &mut Self, item: T) void
+```
+
+### Deque.pop_front
+
+```otr
+fn pop_front(self: &mut Self) ?T
+```
+
+### Deque.pop_back
+
+```otr
+fn pop_back(self: &mut Self) ?T
+```
+
+### Deque.get
+
+```otr
+fn get(self: &Self, i: usize) ?&T
+```
+
+Element `i` counted from the front.
+
+### Deque.get_mut
+
+```otr
+fn get_mut(self: &mut Self, i: usize) ?&mut T
+```
+
+### Deque.front
+
+```otr
+fn front(self: &Self) ?&T
+```
+
+### Deque.back
+
+```otr
+fn back(self: &Self) ?&T
+```
+
+### Deque.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+Removes every element, keeping the storage.
+
+### Deque.reserve
+
+```otr
+fn reserve(self: &mut Self, additional: usize) void
+```
+
+Makes room for `additional` more elements, so that pushing them does not grow
+the storage again.
+
+### Deque.try_reserve
+
+```otr
+fn try_reserve(self: &mut Self, additional: usize) error { NoMemory, Overflow }!void
+```
+
+Fallible `reserve`; no element moves until the new allocation succeeds.
+
+### Deque.slices
+
+```otr
+fn slices(self: &Self) Slices(T)
+```
+
+The elements in order, as at most two slices of the ring.
+
+### Deque.iter
+
+```otr
+fn iter(self: &Self) Iter(T)
+```
+
+The elements from front to back.
+
+### Deque.iter_mut
+
+```otr
+fn iter_mut(self: &mut Self) IterMut(T)
+```
+
+The elements from front to back, to change in place.
+
+## Iter
+
+```otr
+fn Iter(comptime T: type) type
+```
+
+The elements of a deque from front to back.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>first</code> | <code>[]T</code> | Read-only |
+| <code>second</code> | <code>[]T</code> | Read-only |
+| <code>i</code> | <code>usize</code> | Read-only |
+
+### Iter.next
+
+```otr
+fn next(self: &mut Self) ?&T
+```
+
+## IterMut
+
+```otr
+fn IterMut(comptime T: type) type
+```
+
+The elements of a deque from front to back, each as an exclusive reference.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>first</code> | <code>[]mut T</code> | Read-only |
+| <code>second</code> | <code>[]mut T</code> | Read-only |
+| <code>i</code> | <code>usize</code> | Read-only |
+
+### IterMut.next
+
+```otr
+fn next(self: &mut Self) ?&mut T
+```

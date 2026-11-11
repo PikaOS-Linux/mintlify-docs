@@ -1,0 +1,148 @@
+---
+title: "std.rc"
+sidebarTitle: "rc"
+description: "Shared ownership within one thread."
+---
+
+Shared ownership within one thread: the value lives until the last `Rc` is dropped,
+and `Weak` references see it while it does, without keeping it alive. Counting is not
+atomic, so neither may cross threads; `Arc` is the thread-safe one. Values shared this
+way are read through `get`; one that changes is wrapped in a `cell.RefCell`.
+
+```otr
+import std.rc
+```
+
+## Example
+
+```otr
+import std
+import std.rc
+import std.string
+
+pub fn main() void {
+    title := rc.Rc(string.String).init(string.String.from(std.mem.heap, "shared title"))
+
+    // clone adds an owner of the same value; nothing is copied.
+    other := title.clone()
+    std.io.printf("{} (owners: {})\n", .{ other.get().as_str(), title.strong_count() })
+    std.io.printf("same value: {}\n", .{ rc.Rc(string.String).same(&title, &other) })
+
+    // A weak reference sees the value without keeping it alive.
+    weak := title.downgrade()
+    defer weak.deinit()
+
+    title.deinit()
+    if weak.upgrade() |again| {
+        std.io.printf("still alive: {}\n", .{ again.get().as_str() })
+        again.deinit()
+    }
+
+    // The last owner frees the string.
+    other.deinit()
+    std.io.printf("alive after last owner: {}\n", .{ weak.alive() })
+}
+```
+
+```text
+shared title (owners: 2)
+same value: true
+still alive: shared title
+alive after last owner: false
+```
+
+## Rc
+
+```otr
+fn Rc(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>inner</code> | <code>*Inner</code> | Read-only |
+
+### Rc.init
+
+```otr
+fn init(value: T) Self
+```
+
+### Rc.clone
+
+```otr
+fn clone(self: &Self) Self
+```
+
+Another owner of the same value.
+
+### Rc.get
+
+```otr
+fn get(self: &Self) &T
+```
+
+### Rc.downgrade
+
+```otr
+fn downgrade(self: &Self) Weak
+```
+
+A reference that does not keep the value alive.
+
+### Rc.strong_count
+
+```otr
+fn strong_count(self: &Self) usize
+```
+
+### Rc.weak_count
+
+```otr
+fn weak_count(self: &Self) usize
+```
+
+### Rc.same
+
+```otr
+fn same(a: &Self, b: &Self) bool
+```
+
+Whether `a` and `b` share one value.
+
+### Rc.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### Rc.Weak
+
+```otr
+const Weak = struct
+```
+
+#### Rc.Weak.upgrade
+
+```otr
+fn upgrade(w: &Weak) ?Self
+```
+
+An owner of the value, if it is still alive.
+
+#### Rc.Weak.clone
+
+```otr
+fn clone(w: &Weak) Weak
+```
+
+#### Rc.Weak.alive
+
+```otr
+fn alive(w: &Weak) bool
+```
+
+#### Rc.Weak.deinit
+
+```otr
+fn deinit(w: Weak) void
+```

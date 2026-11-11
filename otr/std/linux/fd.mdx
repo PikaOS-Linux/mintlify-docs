@@ -1,0 +1,717 @@
+---
+title: "std.linux.fd"
+sidebarTitle: "linux.fd"
+description: "Owned Linux descriptors and errno-typed calls."
+---
+
+Owned Linux descriptors and errno-typed calls.
+
+```otr
+import std.linux.fd
+```
+
+## Example
+
+```otr
+import std
+import std.fs
+import std.linux.fd
+import std.path
+
+pub fn main() !void {
+    heap := std.mem.heap
+    dir := path.join(heap, fs.temp_dir(), "otr-example-linux-fd")
+    defer dir.deinit()
+    try fs.make_path(heap, dir.as_str())
+    name := path.join(heap, dir.as_str(), "lines.txt")
+    defer name.deinit()
+
+    // An Fd is a resource: deinit closes it.
+    {
+        out := try fd.open(name.as_str(), fd.O.wronly | fd.O.creat | fd.O.trunc, 0o600)
+        defer out.deinit()
+        n := try out.write("first line\nsecond line\n")
+        std.io.printf("wrote {} bytes\n", .{ n })
+    }
+
+    file := try fd.open(name.as_str(), fd.O.rdonly, 0)
+    defer file.deinit()
+    var first: [10]u8
+    var buf: [64]u8
+    // read and pread return the part of the buffer they filled.
+    std.io.printf("read: {}\n", .{ try file.read(&out first) })
+    std.io.printf("pread at 11: {}", .{ try file.pread(&out buf, 11) })
+    std.io.printf("at end of file: {} bytes\n", .{ (try file.pread(&out buf, 23)).len })
+
+    // A pipe: a is the read end, b the write end.
+    pipe := try fd.pipe2(0)
+    defer pipe.deinit()
+    _ = try pipe.b.write("through a pipe")
+    std.io.printf("pipe: {}\n", .{ try pipe.a.read(&out buf) })
+
+    try fd.unlink(name.as_str())
+    try fs.delete_dir(heap, dir.as_str())
+    if fd.open(name.as_str(), fd.O.rdonly, 0) |f| {
+        f.deinit()
+    } else |err| {
+        std.io.printf("after unlink: {}\n", .{ err })
+    }
+}
+```
+
+```text
+wrote 23 bytes
+read: first line
+pread at 11: second line
+at end of file: 0 bytes
+pipe: through a pipe
+after unlink: error.NotFound
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+What a failed call's errno means. `Unexpected` covers the numbers not named here.
+
+| Variant |
+| --- |
+| <code>PermissionDenied</code> |
+| <code>NotFound</code> |
+| <code>NoSuchProcess</code> |
+| <code>Interrupted</code> |
+| <code>Io</code> |
+| <code>NoDevice</code> |
+| <code>BadFd</code> |
+| <code>NoChild</code> |
+| <code>WouldBlock</code> |
+| <code>NoMemory</code> |
+| <code>AccessDenied</code> |
+| <code>Busy</code> |
+| <code>AlreadyExists</code> |
+| <code>NotDir</code> |
+| <code>IsDir</code> |
+| <code>Invalid</code> |
+| <code>SystemFdLimit</code> |
+| <code>ProcessFdLimit</code> |
+| <code>NotATerminal</code> |
+| <code>FileTooBig</code> |
+| <code>NoSpace</code> |
+| <code>ReadOnly</code> |
+| <code>BrokenPipe</code> |
+| <code>NameTooLong</code> |
+| <code>Unsupported</code> |
+| <code>SymlinkLoop</code> |
+| <code>ConnectionReset</code> |
+| <code>ConnectionRefused</code> |
+| <code>TimedOut</code> |
+| <code>Canceled</code> |
+| <code>DiskQuota</code> |
+| <code>FileBusy</code> |
+| <code>Overflow</code> |
+| <code>IllegalSequence</code> |
+| <code>Unexpected</code> |
+| <code>ConnectionAborted</code> |
+| <code>NoBuffers</code> |
+
+## errno_error
+
+```otr
+fn errno_error(e: i32) Error
+```
+
+The `Error` for errno value `e`.
+
+## last_error
+
+```otr
+fn last_error() Error
+```
+
+The error for the errno the last failed call left.
+
+## interrupted
+
+```otr
+fn interrupted() bool
+```
+
+## O
+
+```otr
+const O = struct
+```
+
+Flags for `open`, `pipe2` and `Fd.set_flags`.
+
+### O.direct
+
+```otr
+const direct: u32 = if @target_arch() == .aarch64 { 0x10000 } else { 0x4000 }
+```
+
+For `pipe2`: a pipe of packets.
+
+| Name | Definition |
+| --- | --- |
+| <code>O.rdonly</code> | <code>0</code> |
+| <code>O.wronly</code> | <code>1</code> |
+| <code>O.rdwr</code> | <code>2</code> |
+| <code>O.creat</code> | <code>0x40</code> |
+| <code>O.excl</code> | <code>0x80</code> |
+| <code>O.noctty</code> | <code>0x100</code> |
+| <code>O.trunc</code> | <code>0x200</code> |
+| <code>O.append</code> | <code>0x400</code> |
+| <code>O.nonblock</code> | <code>0x800</code> |
+| <code>O.directory</code> | <code>if @target_arch() == .aarch64 &#123; 0x4000 &#125; else &#123; 0x10000 &#125;</code> |
+| <code>O.nofollow</code> | <code>if @target_arch() == .aarch64 &#123; 0x8000 &#125; else &#123; 0x20000 &#125;</code> |
+
+## Fd
+
+```otr
+const Fd = struct
+```
+
+An open file descriptor, closed by `deinit`. Only this module and `from_raw` make
+one, so each descriptor has one owner and is closed once.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>fd</code> | <code>i32</code> | Read-only |
+
+### Fd.from_raw
+
+```otr
+unsafe fn from_raw(fd: i32) Fd
+```
+
+Takes ownership of descriptor `fd`. Unsafe: nothing else may close it or wrap it
+again, or a later `deinit` closes a descriptor that another part of the program
+has been given since.
+
+### Fd.raw
+
+```otr
+fn raw(self: &Fd) i32
+```
+
+The descriptor's number, for C calls and `Io.wait_readable`; it stays owned here.
+
+### Fd.into_raw
+
+```otr
+fn into_raw(self: Fd) i32
+```
+
+Gives up ownership without closing; the caller closes the number.
+
+### Fd.poll_fd
+
+```otr
+fn poll_fd(self: &Fd) i32
+```
+
+Ready to read, for `Io.select`.
+
+### Fd.dup
+
+```otr
+fn dup(self: &Fd) Error!Fd
+```
+
+Another descriptor for the same open file.
+
+### Fd.set_cloexec
+
+```otr
+fn set_cloexec(self: &Fd) Error!void
+```
+
+Marks an adopted/inherited descriptor close-on-exec without changing its number.
+
+### Fd.read
+
+```otr
+fn read(self: &Fd, buf: []out u8) Error! []mut u8
+```
+
+Reads up to `buf.len` bytes into `buf`, which need not hold values yet, and returns
+the part it filled; that is empty at end of file.
+
+### Fd.read_once
+
+```otr
+fn read_once(self: &Fd, buf: []out u8) Error! []mut u8
+```
+
+Calls libc read(2) once, without managed task I/O or an EINTR retry. `WouldBlock`
+is returned directly, without waiting. A blocking descriptor can block the calling
+thread, even in a fiber. This is not an Otr task cancellation point. Signal-handler
+flags still control kernel syscall restarting. Returns only the initialized prefix,
+empty at end of file. `buf` need not hold values yet.
+
+### Fd.pread
+
+```otr
+fn pread(self: &Fd, buf: []out u8, offset: u64) Error! []mut u8
+```
+
+Reads at `offset` without changing the descriptor's file position.
+
+### Fd.add_seals
+
+```otr
+fn add_seals(self: &Fd, seals: u32) Error!void
+```
+
+Adds memfd seals without changing descriptor ownership.
+
+### Fd.write
+
+```otr
+fn write(self: &Fd, bytes: []u8) Error!usize
+```
+
+Writes some of `bytes`, and returns how many.
+
+### Fd.try_lock_exclusive
+
+```otr
+fn try_lock_exclusive(self: &Fd) Error!bool
+```
+
+Takes an exclusive advisory lock on the open file without waiting (flock(2) with
+`LOCK_EX | LOCK_NB`), as a single-instance lock: false when another descriptor
+holds one. The lock goes with the descriptor's last copy.
+
+### Fd.sync
+
+```otr
+fn sync(self: &Fd) Error!void
+```
+
+Waits until the file's data and metadata are on the disk (fsync(2)).
+
+### Fd.read_u64
+
+```otr
+fn read_u64(self: &Fd) Error!u64
+```
+
+Reads the 8-byte counter an eventfd or timerfd gives.
+
+### Fd.write_u64
+
+```otr
+fn write_u64(self: &Fd, v: u64) Error!void
+```
+
+Adds `v` to an eventfd's counter.
+
+### Fd.get_flags
+
+```otr
+fn get_flags(self: &Fd) Error!u32
+```
+
+The file status flags (`O`), as F_GETFL gives them.
+
+### Fd.set_flags
+
+```otr
+fn set_flags(self: &Fd, flags: u32) Error!void
+```
+
+Sets the file status flags that F_SETFL can change, such as `O.nonblock`.
+
+### Fd.set_socket_option
+
+```otr
+fn set_socket_option(self: &Fd, level: i32, name: i32, value: i32) Error!void
+```
+
+Sets the integer socket option `name` at `level` (`SOL`, `SO`), such as the size of
+a socket's buffers.
+
+### Fd.bind_unix
+
+```otr
+fn bind_unix(self: &Fd, path: str) Error!void
+```
+
+Binds the Unix socket to `path`, which then names it in the file system.
+
+### Fd.listen
+
+```otr
+fn listen(self: &Fd, backlog: i32) Error!void
+```
+
+Makes the bound stream socket accept connections, `backlog` of them waiting at most.
+
+### Fd.accept
+
+```otr
+fn accept(self: &Fd, nonblock: bool) Error!Fd
+```
+
+The next connection to the listening socket; `WouldBlock` on a non-blocking one with
+none waiting. The new socket is non-blocking when `nonblock` is set.
+
+### Fd.accept_once
+
+```otr
+fn accept_once(self: &Fd, nonblock: bool) Error!Fd
+```
+
+One accept4 attempt. The listener's own flags control waiting; `nonblock` sets
+the new socket's flags. Interrupted and ConnectionAborted are returned directly.
+
+### Fd.send_to_unix
+
+```otr
+fn send_to_unix(self: &Fd, path: str, bytes: []u8) Error!usize
+```
+
+Sends `bytes` as one datagram to the Unix socket bound at `path`.
+
+### Fd.chmod
+
+```otr
+fn chmod(self: &Fd, mode: u32) Error!void
+```
+
+Sets the file's permission bits, such as 0o600 for a socket only its owner may use.
+
+### Fd.truncate
+
+```otr
+fn truncate(self: &Fd, len: u64) Error!void
+```
+
+Sets the size of the file, as for a `memfd` to be mapped.
+
+### Fd.deinit
+
+```otr
+fn deinit(self: Fd) void
+```
+
+## is_open
+
+```otr
+fn is_open(fd: i32) bool
+```
+
+Whether descriptor number `fd` is open in this process (F_GETFD succeeds).
+
+## dup2
+
+```otr
+fn dup2(src: &Fd, dst: &mut Fd) Error!void
+```
+
+Makes `dst` refer to the open file `src` refers to, closing what `dst` referred to
+before; its number stays the same.
+
+## close_range
+
+```otr
+unsafe fn close_range(first: u32, last: u32, flags: u32) Error!void
+```
+
+Closes every descriptor from `first` to `last`; with `flags` 4 (CLOSE_RANGE_CLOEXEC)
+it marks them close-on-exec instead. Unsafe: an `Fd` among them would later close a
+number reused by something else. A child process gets the same effect safely through
+`process.SpawnOptions.close_others`.
+
+## open
+
+```otr
+fn open(path: str, flags: u32, mode: u32) Error!Fd
+```
+
+Opens the file at `path`, which must be shorter than 4096 bytes and hold no NUL;
+`mode` gives a file that `O.creat` makes its permissions.
+
+## Pair
+
+```otr
+const Pair = struct
+```
+
+Two descriptors made together, by `pipe2` (`a` is the read end, `b` the write end)
+or `socketpair`. Fields cannot be moved out of a struct (spec O5), so `into_a` and
+`into_b` keep one end and close the other, as a parent does once a child process has
+the other end.
+
+| Field | Type |
+| --- | --- |
+| <code>a</code> | <code>Fd</code> |
+| <code>b</code> | <code>Fd</code> |
+
+### Pair.into_a
+
+```otr
+fn into_a(self: Pair) Fd
+```
+
+Closes `b` and returns `a`.
+
+### Pair.into_b
+
+```otr
+fn into_b(self: Pair) Fd
+```
+
+Closes `a` and returns `b`.
+
+### Pair.deinit
+
+```otr
+fn deinit(self: Pair) void
+```
+
+## pipe2
+
+```otr
+fn pipe2(flags: u32) Error!Pair
+```
+
+A pipe; `flags` are `O.nonblock` and `O.direct`.
+
+## SOCK
+
+```otr
+const SOCK = struct
+```
+
+Socket types for `socketpair`, optionally or'd with `nonblock`.
+
+| Name | Definition |
+| --- | --- |
+| <code>SOCK.stream</code> | <code>1</code> |
+| <code>SOCK.dgram</code> | <code>2</code> |
+| <code>SOCK.seqpacket</code> | <code>5</code> |
+| <code>SOCK.nonblock</code> | <code>0x800</code> |
+
+## random
+
+```otr
+fn random(buf: []out u8) Error! []mut u8
+```
+
+Fills `buf`, which need not hold values yet, with random bytes from the kernel, fit
+for keys and tokens, and returns it filled.
+
+## unix_socket
+
+```otr
+fn unix_socket(kind: u32) Error!Fd
+```
+
+A Unix domain socket of type `kind` (`SOCK`), not yet bound or connected; datagram
+ones are bound with `Fd.bind_unix` and sent to with `Fd.send_to_unix`, and received
+from with `recv_message`.
+
+## SockaddrUn
+
+```otr
+const SockaddrUn = extern struct
+```
+
+`struct sockaddr_un`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>family</code> | <code>u16</code> | Read-only |
+| <code>path</code> | <code>[108]u8</code> | Read-only |
+
+## socketpair
+
+```otr
+fn socketpair(kind: u32) Error!Pair
+```
+
+Two connected Unix domain sockets of type `kind` (`SOCK`).
+
+## SOL
+
+```otr
+const SOL = struct
+```
+
+Option levels for `Fd.set_socket_option`.
+
+| Name | Definition |
+| --- | --- |
+| <code>SOL.socket</code> | <code>1</code> |
+
+## SO
+
+```otr
+const SO = struct
+```
+
+Socket-level options for `Fd.set_socket_option`.
+
+### SO.sndbuf
+
+```otr
+const sndbuf: i32 = 7
+```
+
+Send buffer size in bytes; the kernel doubles it and clamps it to its minimum.
+
+| Name | Definition |
+| --- | --- |
+| <code>SO.rcvbuf</code> | <code>8</code> |
+
+## EFD
+
+```otr
+const EFD = struct
+```
+
+Flags for `eventfd`.
+
+| Name | Definition |
+| --- | --- |
+| <code>EFD.semaphore</code> | <code>1</code> |
+| <code>EFD.nonblock</code> | <code>0x800</code> |
+
+## eventfd
+
+```otr
+fn eventfd(initval: u32, flags: u32) Error!Fd
+```
+
+A counter readable as a descriptor (`Fd.read_u64`, `Fd.write_u64`), to wake a loop.
+
+## Itimerspec
+
+```otr
+const Itimerspec = extern struct
+```
+
+A timer's period (`interval`, zero for a one-shot timer) and its time to the next
+expiry (`value`, zero to disarm it).
+
+| Field | Type |
+| --- | --- |
+| <code>interval</code> | <code>Timespec</code> |
+| <code>value</code> | <code>Timespec</code> |
+
+## CLOCK
+
+```otr
+const CLOCK = struct
+```
+
+Clocks for `timerfd_create`.
+
+| Name | Definition |
+| --- | --- |
+| <code>CLOCK.realtime</code> | <code>0</code> |
+| <code>CLOCK.monotonic</code> | <code>1</code> |
+| <code>CLOCK.boottime</code> | <code>7</code> |
+
+## TFD
+
+```otr
+const TFD = struct
+```
+
+Flags for `timerfd_create` and `timerfd_settime`.
+
+### TFD.timer_abstime
+
+```otr
+const timer_abstime: u32 = 1
+```
+
+`timerfd_settime`: `value` is a time on the clock, not a delay.
+
+| Name | Definition |
+| --- | --- |
+| <code>TFD.nonblock</code> | <code>0x800</code> |
+
+## timerfd_create
+
+```otr
+fn timerfd_create(clock: i32, flags: u32) Error!Fd
+```
+
+A timer whose expiries are read as a count with `Fd.read_u64`.
+
+## timerfd_settime
+
+```otr
+fn timerfd_settime(timer: &Fd, flags: u32, new: Itimerspec) Error!Itimerspec
+```
+
+Arms or disarms `timer`; returns its previous setting.
+
+## timerfd_gettime
+
+```otr
+fn timerfd_gettime(timer: &Fd) Error!Itimerspec
+```
+
+The timer's period and the time left to its next expiry.
+
+## memfd
+
+```otr
+fn memfd(name: str, len: u64) Error!Fd
+```
+
+Anonymous memory as a file of `len` bytes (memfd_create, then ftruncate), to map with
+`Mapping.shared` and pass to another process, as a Wayland wl_shm pool is. `name`
+only labels it in /proc and holds no NUL.
+
+## getpid
+
+```otr
+fn getpid() i32
+```
+
+## getuid
+
+```otr
+fn getuid() u32
+```
+
+## geteuid
+
+```otr
+fn geteuid() u32
+```
+
+The effective user id, which decides what the process may do: 0 when it runs as root.
+
+## unlink
+
+```otr
+fn unlink(path: str) Error!void
+```
+
+Removes a path using stack storage, without allocating.
+
+## connect_unix
+
+```otr
+fn connect_unix(path: str) Error!Fd
+```
+
+Blocking pathname connect followed by NONBLOCK, matching nested compositor startup.
+The returned CLOEXEC descriptor has one owner; every failure closes it here.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>o_cloexec</code> | <code>0x80000</code> |
+| <code>Timespec</code> | [<code>time.Timespec</code>](/otr/std/time#timespec) |

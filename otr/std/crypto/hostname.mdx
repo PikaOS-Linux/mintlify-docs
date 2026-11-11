@@ -1,0 +1,51 @@
+---
+title: "std.crypto.hostname"
+sidebarTitle: "crypto.hostname"
+description: "Host name and IP address matching for certificates (RFC 6125)."
+---
+
+Host name and IP address matching for certificates (RFC 6125): the rules for SAN
+dNSName patterns, wildcards included, dNSName name constraints (RFC 5280 §4.2.1.10),
+and parsing of IPv4 and IPv6 literals for SAN iPAddress entries.
+
+```otr
+import std.crypto.hostname
+```
+
+## match_dns
+
+```otr
+fn match_dns(pattern: []u8, host_in: []u8) bool
+```
+
+Whether the SAN dNSName `pattern` matches `host` (RFC 6125 §6.4): equal ignoring ASCII
+case, or `*.rest` where `*` stands for exactly the first label of `host`. The wildcard
+must be the whole leftmost label and at least two labels must follow it, so `*.com`
+and `f*.example.com` match nothing, as the CA/Browser Forum requires.
+
+## constraint_covers
+
+```otr
+fn constraint_covers(pattern: []u8, base_in: []u8) bool
+```
+
+Whether every host the SAN dNSName `pattern` matches lies inside the dNSName name
+constraint `base`. For `*.rest` that is every name one label above `rest`.
+
+## constraint_meets
+
+```otr
+fn constraint_meets(pattern: []u8, base_in: []u8) bool
+```
+
+Whether some host the SAN dNSName `pattern` matches lies inside `base`: for `*.rest`
+also when `base` is one label in front of `rest`, which the wildcard stands for.
+
+## parse_ip
+
+```otr
+fn parse_ip(text: []u8, out: &mut [16]u8) usize
+```
+
+`text` as an IPv4 or IPv6 address, written to `out`, returning its length (4 or 16),
+or 0 when it is not one.

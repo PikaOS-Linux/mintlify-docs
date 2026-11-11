@@ -1,0 +1,369 @@
+---
+title: "std.runtime"
+sidebarTitle: "runtime"
+description: "The program environment and the default Io runtime (spec §10)."
+---
+
+The program environment and the default `Io` runtime (spec §10).
+
+`Io` runs tasks on a pool of threads that grows as tasks block (`Io.Threaded`, spec
+C6). `Env` and `Io` have no fields, so the entry point passes nothing for them; the
+runtime keeps the command line and the pool.
+
+```otr
+import std.runtime
+```
+
+## Example
+
+```otr
+import std
+import std.runtime
+import std.sync
+import std.time
+
+fn sum(xs: []i64) i64 {
+    var s: i64 = 0
+    for x in xs { s += x }
+    return s
+}
+
+// main may take the Env: the command line, the environment and the Io runtime.
+pub fn main(env: runtime.Env) !void {
+    io := env.io
+    std.io.printf("arguments after the program name: {}\n", .{ env.arg_count() - 1 })
+    std.io.printf("HOME is set: {}\n", .{ env.get_env("HOME") != null })
+
+    // async starts a task that may borrow; the future must be awaited or cancelled.
+    data := [6]i64{ 1, 2, 3, 4, 5, 6 }
+    lo := io.async(fn[&data]() i64 { return sum(data[0..3]) })
+    hi := io.async(fn[&data]() i64 { return sum(data[3..6]) })
+    std.io.printf("halves: {} {}\n", .{ lo.await(io), hi.await(io) })
+
+    // A cancelled task fails at its next wait, here the sleep.
+    sleeper := io.async(fn[io]() runtime.Io.Canceled!void { return io.sleep(60_000_000_000) })
+    if sleeper.cancel(io) |_| {} else |err| {
+        std.io.printf("sleeper: {}\n", .{ err })
+    }
+
+    // select waits for the first ready source, or the deadline.
+    inbox := sync.Channel(i64).init(std.mem.heap, 1)
+    defer inbox.deinit()
+    switch try io.select(.{ &inbox }, time.monotonic_ns() + 1_000_000) {
+        .source |i| => std.io.printf("source {} ready\n", .{ i })
+        .timeout => std.io.println("nothing arrived in time")
+    }
+    _ = inbox.try_send(7)
+    switch try io.select(.{ &inbox }, null) {
+        .source |i| => std.io.printf("source {} ready: {}\n", .{ i, inbox.try_recv() orelse 0 })
+        .timeout => {}
+    }
+}
+```
+
+```text
+arguments after the program name: 0
+HOME is set: true
+halves: 6 15
+sleeper: error.Canceled
+nothing arrived in time
+source 0 ready: 7
+```
+
+## Env
+
+```otr
+const Env = struct
+```
+
+What `main(env: Env)` receives: the runtime, the command line and environment variables.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>io</code> | <code>Io</code> | Read-only |
+
+### Env.arg_count
+
+```otr
+fn arg_count(self: Env) usize
+```
+
+Number of command-line arguments, including the program name.
+
+### Env.arg
+
+```otr
+fn arg(self: Env, i: usize) []static u8
+```
+
+Command-line argument `i`; argument 0 is the program name.
+
+### Env.env_count
+
+```otr
+fn env_count(self: Env) usize
+```
+
+Number of environment variables, for `env_var`.
+
+### Env.env_var
+
+```otr
+fn env_var(self: Env, i: usize) []static u8
+```
+
+Environment variable `i`, as `NAME=value`, for handing this process's environment
+on to a child with changes (`process.RunOptions.env`).
+
+### Env.get_env
+
+```otr
+fn get_env(self: Env, name: str) ?[]static u8
+```
+
+The value of environment variable `name`, or null when it is unset.
+
+## Io
+
+```otr
+const Io = struct
+```
+
+Starts tasks. Everything that can block takes an `Io`, so callers choose the runtime.
+
+### Io.Threaded
+
+```otr
+const Threaded = struct
+```
+
+The thread-pool runtime (spec C6). `env.io` is one already; `init` gives another
+handle to the same pool.
+
+#### Io.Threaded.init
+
+```otr
+fn init(alloc: mem.Allocator) Io
+```
+
+### Io.Uring
+
+```otr
+const Uring = uring_loop
+```
+
+The io_uring event loop with stackful tasks (spec C6); see `Uring.run`.
+
+### Io.Canceled
+
+```otr
+const Canceled = error { Canceled }
+```
+
+What a wait in a cancelled task returns (spec C4).
+
+### Io.sleep
+
+```otr
+fn sleep(self: Io, ns: u64) Canceled!void
+```
+
+Pauses the calling task for `ns` nanoseconds; in an event loop other tasks run.
+
+### Io.sleep_until
+
+```otr
+fn sleep_until(self: Io, deadline: u64) Canceled!void
+```
+
+Pauses the calling task until `time.monotonic_ns()` reaches `deadline`.
+
+### Io.wait_readable
+
+```otr
+fn wait_readable(self: Io, fd: i32) Canceled!void
+```
+
+Waits until reading `fd` would not block: data, end of file or an error is there.
+
+### Io.check_cancel
+
+```otr
+fn check_cancel(self: Io) Canceled!void
+```
+
+Fails once the calling task has been cancelled: a cancellation point for a task
+that computes for long without waiting.
+
+### Io.select
+
+```otr
+fn select(self: Io, sources: anytype, deadline: ?u64) Canceled!Ready
+```
+
+Waits until one of `sources` is ready to read, or until `time.monotonic_ns()`
+reaches `deadline`. `sources` is a tuple whose items are file descriptors (`i32`)
+or references to values with a `poll_fd()` method, such as a `sync.Channel`,
+`process.Signals`, `process.Child`, `fs.Watcher` or `net.Conn`. Returns the index
+of the first ready item; reading from it may still find nothing when another
+task got there first.
+
+### Io.poll
+
+```otr
+fn poll(self: Io, fds: []mut PollFd, deadline: ?u64) PollError!usize
+```
+
+Fills every ready mask, including HUP/ERR/NVAL, using caller-owned poll storage.
+`deadline` is absolute monotonic nanoseconds; cancellation consumes no I/O.
+
+### Io.spawn
+
+```otr
+fn spawn(self: Io, task: anytype) error { SystemResources }!void
+```
+
+Runs `task` on its own until it returns. It must own everything it captures and be
+able to move to another thread (spec C3). A task returning an error reports it on
+stderr, since nothing waits for it.
+
+### Io.blocking
+
+```otr
+fn blocking(self: Io, task: anytype) @return_type(@type_of(task))
+```
+
+Runs `task` on a pool thread and returns its result. Inside `Io.Uring` only the
+calling task waits meanwhile, so a call that blocks the thread it runs on, such as
+a C library's DNS lookup or file access, holds up no other task; elsewhere `task`
+runs on the calling thread. It may capture what `async` allows (spec C4).
+
+### Io.async
+
+```otr
+fn async(self: Io, task: anytype) Future(@return_type(@type_of(task)))
+```
+
+Starts `task` and returns its future. The task may capture `&x` when `x` is `Sync`
+and `&mut x` when `x` is `Send`; the future holds those loans until `await` or
+`cancel` consumes it (spec C4).
+
+### Io.wait_fd
+
+```otr
+fn wait_fd(self: Io, fd: i32, readable: bool, writable: bool, deadline: ?u64) Canceled!bool
+```
+
+Waits until `fd` can be read, when `readable`, or written, when `writable`, or until
+`time.monotonic_ns()` reaches `deadline`; false when the time ran out. For a
+non-blocking socket, whose state machine says which way it waits (a connect in
+progress and a full send buffer wait to write, which `select` cannot).
+
+## Ready
+
+```otr
+const Ready = union
+```
+
+What `Io.select` saw: the index of a ready source, or that the deadline passed.
+
+| Member | Type |
+| --- | --- |
+| <code>source</code> | <code>usize</code> |
+| <code>timeout</code> |  |
+
+## PollError
+
+```otr
+const PollError = error { Canceled, Invalid, Io }
+```
+
+## Poll
+
+```otr
+const Poll = struct
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>Poll.read</code> | <code>1</code> |
+| <code>Poll.write</code> | <code>4</code> |
+| <code>Poll.err</code> | <code>8</code> |
+| <code>Poll.hup</code> | <code>16</code> |
+| <code>Poll.invalid</code> | <code>32</code> |
+
+## PollFd
+
+```otr
+const PollFd = extern struct
+```
+
+`struct pollfd`; masks remain visible even when no requested interest fires.
+
+| Field | Type |
+| --- | --- |
+| <code>fd</code> | <code>i32</code> |
+| <code>events</code> | <code>i16</code> |
+| <code>revents</code> | <code>i16</code> |
+
+## Error
+
+```otr
+const Error = error { Unsupported }
+```
+
+## Uring
+
+```otr
+const Uring = struct
+```
+
+### Uring.run
+
+```otr
+fn run(task: anytype) Error!void
+```
+
+## Future
+
+```otr
+fn Future(comptime T: type) type
+```
+
+The result of a task started by `Io.async`; it must be consumed by `await` or `cancel`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>job</code> | <code>?*anyopaque</code> | Read-only |
+| <code>block</code> | <code>[*]u8</code> | Read-only |
+| <code>result_offset</code> | <code>usize</code> | Read-only |
+| <code>block_size</code> | <code>usize</code> | Read-only |
+
+### Future.await
+
+```otr
+fn await(self: Self, io: Io) T
+```
+
+Waits for the task and returns its result. A task no thread has started yet
+runs here instead.
+
+### Future.cancel
+
+```otr
+fn cancel(self: Self, io: Io) T
+```
+
+Asks the task to stop, waits for it and returns what it produced. From now on
+every wait in std that the task makes fails with `error.Canceled`, the one it
+is in included, so a task that passes errors up ends soon; one that never
+waits runs to the end, unless it checks `io.check_cancel()`. A task no thread
+has started yet runs here, cancelled from the start.
+
+### Future.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+Waits for the task and discards its result.

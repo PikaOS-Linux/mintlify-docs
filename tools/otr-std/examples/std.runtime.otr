@@ -1,0 +1,42 @@
+import std
+import std.runtime
+import std.sync
+import std.time
+
+fn sum(xs: []i64) i64 {
+    var s: i64 = 0
+    for x in xs { s += x }
+    return s
+}
+
+// main may take the Env: the command line, the environment and the Io runtime.
+pub fn main(env: runtime.Env) !void {
+    io := env.io
+    std.io.printf("arguments after the program name: {}\n", .{ env.arg_count() - 1 })
+    std.io.printf("HOME is set: {}\n", .{ env.get_env("HOME") != null })
+
+    // async starts a task that may borrow; the future must be awaited or cancelled.
+    data := [6]i64{ 1, 2, 3, 4, 5, 6 }
+    lo := io.async(fn[&data]() i64 { return sum(data[0..3]) })
+    hi := io.async(fn[&data]() i64 { return sum(data[3..6]) })
+    std.io.printf("halves: {} {}\n", .{ lo.await(io), hi.await(io) })
+
+    // A cancelled task fails at its next wait, here the sleep.
+    sleeper := io.async(fn[io]() runtime.Io.Canceled!void { return io.sleep(60_000_000_000) })
+    if sleeper.cancel(io) |_| {} else |err| {
+        std.io.printf("sleeper: {}\n", .{ err })
+    }
+
+    // select waits for the first ready source, or the deadline.
+    inbox := sync.Channel(i64).init(std.mem.heap, 1)
+    defer inbox.deinit()
+    switch try io.select(.{ &inbox }, time.monotonic_ns() + 1_000_000) {
+        .source |i| => std.io.printf("source {} ready\n", .{ i })
+        .timeout => std.io.println("nothing arrived in time")
+    }
+    _ = inbox.try_send(7)
+    switch try io.select(.{ &inbox }, null) {
+        .source |i| => std.io.printf("source {} ready: {}\n", .{ i, inbox.try_recv() orelse 0 })
+        .timeout => {}
+    }
+}

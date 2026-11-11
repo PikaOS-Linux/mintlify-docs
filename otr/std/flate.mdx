@@ -1,0 +1,98 @@
+---
+title: "std.flate"
+sidebarTitle: "flate"
+description: "Native resumable DEFLATE, zlib and gzip."
+---
+
+Native resumable DEFLATE, zlib and gzip. Streaming states allocate nothing and
+retain no caller buffers; each stream/member owns an independent 32 KiB history.
+Whole-buffer adapters append valid prefixes on errors and use List's panic-on-OOM
+policy. They never report a fabricated NoMemory. Raw/zlib legacy decoding accepts
+trailing bytes; strict callers use step's exact in_used extent. Gzip is concatenated.
+
+```otr
+import std.flate
+```
+
+## Example
+
+```otr
+import std
+import std.flate
+import std.list
+
+pub fn main() !void {
+    heap := std.mem.heap
+    text := "otters hold hands, otters hold hands, otters hold hands while they sleep"
+
+    var zipped = list.List(u8).init(heap)
+    defer zipped.deinit()
+    // The cap is the largest size the output may reach; bound gives the worst case.
+    try flate.compress(.gzip, text, &mut zipped, try flate.bound(text.len, .gzip), .o2)
+    std.io.printf("{} bytes compressed to {}\n", .{ text.len, zipped.len })
+    std.io.printf("gzip magic: {x} {x}\n", .{ zipped[0], zipped[1] })
+
+    var plain = list.List(u8).init(heap)
+    defer plain.deinit()
+    try flate.decompress(.gzip, zipped.items(), &mut plain, 1024)
+    std.io.printf("round trip: {}\n", .{ std.mem.eql(u8, plain.items(), text) })
+
+    // A cap smaller than the data stops a decompression bomb.
+    var small = list.List(u8).init(heap)
+    defer small.deinit()
+    if flate.decompress(.gzip, zipped.items(), &mut small, 16) |_| {} else |err| {
+        std.io.printf("capped at 16 bytes: {}\n", .{ err })
+    }
+
+    std.io.printf("adler32: {x}\n", .{ flate.adler32(text) })
+}
+```
+
+```text
+72 bytes compressed to 58
+gzip magic: 1f 8b
+round trip: true
+capped at 16 bytes: error.TooLarge
+adler32: ce671aa7
+```
+
+## adler32
+
+```otr
+fn adler32(bytes: []u8) u32
+```
+
+## decompress
+
+```otr
+fn decompress(format: Format, src: []u8, out: &mut List(u8), max: usize) Error!void
+```
+
+`max` caps total list length, including bytes already present. Existing output is
+never a DEFLATE dictionary. Capacity growth is also clamped before reserving.
+
+## compress
+
+```otr
+fn compress(format: Format, src: []u8, out: &mut List(u8), max: usize, level: Level) Error!void
+```
+
+Deterministic native compression. o2/o3 select bounded 32/128-candidate lazy LZ77,
+not the reference C level 6/7 algorithms. Scratch and output bounds are independent
+of total source size. Allocator failure follows List's panic-on-OOM contract.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>Error</code> | [<code>flate_common.Error</code>](/otr/std/flate_common#error) |
+| <code>Format</code> | [<code>flate_common.Format</code>](/otr/std/flate_common#format) |
+| <code>Limits</code> | [<code>flate_common.Limits</code>](/otr/std/flate_common#limits) |
+| <code>MemberPolicy</code> | [<code>flate_common.MemberPolicy</code>](/otr/std/flate_common#memberpolicy) |
+| <code>Progress</code> | [<code>flate_common.Progress</code>](/otr/std/flate_common#progress) |
+| <code>State</code> | [<code>flate_common.State</code>](/otr/std/flate_common#state) |
+| <code>Level</code> | [<code>flate_common.Level</code>](/otr/std/flate_common#level) |
+| <code>Action</code> | [<code>flate_common.Action</code>](/otr/std/flate_common#action) |
+| <code>Inflater</code> | [<code>flate_inflate.Inflater</code>](/otr/std/flate_inflate#inflater) |
+| <code>Deflater</code> | [<code>flate_deflate.Deflater</code>](/otr/std/flate_deflate#deflater) |
+| <code>bound</code> | [<code>flate_common.bound</code>](/otr/std/flate_common#bound) |

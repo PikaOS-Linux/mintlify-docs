@@ -1,0 +1,29 @@
+import std
+import std.crypto.hkdf
+
+fn print_hex(label: str, bytes: []u8) void {
+    std.io.printf("{}: ", .{ label })
+    for b in bytes { std.io.printf("{x:0>2}", .{ b }) }
+    std.io.printf("\n", .{})
+}
+
+pub fn main() void {
+    // Input keying material, such as a Diffie-Hellman shared secret, is not a key yet.
+    shared_secret := "result of a key exchange"
+    salt := "example salt"
+
+    // extract concentrates it into one pseudorandom key.
+    prk := hkdf.HkdfSha256.extract(salt, shared_secret)
+
+    // expand derives independent keys from it, one per purpose named in `info`.
+    var send_key: [32]u8 = std.mem.splat(32, u8, 0)
+    var recv_key: [32]u8 = std.mem.splat(32, u8, 0)
+    var nonce: [12]u8 = std.mem.splat(12, u8, 0)
+    hkdf.HkdfSha256.expand(&mut send_key[0..], &prk, "client to server")
+    hkdf.HkdfSha256.expand(&mut recv_key[0..], &prk, "server to client")
+    hkdf.HkdfSha256.expand(&mut nonce[0..], &prk, "nonce")
+
+    print_hex("send key", send_key[0..])
+    print_hex("recv key", recv_key[0..])
+    print_hex("nonce", nonce[0..])
+}

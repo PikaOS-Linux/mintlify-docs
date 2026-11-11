@@ -1,0 +1,45 @@
+import std
+import std.linux
+import std.socket_stream
+
+// A frame is bytes plus the descriptors that travel with them.
+fn greeting(counter: &linux.Fd) socket_stream.Error!socket_stream.Frame {
+    var frame = socket_stream.Frame.init(std.mem.heap)
+    errdefer frame.deinit()
+    try frame.append("hello, ")
+    try frame.append("here is a counter")
+    try frame.append_fd(counter)
+    return frame
+}
+
+pub fn main() !void {
+    heap := std.mem.heap
+    pair := try linux.socketpair(linux.SOCK.stream | linux.SOCK.nonblock)
+    a, b := pair
+    var tx = socket_stream.Stream.init(heap, a)
+    defer tx.deinit()
+    var rx = socket_stream.Stream.init(heap, b)
+    defer rx.deinit()
+
+    counter := try linux.eventfd(7, linux.EFD.nonblock)
+    defer counter.deinit()
+    // enqueue queues the frame; flush writes what the socket takes now.
+    try tx.enqueue(try greeting(&counter))
+    std.io.printf("wants to write: {}\n", .{ tx.interest().write })
+    var control = std.mem.splat(8, u64, 0)
+    std.io.printf("flush: {}\n", .{ @tag_name(try tx.flush(&mut control[0..])) })
+
+    // receive reads up to a limit into the stream's buffer, descriptors beside it.
+    var scratch = socket_stream.Scratch.init(heap)
+    defer scratch.deinit()
+    try scratch.prepare(4)
+    std.io.printf("receive: {}\n", .{ @tag_name(try rx.receive(64, &mut scratch)) })
+    std.io.printf("bytes: {}\n", .{ rx.bytes() })
+
+    // The caller frames the bytes itself and consumes what it has handled.
+    try rx.consume(7)
+    std.io.printf("after consume: {}\n", .{ rx.bytes() })
+    passed := rx.take_fd() orelse return error.MissingFd
+    defer passed.deinit()
+    std.io.printf("counter read through the passed descriptor: {}\n", .{ try passed.read_u64() })
+}

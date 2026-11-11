@@ -1,0 +1,7 @@
+crc32    fb596ff2
+fnv1a64  2545374bc75a86ed
+wyhash   9b625a3966330e42
+xxhash64 596fd7ea1af58076
+sha256   8bfd001789db99cd9ec1a4a832c43670b7a8e7d06f7ee9460799682c4725fa5e
+streamed sha256 matches: true
+streamed crc32 matches: true

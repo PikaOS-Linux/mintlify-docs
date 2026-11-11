@@ -1,0 +1,139 @@
+---
+title: "std.priority_queue"
+sidebarTitle: "priority_queue"
+description: "A priority queue that owns its elements."
+---
+
+A priority queue that owns its elements: a binary min-heap ordered by `less`, so `pop`
+returns an element no other is `less` than. Push and pop are O(log n); elements move
+through a hole rather than by swaps, one move per level.
+
+```otr
+import std.priority_queue
+```
+
+## Example
+
+```otr
+import std
+import std.priority_queue
+
+const Task = struct {
+    priority: u32
+    name: []static u8
+}
+
+// The queue is a min-heap: pop returns the element that is less than the rest.
+fn sooner(a: &Task, b: &Task) bool {
+    return a.priority < b.priority
+}
+
+pub fn main() void {
+    var tasks = priority_queue.PriorityQueue(Task, sooner).init(std.mem.heap)
+    defer tasks.deinit()
+
+    tasks.push(.{ priority: 3, name: "write tests" })
+    tasks.push(.{ priority: 1, name: "fix crash" })
+    tasks.push(.{ priority: 5, name: "tidy docs" })
+    tasks.push(.{ priority: 2, name: "review patch" })
+
+    if tasks.peek() |next| {
+        std.io.printf("{} queued, next: {}\n", .{ tasks.len(), next.name })
+    }
+
+    for {
+        task := tasks.pop() orelse break
+        std.io.printf("{} {}\n", .{ task.priority, task.name })
+    }
+    std.io.printf("left {}\n", .{ tasks.len() })
+}
+```
+
+```text
+4 queued, next: fix crash
+1 fix crash
+2 review patch
+3 write tests
+5 tidy docs
+left 0
+```
+
+## PriorityQueue
+
+```otr
+fn PriorityQueue(comptime T: type, comptime less: fn(a: &T, b: &T) bool) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>buf</code> | <code>mem.RawBuf(T)</code> | Read-only |
+| <code>count</code> | <code>usize</code> | Read-only |
+| <code>cap</code> | <code>usize</code> | Read-only |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+
+### PriorityQueue.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### PriorityQueue.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+Frees the storage, deinitialising the elements first when they are resources (spec O8).
+
+### PriorityQueue.len
+
+```otr
+fn len(self: &Self) usize
+```
+
+### PriorityQueue.peek
+
+```otr
+fn peek(self: &Self) ?&T
+```
+
+The element `pop` would return.
+
+### PriorityQueue.push
+
+```otr
+fn push(self: &mut Self, item: T) void
+```
+
+### PriorityQueue.pop
+
+```otr
+fn pop(self: &mut Self) ?T
+```
+
+Removes and returns an element no other is `less` than.
+
+### PriorityQueue.items
+
+```otr
+fn items(self: &Self) []T
+```
+
+The elements in heap order: the first is the least, the rest in no useful order.
+
+### PriorityQueue.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+Removes every element, keeping the storage.
+
+### PriorityQueue.reserve
+
+```otr
+fn reserve(self: &mut Self, additional: usize) void
+```
+
+Makes room for `additional` more elements, so that pushing them does not grow
+the storage again.

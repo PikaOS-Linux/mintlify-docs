@@ -1,0 +1,199 @@
+---
+title: "std.tz"
+sidebarTitle: "tz"
+description: "Time zones."
+---
+
+Time zones: TZif files (RFC 8536, versions 1 to 4) from the system's zoneinfo
+database, POSIX `TZ` rules, and the local zone that `TZ` and /etc/localtime name.
+A `TimeZone` gives the UTC offset in force at any instant, so `std.datetime` can show
+that instant on the zone's wall clock, and finds the instant a wall-clock time names.
+
+```otr
+import std.tz
+```
+
+## Example
+
+```otr
+import std
+import std.tz
+
+pub fn main() !void {
+    // A POSIX rule describes the zone here, so the output does not depend on the
+    // machine's zoneinfo files. tz.load(alloc, "Europe/Berlin") reads the system's.
+    berlin := try tz.TimeZone.parse_posix(std.mem.heap, "CET-1CEST,M3.5.0,M10.5.0/3")
+    defer berlin.deinit()
+
+    winter: i64 = 1768478400
+    summer: i64 = 1784116800
+    std.io.printf("{}\n{}\n", .{ berlin.at(winter), berlin.at(summer) })
+
+    off := berlin.offset_at(summer)
+    std.io.printf("{}: {} s east of UTC, dst {}\n", .{ off.abbrev.as_str(), off.seconds, off.is_dst })
+
+    // A wall-clock time in the zone names an instant.
+    meeting := try berlin.from_local(2026, 7, 1, 9, 30, 0)
+    std.io.printf("09:30 on 1 July is {} unix\n", .{ meeting.unix() })
+
+    // 02:30 on 29 March 2026 was skipped: the clock went from 02:00 to 03:00.
+    gap := try berlin.from_local(2026, 3, 29, 2, 30, 0)
+    std.io.printf("02:30 in the gap reads as {}\n", .{ gap })
+
+    utc := tz.TimeZone.utc(std.mem.heap)
+    defer utc.deinit()
+    var buf: [48]u8 = unsafe { undefined }
+    std.io.println(utc.at(summer).strftime(&mut buf, "%Y-%m-%d %H:%M %Z") orelse "")
+}
+```
+
+```text
+2026-01-15T13:00:00+01:00
+2026-07-15T14:00:00+02:00
+CEST: 7200 s east of UTC, dst true
+09:30 on 1 July is 1782891000 unix
+02:30 in the gap reads as 2026-03-29T03:30:00+02:00
+2026-07-15 12:00 UTC
+```
+
+## Error
+
+```otr
+const Error = error { NotFound, AccessDenied, NameTooLong, Io, InvalidZone }
+```
+
+## zoneinfo_dir
+
+```otr
+const zoneinfo_dir = "/usr/share/zoneinfo"
+```
+
+Where zone names such as `Europe/London` are looked up, unless `TZDIR` says otherwise.
+
+## TimeZone
+
+```otr
+const TimeZone = struct
+```
+
+A time zone: the offsets it has had, the instants it changed between them, and the
+rule for the instants after the last change. A resource: it owns its tables.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>times</code> | <code>List(i64)</code> | Read-only | Transition instants, strictly ascending; from `times[i]` on, `types[kinds[i]]` is in force. Before the first, `types[0]` is (RFC 8536 §3.2). |
+| <code>kinds</code> | <code>List(u8)</code> | Read-only |  |
+| <code>types</code> | <code>List(Offset)</code> | Read-only |  |
+| <code>has_rule</code> | <code>bool</code> | Read-only |  |
+| <code>rule_first</code> | <code>bool</code> | Read-only | Whether the rule, not `types[0]`, is in force before `times[0]`: true when the table holds only the rule's own changes. |
+| <code>rule</code> | <code>Rule</code> | Read-only |  |
+
+### TimeZone.utc
+
+```otr
+fn utc(alloc: mem.Allocator) TimeZone
+```
+
+UTC, with no transitions.
+
+### TimeZone.parse_tzif
+
+```otr
+fn parse_tzif(alloc: mem.Allocator, data: []u8) Error!TimeZone
+```
+
+The zone a TZif file's contents describe. Leap-second records are skipped: the
+instants given to and returned by a `TimeZone` are POSIX times, which have none.
+
+### TimeZone.parse_posix
+
+```otr
+fn parse_posix(alloc: mem.Allocator, spec: str) Error!TimeZone
+```
+
+The zone a POSIX `TZ` rule describes, such as `CET-1CEST,M3.5.0,M10.5.0/3` or
+`<+0530>-5:30`. A rule with a daylight name but no dates uses the United States'
+(`M3.2.0,M11.1.0`), as glibc does.
+
+### TimeZone.load
+
+```otr
+fn load(alloc: mem.Allocator, name: str) Error!TimeZone
+```
+
+The zone `name` names: a path when it starts with `/`, otherwise a name in
+`zoneinfo_dir` such as `America/New_York`. Names holding `..` are refused.
+
+### TimeZone.local
+
+```otr
+fn local(alloc: mem.Allocator, env: runtime.Env) TimeZone
+```
+
+The zone the process runs in, found as glibc finds it: `TZ` unset is
+/etc/localtime; empty is UTC; otherwise, with any leading `:` removed, a file
+(`load`, looked up in `TZDIR` when that is set) or else a POSIX rule. UTC when
+none of these works, so a clock always has a zone.
+
+### TimeZone.from_tz
+
+```otr
+fn from_tz(alloc: mem.Allocator, value: str, dir: str) Error!TimeZone
+```
+
+The zone the value of `TZ` names, with zone names looked up in `dir`, as `local`
+reads it.
+
+### TimeZone.deinit
+
+```otr
+fn deinit(self: TimeZone) void
+```
+
+### TimeZone.offset_at
+
+```otr
+fn offset_at(self: &TimeZone, t: i64) Offset
+```
+
+The offset in force at `t`, in seconds since 1970-01-01 UTC, for any `t`; past
+the years an `i32` holds, the offset of the nearest year that fits one.
+
+### TimeZone.at
+
+```otr
+fn at(self: &TimeZone, t: i64) DateTime
+```
+
+`t`, in seconds since 1970-01-01 UTC, on the zone's wall clock, whose year must fit
+an `i32`, as `DateTime.from_unix` requires.
+
+### TimeZone.at_ns
+
+```otr
+fn at_ns(self: &TimeZone, ns: i64) DateTime
+```
+
+`ns`, in nanoseconds since 1970-01-01 UTC, on the zone's wall clock, as `at` takes
+seconds.
+
+### TimeZone.now
+
+```otr
+fn now(self: &TimeZone) DateTime
+```
+
+The current time on the zone's wall clock.
+
+### TimeZone.from_local
+
+```otr
+fn from_local(self: &TimeZone, year: i32, month: u8, day: u8, hour: u8, minute: u8, second: u8) datetime.Error!DateTime
+```
+
+The instant a wall-clock time in this zone names, with the offset it has there. A
+time the clock skipped (in a spring-forward gap) is read with the offset before
+the gap, so it lands that far after it; a time the clock showed twice (when it
+went back) is the earlier one. This is RFC 5545's and Temporal's `compatible`
+choice. `OutOfRange` when the fields are not a valid date and time, or when a gap
+moves the time past the last year an `i32` holds.

@@ -1,0 +1,26 @@
+import std
+import std.rc
+import std.string
+
+pub fn main() void {
+    title := rc.Rc(string.String).init(string.String.from(std.mem.heap, "shared title"))
+
+    // clone adds an owner of the same value; nothing is copied.
+    other := title.clone()
+    std.io.printf("{} (owners: {})\n", .{ other.get().as_str(), title.strong_count() })
+    std.io.printf("same value: {}\n", .{ rc.Rc(string.String).same(&title, &other) })
+
+    // A weak reference sees the value without keeping it alive.
+    weak := title.downgrade()
+    defer weak.deinit()
+
+    title.deinit()
+    if weak.upgrade() |again| {
+        std.io.printf("still alive: {}\n", .{ again.get().as_str() })
+        again.deinit()
+    }
+
+    // The last owner frees the string.
+    other.deinit()
+    std.io.printf("alive after last owner: {}\n", .{ weak.alive() })
+}

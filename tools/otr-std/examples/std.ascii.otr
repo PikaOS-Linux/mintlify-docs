@@ -1,0 +1,23 @@
+import std
+import std.ascii
+
+pub fn main() void {
+    std.io.printf("digit '7': {}, alpha '_': {}, space '\\t': {}\n", .{ ascii.is_digit('7'), ascii.is_alpha('_'), ascii.is_space('\t') })
+    std.io.printf("upper of 'q': {c}, lower of 'Q': {c}\n", .{ ascii.to_upper('q'), ascii.to_lower('Q') })
+
+    // Header names compare without regard to case.
+    std.io.printf("same header: {}\n", .{ ascii.eql_ignore_case("Content-Type", "content-type") })
+    std.io.printf("is http: {}\n", .{ ascii.starts_with_ignore_case("HTTP/1.1 200 OK", "http/") })
+    if ascii.index_of_ignore_case("Hello World", "WORLD") |at| {
+        std.io.printf("world at byte {}\n", .{ at })
+    }
+
+    var buf: [32]u8 = unsafe { undefined }
+    std.io.println(ascii.lower_into(&mut buf, "MiXeD Case"))
+
+    var letters: usize = 0
+    for c in "otr 0.2.6, 2026" {
+        letters += @int_from_bool(ascii.is_alpha(c))
+    }
+    std.io.printf("{} letters\n", .{ letters })
+}

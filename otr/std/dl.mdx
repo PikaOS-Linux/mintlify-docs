@@ -1,0 +1,108 @@
+---
+title: "std.dl"
+sidebarTitle: "dl"
+description: "Shared libraries loaded at run time (dlopen), such as a Vulkan loader a program uses when it is installed."
+---
+
+Shared libraries loaded at run time (dlopen), such as a Vulkan loader a program uses
+when it is installed. A loaded library stays loaded for the rest of the program, so
+the functions found in it never dangle.
+
+```otr
+import std.dl
+```
+
+## Example
+
+```otr
+import std
+import std.dl
+
+// The functions wanted from the library, by name; load fills in every field.
+const Math = struct {
+    pub sqrt: fn(f64) f64
+    pub hypot: fn(f64, f64) f64
+}
+
+pub fn main() !void {
+    // The C math library, which every glibc system has.
+    lib := try dl.Library.open("libm.so.6")
+
+    // load promises each named symbol has its field's type, so it is unsafe once;
+    // calls through the table are then safe.
+    math := try unsafe { lib.load(Math) }
+    std.io.printf("sqrt(16) = {}\n", .{ math.sqrt(16.0) })
+    std.io.printf("hypot(3, 4) = {}\n", .{ math.hypot(3.0, 4.0) })
+
+    // lookup finds one function; null when the library has no such symbol.
+    floor := unsafe { lib.lookup(fn(f64) f64, "floor") } orelse return error.Missing
+    std.io.printf("floor(2.7) = {}\n", .{ unsafe { floor(2.7) } })
+    std.io.printf("has no_such_function: {}\n", .{ lib.symbol("no_such_function") != null })
+
+    // An optional library is tried, and the program carries on without it.
+    if dl.Library.open("libnot-installed.so") |_| {} else |err| {
+        std.io.printf("libnot-installed.so: {}\n", .{ err })
+    }
+}
+```
+
+```text
+sqrt(16) = 4
+hypot(3, 4) = 5
+floor(2.7) = 2
+has no_such_function: false
+libnot-installed.so: error.NotFound
+```
+
+## Library
+
+```otr
+const Library = struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>handle</code> | <code>*anyopaque</code> | Read-only |
+
+### Library.open
+
+```otr
+fn open(name: [:0]u8) error { NotFound }!Library
+```
+
+Loads the library `name` (a path, or a name the dynamic loader searches for).
+
+### Library.symbol
+
+```otr
+fn symbol(self: Library, name: [:0]u8) ?*anyopaque
+```
+
+The address of the symbol `name`, for `ffi.load_table` or `lookup`.
+
+### Library.lookup
+
+```otr
+unsafe fn lookup(self: Library, comptime F: type, name: [:0]u8) ?F
+```
+
+The function `name` as the function type `F`. Unsafe: `name` must be a function of
+that type.
+
+### Library.close
+
+```otr
+unsafe fn close(self: Library) void
+```
+
+Unloads the library, as a daemon frees a large runtime it no longer needs. Unsafe:
+nothing found in it, no function `lookup` or `load` gave and no copy of this
+`Library`, may be used afterwards, since its code and data are unmapped.
+
+### Library.load
+
+```otr
+unsafe fn load(self: Library, comptime T: type) error { Missing }!T
+```
+
+A table of the library's functions; see `ffi.load_table`.

@@ -1,0 +1,695 @@
+---
+title: "std.linux"
+sidebarTitle: "linux"
+description: "Linux system calls with typed results."
+---
+
+Linux system calls with typed results: an owned file descriptor `Fd`, errors named
+after errno, memory mappings, directory entries read with getdents64, and file
+descriptors passed over Unix sockets. Every call costs what the C library call does
+plus a compare of its result.
+
+Descriptors made here are always close-on-exec; a child process gets one only
+through `process.SpawnOptions.fds`.
+
+```otr
+import std.linux
+```
+
+## Example
+
+```otr
+import std
+import std.linux
+
+pub fn main() !void {
+    // A pipe and an eventfd, the two usual ways to wake an event loop.
+    pipe := try linux.pipe2(linux.O.nonblock)
+    defer pipe.deinit()
+    wake := try linux.eventfd(0, linux.EFD.nonblock)
+    defer wake.deinit()
+
+    // Each descriptor is registered with a datum that wait hands back.
+    loop := try linux.Epoll.init()
+    defer loop.deinit()
+    try loop.add(&pipe.a, linux.EPOLL.readable, 1)
+    try loop.add(&wake, linux.EPOLL.readable, 2)
+
+    var events: [4]linux.EpollEvent
+    std.io.printf("nothing ready yet: {}\n", .{ (try loop.wait(&out events, 0)).len == 0 })
+
+    _ = try pipe.b.write("ping")
+    try wake.write_u64(3)
+
+    var buf: [16]u8
+    var seen: u64 = 0
+    for ev in try loop.wait(&out events, 0) {
+        seen += ev.data()
+    }
+    // Sum of the two data, whatever order the kernel reported them in.
+    std.io.printf("ready data sum: {}\n", .{ seen })
+    std.io.printf("pipe: {}\n", .{ try pipe.a.read(&out buf) })
+    std.io.printf("eventfd counter: {}\n", .{ try wake.read_u64() })
+
+    try loop.remove(&wake)
+    std.io.printf("after reading: {} ready\n", .{ (try loop.wait(&out events, 0)).len })
+}
+```
+
+```text
+nothing ready yet: true
+ready data sum: 3
+pipe: ping
+eventfd counter: 3
+after reading: 0 ready
+```
+
+## EPOLL
+
+```otr
+const EPOLL = struct
+```
+
+Event bits for `Epoll`. `err` and `hangup` are always reported, whatever was asked for.
+
+### EPOLL.readable
+
+```otr
+const readable: u32 = 0x1
+```
+
+EPOLLIN
+
+### EPOLL.writable
+
+```otr
+const writable: u32 = 0x4
+```
+
+EPOLLOUT
+
+### EPOLL.err
+
+```otr
+const err: u32 = 0x8
+```
+
+EPOLLERR
+
+### EPOLL.hangup
+
+```otr
+const hangup: u32 = 0x10
+```
+
+EPOLLHUP
+
+### EPOLL.peer_closed
+
+```otr
+const peer_closed: u32 = 0x2000
+```
+
+EPOLLRDHUP: the peer shut down its writing end.
+
+## EpollEvent
+
+```otr
+const EpollEvent = if @target_arch() == .x86_64 { EpollEventOf([0]u32, [0]u32{}) } else { EpollEventOf(u32, 0) }
+```
+
+What `Epoll.wait` reports for one descriptor: the `EPOLL` bits that happened, and the
+datum it was registered with. Its layout is the kernel's, which is packed on x86-64
+and aligns the datum to 8 bytes elsewhere.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>events</code> | <code>u32</code> | Public |
+| <code>pad</code> | <code>Pad</code> | Read-only |
+| <code>data_lo</code> | <code>u32</code> | Read-only |
+| <code>data_hi</code> | <code>u32</code> | Read-only |
+
+### EpollEvent.init
+
+```otr
+fn init(events: u32, data: u64) Self
+```
+
+### EpollEvent.data
+
+```otr
+fn data(e: &Self) u64
+```
+
+## Epoll
+
+```otr
+const Epoll = struct
+```
+
+An epoll instance: descriptors registered with the events wanted (level-triggered) and
+a 64-bit datum each, which `wait` hands back.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>fd</code> | <code>Fd</code> | Read-only |
+
+### Epoll.init
+
+```otr
+fn init() Error!Epoll
+```
+
+### Epoll.deinit
+
+```otr
+fn deinit(self: Epoll) void
+```
+
+### Epoll.add
+
+```otr
+fn add(self: &Epoll, fd: &Fd, events: u32, data: u64) Error!void
+```
+
+### Epoll.add_raw
+
+```otr
+fn add_raw(self: &Epoll, fd: i32, events: u32, data: u64) Error!void
+```
+
+`add` for a descriptor another library owns, such as a Wayland connection's, by its
+number; remove it before that library closes it.
+
+### Epoll.poll_fd
+
+```otr
+fn poll_fd(self: &Epoll) i32
+```
+
+The epoll descriptor itself, readable while any registered descriptor has an event,
+so one epoll can sit inside another loop's epoll or poll.
+
+### Epoll.modify_raw
+
+```otr
+fn modify_raw(self: &Epoll, fd: i32, events: u32, data: u64) Error!void
+```
+
+`modify` for a descriptor added with `add_raw`.
+
+### Epoll.modify
+
+```otr
+fn modify(self: &Epoll, fd: &Fd, events: u32, data: u64) Error!void
+```
+
+Changes what `fd`, already added, is woken for.
+
+### Epoll.remove
+
+```otr
+fn remove(self: &Epoll, fd: &Fd) Error!void
+```
+
+Stops watching `fd`. Remove a descriptor before closing it: a duplicate keeps the
+registration alive and delivering events otherwise.
+
+### Epoll.remove_raw
+
+```otr
+fn remove_raw(self: &Epoll, fd: i32) Error!void
+```
+
+`remove` for a descriptor owned by another library.
+
+### Epoll.wait
+
+```otr
+fn wait(self: &Epoll, events: []out EpollEvent, timeout_ms: i32) Error! []mut EpollEvent
+```
+
+Waits up to `timeout_ms` (-1: without limit) for events, filling a prefix of
+`events`, which it returns; empty when the time ran out.
+
+## getdents64
+
+```otr
+fn getdents64(dir: &Fd, buf: []mut u8) Error!usize
+```
+
+Reads directory entries of `dir` (opened with `O.directory`) into `buf`, as many as
+fit, and returns how many bytes it filled; 0 at the end of the directory. Go over
+them with `dirents(buf[0..n])`.
+
+## DirKind
+
+```otr
+const DirKind = enum
+```
+
+What a directory entry is (its `d_type`); `unknown` when the file system does not
+say, and a `stat` must tell.
+
+| Variant |
+| --- |
+| <code>unknown</code> |
+| <code>fifo</code> |
+| <code>char_device</code> |
+| <code>dir</code> |
+| <code>block_device</code> |
+| <code>file</code> |
+| <code>symlink</code> |
+| <code>socket</code> |
+
+## Dirent
+
+```otr
+const Dirent = ref struct
+```
+
+One entry; `name` points into the buffer `getdents64` filled.
+
+| Field | Type |
+| --- | --- |
+| <code>ino</code> | <code>u64</code> |
+| <code>kind</code> | <code>DirKind</code> |
+| <code>name</code> | <code>[]u8</code> |
+
+## dirents
+
+```otr
+fn dirents(buf: []u8) Dirents
+```
+
+The entries in bytes `getdents64` filled, in order.
+
+## Dirents
+
+```otr
+const Dirents = ref struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>buf</code> | <code>[]u8</code> | Read-only |
+| <code>pos</code> | <code>usize</code> | Read-only |
+
+### Dirents.next
+
+```otr
+fn next(self: &mut Dirents) ?Dirent
+```
+
+## max_fds
+
+```otr
+const max_fds = 32
+```
+
+The default descriptor capacity for legacy send and receive calls.
+
+## send_fds
+
+```otr
+fn send_fds(sock: &Fd, bytes: []u8, fds: []&Fd) Error!usize
+```
+
+Sends `bytes` (at least one) over the Unix socket `sock` with copies of the
+descriptors `fds` (SCM_RIGHTS, at most `max_fds`); returns how many bytes went. The
+descriptors stay open here.
+
+## send_message
+
+```otr
+fn send_message(sock: &Fd, bytes: []u8, fds: anytype, nonblock: bool) Error!usize
+```
+
+`send_fds`, failing with `WouldBlock` instead of waiting when `nonblock` is set and the
+socket's buffer is full. `fds` is a slice of `Fd` or of `&Fd`, so descriptors queued in
+a list go without gathering references to them first.
+
+## send_message_bounded
+
+```otr
+fn send_message_bounded(comptime capacity: usize, sock: &Fd, bytes: []u8, fds: anytype, nonblock: bool) Error!usize
+```
+
+Sends one SCM_RIGHTS message with stack storage for `capacity` descriptors, up to
+Linux's limit of 253. A longer slice returns `Invalid` before sending anything.
+Both `[]Fd` and `[]&Fd` are borrowed; sending never consumes or closes them.
+
+## recv_fds
+
+```otr
+fn recv_fds(sock: &Fd, buf: []mut u8, fds: &mut list.List(Fd)) Error!usize
+```
+
+Receives up to `buf.len` bytes from the Unix socket `sock`, and appends the
+descriptors sent with them to `fds`; returns how many bytes came, 0 once the peer
+has closed its end.
+
+## Fds
+
+```otr
+const Fds = bounded.BoundedList(Fd, max_fds)
+```
+
+The descriptors one `recv_message` can bring, in the order they were sent.
+
+## Received
+
+```otr
+const Received = ref struct
+```
+
+What `recv_message` received: the bytes it filled, empty once the peer has closed its
+end, and whether descriptors were cut off for want of room (MSG_CTRUNC).
+
+| Field | Type |
+| --- | --- |
+| <code>bytes</code> | <code>[]mut u8</code> |
+| <code>truncated</code> | <code>bool</code> |
+
+## recv_message
+
+```otr
+fn recv_message(sock: &Fd, buf: []out u8, fds: anytype, nonblock: bool) Error!Received
+```
+
+`recv_fds` into a buffer with no values yet, failing with `WouldBlock` instead of
+waiting when `nonblock` is set and nothing has arrived. The descriptors are appended to
+`fds`, a fixed-size queue so that receiving never allocates; any that do not fit are
+closed, and reported as `truncated`.
+
+## IoctlDir
+
+```otr
+const IoctlDir = enum
+```
+
+Which way an ioctl's argument goes, as the kernel's `_IOC` encodes it.
+
+| Variant |
+| --- |
+| <code>none</code> |
+| <code>write</code> |
+| <code>read</code> |
+| <code>read_write</code> |
+
+## Ioctl
+
+```otr
+unsafe fn Ioctl(comptime dir: IoctlDir, comptime kind: u8, comptime nr: u8, comptime T: type) type
+```
+
+An ioctl taking a `T` the kernel reads (`write`), fills (`read`) or both: the request
+number is built as the kernel's `_IOW`, `_IOR` and `_IOWR` macros build it, from `kind`,
+`nr` and `T`'s size, and `call` is safe. Unsafe to declare: the kernel must touch only
+the `T` given, so any pointer it holds as an integer must be one it would follow
+anyway, which a safe wrapper around `call` makes sure of.
+
+### Ioctl.call
+
+```otr
+fn call(fd: &Fd, arg: &mut T) Error!u32
+```
+
+Runs the ioctl on `arg`, returning its non-negative result.
+
+| Name | Definition |
+| --- | --- |
+| <code>Ioctl.request</code> | <code>number</code> |
+
+## IoctlNumber
+
+```otr
+unsafe fn IoctlNumber(comptime number: u32, comptime T: type) type
+```
+
+An ioctl with a number the kernel does not encode, such as `TIOCSWINSZ`, taking a `T`.
+
+### IoctlNumber.call
+
+```otr
+fn call(fd: &Fd, arg: &mut T) Error!u32
+```
+
+Runs the ioctl on `arg`, returning its non-negative result.
+
+| Name | Definition |
+| --- | --- |
+| <code>IoctlNumber.request</code> | <code>number</code> |
+
+## IoctlScalarNumber
+
+```otr
+unsafe fn IoctlScalarNumber(comptime number: u32) type
+```
+
+An ioctl taking an unsigned scalar, not a pointer, even when its number encodes
+`_IOW(..., int)`. Unsafe to declare: the request must interpret the zero-extended
+value as a scalar and must not follow it as an address. Retries only EINTR.
+
+### IoctlScalarNumber.call
+
+```otr
+fn call(fd: &Fd, value: u32) Error!u32
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>IoctlScalarNumber.request</code> | <code>number</code> |
+
+## IoctlNone
+
+```otr
+unsafe fn IoctlNone(comptime number: u32) type
+```
+
+An ioctl with no third argument. Unsafe to declare: the request must not read a
+third argument or touch memory through one. Retries only EINTR, as pointer calls do.
+
+### IoctlNone.call
+
+```otr
+fn call(fd: &Fd) Error!u32
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>IoctlNone.request</code> | <code>number</code> |
+
+## Ucred
+
+```otr
+const Ucred = struct
+```
+
+The process at the other end of a Unix socket, as the kernel recorded it when the
+connection was made (SO_PEERCRED), which the peer cannot forge.
+
+| Field | Type |
+| --- | --- |
+| <code>pid</code> | <code>i32</code> |
+| <code>uid</code> | <code>u32</code> |
+| <code>gid</code> | <code>u32</code> |
+
+## peer_cred
+
+```otr
+fn peer_cred(sock: &Fd) Error!Ucred
+```
+
+## CapSet
+
+```otr
+const CapSet = struct
+```
+
+The calling thread's capability sets, each as one bit per capability
+(`@as(u64, 1) << 21` is CAP_SYS_ADMIN).
+
+| Field | Type |
+| --- | --- |
+| <code>effective</code> | <code>u64 = 0</code> |
+| <code>permitted</code> | <code>u64 = 0</code> |
+| <code>inheritable</code> | <code>u64 = 0</code> |
+
+## capget
+
+```otr
+fn capget() Error!CapSet
+```
+
+capget(2) for the calling thread.
+
+## capset
+
+```otr
+fn capset(caps: CapSet) Error!void
+```
+
+capset(2) for the calling thread: a set can only shrink, unless CAP_SETPCAP allows more.
+
+## set_no_new_privs
+
+```otr
+fn set_no_new_privs() Error!void
+```
+
+PR_SET_NO_NEW_PRIVS: no exec from here on gains privileges (set-uid bits and file
+capabilities are ignored). It cannot be undone.
+
+## set_dumpable
+
+```otr
+fn set_dumpable(on: bool) Error!void
+```
+
+PR_SET_DUMPABLE: whether the process may dump core and be ptrace'd by its own user.
+
+## set_keepcaps
+
+```otr
+fn set_keepcaps(on: bool) Error!void
+```
+
+PR_SET_KEEPCAPS: whether the permitted capabilities survive a change from uid 0 to
+another uid (setresuid).
+
+## capbset_drop
+
+```otr
+fn capbset_drop(cap: u32) Error!void
+```
+
+PR_CAPBSET_DROP: removes capability `cap` from the bounding set, so no exec can gain it
+again; needs CAP_SETPCAP. `error.Invalid` for a number past the kernel's last
+capability, which ends a loop over all of them.
+
+## cap_ambient_clear_all
+
+```otr
+fn cap_ambient_clear_all() Error!void
+```
+
+PR_CAP_AMBIENT_CLEAR_ALL: empties the ambient set, so exec passes no capability on.
+
+## Ids
+
+```otr
+const Ids = struct
+```
+
+The real, effective and saved user or group ids.
+
+| Field | Type |
+| --- | --- |
+| <code>real</code> | <code>u32</code> |
+| <code>effective</code> | <code>u32</code> |
+| <code>saved</code> | <code>u32</code> |
+
+## setresuid
+
+```otr
+fn setresuid(real: u32, effective: u32, saved: u32) Error!void
+```
+
+## setresgid
+
+```otr
+fn setresgid(real: u32, effective: u32, saved: u32) Error!void
+```
+
+## getresuid
+
+```otr
+fn getresuid() Error!Ids
+```
+
+## getresgid
+
+```otr
+fn getresgid() Error!Ids
+```
+
+## setgroups
+
+```otr
+fn setgroups(groups: []u32) Error!void
+```
+
+Sets the supplementary groups to `groups` (none for an empty slice); needs CAP_SETGID.
+
+## getgroups
+
+```otr
+fn getgroups(out: []out u32) Error!usize
+```
+
+Writes the supplementary groups into `out` and returns how many there are; with an empty
+`out`, only counts them. `error.Invalid` when `out` is too short for them all.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>send_ancillary</code> | [<code>socket_ancillary.send</code>](/otr/std/socket_ancillary#send) |
+| <code>recv_ancillary</code> | [<code>socket_ancillary.receive</code>](/otr/std/socket_ancillary#receive) |
+| <code>ancillary_control_words</code> | [<code>socket_ancillary.control_words</code>](/otr/std/socket_ancillary#control_words) |
+| <code>AncillaryError</code> | [<code>socket_ancillary.Error</code>](/otr/std/socket_ancillary) |
+| <code>AncillaryReceived</code> | [<code>socket_ancillary.Received</code>](/otr/std/socket_ancillary#received) |
+| <code>Mapping</code> | [<code>mapping.Mapping</code>](/otr/std/linux/mapping#mapping) |
+| <code>Guarded</code> | [<code>mapping.Guarded</code>](/otr/std/linux/mapping#guarded) |
+| <code>Stat</code> | [<code>metadata.Stat</code>](/otr/std/linux/metadata#stat) |
+| <code>fd_stat</code> | [<code>metadata.fd_stat</code>](/otr/std/linux/metadata#fd_stat) |
+| <code>read_link</code> | [<code>metadata.read_link</code>](/otr/std/linux/metadata#read_link) |
+| <code>Error</code> | [<code>fd.Error</code>](/otr/std/linux/fd#error) |
+| <code>errno_error</code> | [<code>fd.errno_error</code>](/otr/std/linux/fd#errno_error) |
+| <code>O</code> | [<code>fd.O</code>](/otr/std/linux/fd#o) |
+| <code>Fd</code> | [<code>fd.Fd</code>](/otr/std/linux/fd#fd) |
+| <code>is_open</code> | [<code>fd.is_open</code>](/otr/std/linux/fd#is_open) |
+| <code>dup2</code> | [<code>fd.dup2</code>](/otr/std/linux/fd#dup2) |
+| <code>close_range</code> | [<code>fd.close_range</code>](/otr/std/linux/fd#close_range) |
+| <code>open</code> | [<code>fd.open</code>](/otr/std/linux/fd#open) |
+| <code>connect_unix</code> | [<code>fd.connect_unix</code>](/otr/std/linux/fd#connect_unix) |
+| <code>unlink</code> | [<code>fd.unlink</code>](/otr/std/linux/fd#unlink) |
+| <code>Pair</code> | [<code>fd.Pair</code>](/otr/std/linux/fd#pair) |
+| <code>pipe2</code> | [<code>fd.pipe2</code>](/otr/std/linux/fd#pipe2) |
+| <code>SOCK</code> | [<code>fd.SOCK</code>](/otr/std/linux/fd#sock) |
+| <code>random</code> | [<code>fd.random</code>](/otr/std/linux/fd#random) |
+| <code>unix_socket</code> | [<code>fd.unix_socket</code>](/otr/std/linux/fd#unix_socket) |
+| <code>SockaddrUn</code> | [<code>fd.SockaddrUn</code>](/otr/std/linux/fd#sockaddrun) |
+| <code>socketpair</code> | [<code>fd.socketpair</code>](/otr/std/linux/fd#socketpair) |
+| <code>SOL</code> | [<code>fd.SOL</code>](/otr/std/linux/fd#sol) |
+| <code>SO</code> | [<code>fd.SO</code>](/otr/std/linux/fd#so) |
+| <code>EFD</code> | [<code>fd.EFD</code>](/otr/std/linux/fd#efd) |
+| <code>eventfd</code> | [<code>fd.eventfd</code>](/otr/std/linux/fd#eventfd) |
+| <code>Timespec</code> | [<code>fd.Timespec</code>](/otr/std/linux/fd) |
+| <code>Itimerspec</code> | [<code>fd.Itimerspec</code>](/otr/std/linux/fd#itimerspec) |
+| <code>CLOCK</code> | [<code>fd.CLOCK</code>](/otr/std/linux/fd#clock) |
+| <code>TFD</code> | [<code>fd.TFD</code>](/otr/std/linux/fd#tfd) |
+| <code>timerfd_create</code> | [<code>fd.timerfd_create</code>](/otr/std/linux/fd#timerfd_create) |
+| <code>timerfd_settime</code> | [<code>fd.timerfd_settime</code>](/otr/std/linux/fd#timerfd_settime) |
+| <code>timerfd_gettime</code> | [<code>fd.timerfd_gettime</code>](/otr/std/linux/fd#timerfd_gettime) |
+| <code>memfd</code> | [<code>fd.memfd</code>](/otr/std/linux/fd#memfd) |
+| <code>getpid</code> | [<code>fd.getpid</code>](/otr/std/linux/fd#getpid) |
+| <code>getuid</code> | [<code>fd.getuid</code>](/otr/std/linux/fd#getuid) |
+| <code>geteuid</code> | [<code>fd.geteuid</code>](/otr/std/linux/fd#geteuid) |
+| <code>SIG</code> | [<code>process.SIG</code>](/otr/std/process) |
+| <code>SigSet</code> | [<code>process.SigSet</code>](/otr/std/process) |
+| <code>block_signals</code> | [<code>process.block_signals</code>](/otr/std/process) |
+| <code>set_signal_mask</code> | [<code>process.set_signal_mask</code>](/otr/std/process) |
+| <code>signalfd</code> | [<code>process.signalfd</code>](/otr/std/process) |
+| <code>next_signal</code> | [<code>process.next_signal</code>](/otr/std/process) |
+| <code>Rlimit</code> | [<code>process.Rlimit</code>](/otr/std/process) |
+| <code>RLIMIT</code> | [<code>process.RLIMIT</code>](/otr/std/process) |
+| <code>get_rlimit</code> | [<code>process.get_rlimit</code>](/otr/std/process) |
+| <code>set_rlimit</code> | [<code>process.set_rlimit</code>](/otr/std/process) |
+| <code>prlimit</code> | [<code>process.prlimit</code>](/otr/std/process) |
+| <code>raise</code> | [<code>process.raise</code>](/otr/std/process) |
+| <code>kill</code> | [<code>process.kill</code>](/otr/std/process) |
+| <code>W</code> | [<code>process.W</code>](/otr/std/process) |
+| <code>Wait</code> | [<code>process.Wait</code>](/otr/std/process) |
+| <code>waitpid</code> | [<code>process.waitpid</code>](/otr/std/process) |

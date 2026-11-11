@@ -1,0 +1,29 @@
+import std
+import std.crypto
+import std.crypto.hmac
+
+fn print_hex(label: str, bytes: []u8) void {
+    std.io.printf("{}: ", .{ label })
+    for b in bytes { std.io.printf("{x:0>2}", .{ b }) }
+    std.io.printf("\n", .{})
+}
+
+pub fn main() void {
+    key := "a shared secret key"
+    message := "amount=100&to=jade"
+
+    // The sender computes a MAC and sends it with the message.
+    mac := hmac.HmacSha256.create(key, message)
+    print_hex("hmac-sha256", mac[0..])
+
+    // The receiver computes it again, here in parts, and compares in constant time.
+    var h = hmac.HmacSha256.init(key)
+    h.update("amount=100")
+    h.update("&to=jade")
+    expected := h.final()
+    std.io.printf("genuine message accepted: {}\n", .{ crypto.timing_safe_eql(mac[0..], expected[0..]) })
+
+    forged := hmac.HmacSha256.create(key, "amount=900&to=jade")
+    std.io.printf("changed message accepted: {}\n", .{ crypto.timing_safe_eql(mac[0..], forged[0..]) })
+    std.io.printf("mac is {} bytes\n", .{ hmac.HmacSha256.mac_len })
+}

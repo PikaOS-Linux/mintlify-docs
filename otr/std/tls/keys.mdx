@@ -1,0 +1,247 @@
+---
+title: "std.tls.keys"
+sidebarTitle: "tls.keys"
+description: "The cryptography under std.tls."
+---
+
+The cryptography under `std.tls`: the running transcript hash, TLS 1.3's HKDF key
+schedule (RFC 8446 §7.1), TLS 1.2's PRF (RFC 5246 §5), and record protection with the
+three AEADs both versions share. Hashes are picked at run time by `sha2.Hash`, since the
+cipher suite that names one arrives in the server's first message; each function then
+runs the code compiled for that hash.
+
+```otr
+import std.tls.keys
+```
+
+## Transcript
+
+```otr
+const Transcript = struct
+```
+
+The hash of every handshake message so far. Until the server picks a suite both hashes
+run; `choose` then stops the one that is not needed.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>s256</code> | <code>sha2.Sha256</code> | Read-only |
+| <code>s384</code> | <code>sha2.Sha384</code> | Read-only |
+| <code>only</code> | <code>?sha2.Hash</code> | Read-only |
+
+### Transcript.init
+
+```otr
+fn init() Transcript
+```
+
+### Transcript.choose
+
+```otr
+fn choose(self: &mut Transcript, h: sha2.Hash) void
+```
+
+### Transcript.update
+
+```otr
+fn update(self: &mut Transcript, msg: []u8) void
+```
+
+### Transcript.peek
+
+```otr
+fn peek(self: &Transcript, h: sha2.Hash) Digest
+```
+
+The hash of the messages so far; the transcript runs on.
+
+## hmac_of
+
+```otr
+fn hmac_of(h: sha2.Hash, key: []u8, msg: []u8) Digest
+```
+
+## extract
+
+```otr
+fn extract(h: sha2.Hash, salt: []u8, ikm: []u8) Digest
+```
+
+HKDF-Extract. An empty `ikm` stands for the string of zeros as long as the hash, which
+is what the schedule feeds in where it has no PSK and after the handshake secret.
+
+## expand_label
+
+```otr
+fn expand_label(h: sha2.Hash, out: []mut u8, secret: []u8, label: []u8, context: []u8) void
+```
+
+HKDF-Expand-Label: `out` filled from `secret` under "tls13 " + `label` and `context`.
+
+## derive_secret
+
+```otr
+fn derive_secret(h: sha2.Hash, secret: []u8, label: []u8, transcript_hash: []u8) Digest
+```
+
+Derive-Secret: a secret as long as the hash, bound to a transcript hash.
+
+## next_stage
+
+```otr
+fn next_stage(h: sha2.Hash, secret: []u8, ikm: []u8) Digest
+```
+
+The secret that follows `secret` in the schedule: Derive-Secret(secret, "derived", "")
+as the salt of the next extraction, with `ikm` as its input.
+
+## finished_mac
+
+```otr
+fn finished_mac(h: sha2.Hash, traffic_secret: []u8, transcript_hash: []u8) Digest
+```
+
+The finished MAC of RFC 8446 §4.4.4 over `transcript_hash`, keyed from a handshake
+traffic secret.
+
+## prf
+
+```otr
+fn prf(h: sha2.Hash, out: []mut u8, secret: []u8, label: []u8, seed_a: []u8, seed_b: []u8) void
+```
+
+TLS 1.2's PRF, P_hash of RFC 5246 §5, filling `out` from `secret` under `label` and the
+seed `seed_a || seed_b`.
+
+## Aead
+
+```otr
+const Aead = enum
+```
+
+The record AEADs of both versions.
+
+| Variant |
+| --- |
+| <code>aes128_gcm</code> |
+| <code>aes256_gcm</code> |
+| <code>chacha20_poly1305</code> |
+
+## key_len
+
+```otr
+fn key_len(a: Aead) usize
+```
+
+## AuthError
+
+```otr
+const AuthError = error { BadRecordMac }
+```
+
+## Protection
+
+```otr
+const Protection = struct
+```
+
+One direction's record protection: the keyed AEAD, its IV and the record sequence
+number, which every sealed or opened record advances. TLS 1.3 and TLS 1.2's
+ChaCha20-Poly1305 xor the sequence number into a 12-byte IV (RFC 8446 §5.3, RFC 7905);
+TLS 1.2's AES-GCM takes a 4-byte salt and an 8-byte explicit nonce sent in each record
+(RFC 5288), for which this side sends its sequence number.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>seq</code> | <code>u64</code> | Public |
+| <code>explicit_nonce</code> | <code>bool</code> | Public |
+| <code>keyed</code> | <code>Keyed</code> | Read-only |
+| <code>iv</code> | <code>[12]u8</code> | Read-only |
+
+### Protection.init
+
+```otr
+fn init(a: Aead, key: []u8, iv: []u8, explicit_nonce: bool) Protection
+```
+
+`iv` is 12 bytes, or the 4-byte salt when `explicit_nonce`.
+
+### Protection.nonce
+
+```otr
+fn nonce(self: &Protection, explicit: []u8) [12]u8
+```
+
+The nonce of the next record. With an explicit nonce, `explicit` is the 8 bytes the
+record carries.
+
+### Protection.seal
+
+```otr
+fn seal(self: &mut Protection, buf: []mut u8, ad: []u8, n: &[12]u8) [16]u8
+```
+
+Encrypts `buf` in place under `nonce` and returns the tag.
+
+### Protection.open
+
+```otr
+fn open(self: &mut Protection, buf: []mut u8, tag: &[16]u8, ad: []u8, n: &[12]u8) AuthError!void
+```
+
+Checks `tag` and decrypts `buf` in place; a forgery leaves `buf` as it was.
+
+## empty_digest
+
+```otr
+fn empty_digest() Digest
+```
+
+## traffic_keys
+
+```otr
+fn traffic_keys(h: sha2.Hash, a: Aead, secret: []u8) Protection
+```
+
+The record protection a TLS 1.3 traffic secret gives (RFC 8446 §7.3).
+
+## next_traffic
+
+```otr
+fn next_traffic(h: sha2.Hash, secret: Digest) Digest
+```
+
+The traffic secret after a KeyUpdate (RFC 8446 §7.2).
+
+## master12
+
+```otr
+fn master12(h: sha2.Hash, premaster: &[32]u8, session: []u8, client_random: &[32]u8, server_random: &[32]u8) [48]u8
+```
+
+TLS 1.2's master secret from `premaster`: the extended one over the session hash when
+`session` is not empty (RFC 7627 §4), else RFC 5246 §8.1's over both randoms.
+
+## verify_data12
+
+```otr
+fn verify_data12(h: sha2.Hash, master: &[48]u8, label: []u8, transcript_hash: []u8) [12]u8
+```
+
+TLS 1.2's Finished verify_data (RFC 5246 §7.4.9) under `label`.
+
+## keys12
+
+```otr
+fn keys12(h: sha2.Hash, a: Aead, master: &[48]u8, client_random: &[32]u8, server_random: &[32]u8) struct { Protection, Protection }
+```
+
+TLS 1.2's client and server protection from its master secret (RFC 5246 §6.3): the key
+block is the client's key, the server's, then the client's IV and the server's.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>Digest</code> | [<code>sha2.Digest</code>](/otr/std/crypto/sha2#digest) |
+| <code>tag_len</code> | <code>16</code> |

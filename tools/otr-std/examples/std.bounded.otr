@@ -1,0 +1,35 @@
+import std
+import std.bounded
+
+pub fn main() !void {
+    // Four slots on the stack, no allocator.
+    var recent = bounded.BoundedList(u32, 4).init()
+    try recent.push(10)
+    try recent.push(20)
+    try recent.push_slice(&[2]u32{ 30, 40 })
+
+    recent.push(50) catch {
+        std.io.println("list is full")
+    }
+
+    first := recent.ordered_remove(0)
+    last := recent.pop() orelse 0
+    std.io.printf("removed {} and {}, {} left:", .{ first, last, recent.items().len })
+    for x in recent {
+        std.io.printf(" {}", .{ x })
+    }
+    std.io.println("")
+
+    var name = bounded.InlineString(16).init()
+    try name.set("otter")
+    try name.push('-')
+    try name.push_str("shell")
+    std.io.printf("{} ({} of {} bytes)\n", .{ name.as_str(), name.len(), bounded.InlineString(16).capacity })
+
+    // set fails and leaves the contents alone; set_truncated keeps what fits.
+    name.set("a name that is far too long") catch {
+        std.io.printf("too long, still {}\n", .{ name.as_str() })
+    }
+    name.set_truncated("a name that is far too long")
+    std.io.printf("{}\n", .{ name.as_str() })
+}

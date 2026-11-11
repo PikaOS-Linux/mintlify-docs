@@ -1,0 +1,146 @@
+---
+title: "std.tls.record"
+sidebarTitle: "tls.record"
+description: "The record layer of std.tls (RFC 8446 §5, RFC 5246 §6.2)."
+---
+
+The record layer of `std.tls` (RFC 8446 §5, RFC 5246 §6.2): each direction's keys, and
+opening and sealing records in place in the caller's buffer, in TLS 1.3's format (the
+real content type inside the encryption, the header saying application data) or TLS
+1.2's (the type in the header and the associated data, AES-GCM's explicit nonce in the
+record). Record lengths are checked against the version's bounds before anything is
+decrypted.
+
+```otr
+import std.tls.record
+```
+
+## prefix_len
+
+```otr
+const prefix_len: usize = 13
+```
+
+Bytes before application data in `seal`'s buffer, and after it.
+
+## max_plaintext
+
+```otr
+const max_plaintext: usize = 16384
+```
+
+The most plaintext one record carries (2^14).
+
+## max_record
+
+```otr
+const max_record: usize = 5 + max_plaintext + 2048
+```
+
+The longest record accepted: TLS 1.2's ciphertext bound, which is above TLS 1.3's. A
+buffer this long always holds the next record.
+
+## max_record13
+
+```otr
+const max_record13: usize = max_plaintext + 256
+```
+
+TLS 1.3's bound on a record's ciphertext (RFC 8446 §5.2).
+
+## Range
+
+```otr
+const Range = struct
+```
+
+Where `seal` put the record in its buffer.
+
+| Field | Type |
+| --- | --- |
+| <code>start</code> | <code>usize</code> |
+| <code>len</code> | <code>usize</code> |
+
+## Opened
+
+```otr
+const Opened = struct
+```
+
+A record opened: its content type and where its content lies in the buffer.
+
+| Field | Type |
+| --- | --- |
+| <code>ctype</code> | <code>u8</code> |
+| <code>start</code> | <code>usize</code> |
+| <code>len</code> | <code>usize</code> |
+
+## Records
+
+```otr
+const Records = struct
+```
+
+Both directions' protection, each off until its keys are set. The handshake drives the
+fields; `set_rx` and `set_tx` clear the keys they replace.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>rx</code> | <code>keys.Protection</code> |  |
+| <code>tx</code> | <code>keys.Protection</code> |  |
+| <code>rx_on</code> | <code>bool</code> |  |
+| <code>tx_on</code> | <code>bool</code> |  |
+| <code>tls13</code> | <code>bool</code> | TLS 1.3's format, once the server has chosen it. |
+
+### Records.init
+
+```otr
+fn init() Records
+```
+
+### Records.set_rx
+
+```otr
+fn set_rx(self: &mut Records, p: keys.Protection) void
+```
+
+Replaces the receiving keys, clearing the old ones' round keys.
+
+### Records.set_tx
+
+```otr
+fn set_tx(self: &mut Records, p: keys.Protection) void
+```
+
+### Records.length
+
+```otr
+fn length(self: &Records, buf: []u8) wire.Error!?usize
+```
+
+The length the header of the record at the front of `buf` gives, checked against
+the version's bound, or null while the header is incomplete.
+
+### Records.open
+
+```otr
+fn open(self: &mut Records, buf: []mut u8, len: usize) wire.Error!Opened
+```
+
+Opens the whole record `buf[0..5 + len]` in place, decrypting it once the receiving
+keys are on.
+
+### Records.seal
+
+```otr
+fn seal(self: &mut Records, buf: []mut u8, ctype: u8, n: usize) Range
+```
+
+Seals the `n` bytes at `buf[prefix_len..]` into one record of `ctype`, in place,
+once the sending keys are on, and returns where in `buf` it lies.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>suffix_len</code> | <code>17</code> |

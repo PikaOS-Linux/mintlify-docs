@@ -1,0 +1,6 @@
+2000 ms, 250000000 ns
+deadline is 2000 ms after start
+start since deadline: 0 ns
+summed to 499500 in under a second: true
+monotonic clock went backwards: false
+wall clock is past 2026-01-01: true

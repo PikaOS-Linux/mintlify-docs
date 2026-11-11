@@ -1,0 +1,294 @@
+---
+title: "std.utf8"
+sidebarTitle: "utf8"
+description: "UTF-8."
+---
+
+UTF-8: decoding and encoding single codepoints, validation, iteration over codepoints
+with their byte offsets, and counting. Invalid input is never skipped silently: the
+iterator yields U+FFFD for each maximal invalid subpart (Unicode §3.9, as the WHATWG
+decoder does) along with the bytes it replaces, and `find_invalid` reports where the
+first invalid sequence is, how long it is and why it is invalid. Validation runs 128
+bytes at a time over ASCII, then 32 or 8, and through a branchless state machine
+otherwise; `find_invalid` and `write_lossy` skip ASCII 64 bytes at a time, and `count`
+is a `simd for`.
+
+```otr
+import std.utf8
+```
+
+## Example
+
+```otr
+import std
+import std.utf8
+
+pub fn main() !void {
+    text := "naïve 日本"
+    std.io.printf("{} bytes, {} codepoints, valid: {}\n", .{ text.len, utf8.count(text), utf8.is_valid(text) })
+
+    var it = utf8.iterate(text)
+    for c in it {
+        std.io.printf("U+{X:0>4} at byte {} ({} long)\n", .{ c.cp, c.offset, c.len })
+    }
+
+    first := try utf8.decode("é!")
+    std.io.printf("decoded U+{X:0>4} from {} bytes\n", .{ first.cp, first.len })
+
+    if utf8.encode(0x1f9a6) |enc| {
+        std.io.printf("U+1F9A6 takes {} bytes: {x}\n", .{ enc.len, enc.as_str() })
+    }
+
+    // Cutting at byte 3 would split the two-byte "ï", so the cut moves back to 2.
+    std.io.printf("truncate to 3 bytes: {}\n", .{ utf8.truncate(text, 3) })
+    std.io.printf("boundary at 3: {}, at 4: {}\n", .{ utf8.is_boundary(text, 3), utf8.is_boundary(text, 4) })
+
+    broken := "ab\xffcd"
+    if utf8.find_invalid(broken) |bad| {
+        std.io.printf("invalid: {} byte(s) at {}, {}\n", .{ bad.len, bad.offset, bad.err })
+    }
+}
+```
+
+```text
+13 bytes, 8 codepoints, valid: true
+U+006E at byte 0 (1 long)
+U+0061 at byte 1 (1 long)
+U+00EF at byte 2 (2 long)
+U+0076 at byte 4 (1 long)
+U+0065 at byte 5 (1 long)
+U+0020 at byte 6 (1 long)
+U+65E5 at byte 7 (3 long)
+U+672C at byte 10 (3 long)
+decoded U+00E9 from 2 bytes
+U+1F9A6 takes 4 bytes: f09fa6a6
+truncate to 3 bytes: na
+boundary at 3: false, at 4: true
+invalid: 1 byte(s) at 2, error.InvalidStartByte
+```
+
+## DecodeError
+
+```otr
+const DecodeError = error
+```
+
+What `decode` and `find_invalid` report for bytes that are not UTF-8.
+
+| Variant | Description |
+| --- | --- |
+| <code>InvalidStartByte</code> | A continuation byte (`0x80`-`0xbf`) or `0xf8`-`0xff` where a sequence starts. |
+| <code>ExpectedContinuation</code> | A sequence's lead byte is followed by a byte that cannot continue it. |
+| <code>Truncated</code> | The input ends inside a sequence. |
+| <code>Overlong</code> | A longer encoding than the codepoint needs (`0xc0`, `0xc1`, `0xe0 0x80`, …). |
+| <code>Surrogate</code> | The encoding of U+D800-U+DFFF, which are not scalar values. |
+| <code>TooLarge</code> | The encoding of a value above U+10FFFF. |
+
+## replacement_char
+
+```otr
+const replacement_char: u21 = 0xfffd
+```
+
+U+FFFD, which stands for each invalid subpart when decoding loses nothing else.
+
+## max_codepoint
+
+```otr
+const max_codepoint: u21 = 0x10ffff
+```
+
+The largest Unicode scalar value.
+
+## Decoded
+
+```otr
+const Decoded = struct
+```
+
+One decoded codepoint and the number of bytes (1-4) it was encoded in.
+
+| Field | Type |
+| --- | --- |
+| <code>cp</code> | <code>u21</code> |
+| <code>len</code> | <code>u8</code> |
+
+## Encoded
+
+```otr
+const Encoded = struct
+```
+
+The bytes of one encoded codepoint, kept inline so encoding needs no buffer.
+
+| Field | Type |
+| --- | --- |
+| <code>bytes</code> | <code>[4]u8</code> |
+| <code>len</code> | <code>u8</code> |
+
+### Encoded.as_str
+
+```otr
+fn as_str(self: &Encoded) str
+```
+
+## Codepoint
+
+```otr
+const Codepoint = struct
+```
+
+One element of an iteration: the codepoint, or U+FFFD when `valid` is false, and the
+bytes `offset..offset + len` of the input it was decoded from.
+
+| Field | Type |
+| --- | --- |
+| <code>cp</code> | <code>u21</code> |
+| <code>offset</code> | <code>usize</code> |
+| <code>len</code> | <code>u8</code> |
+| <code>valid</code> | <code>bool</code> |
+
+## Invalid
+
+```otr
+const Invalid = struct
+```
+
+Where the first invalid sequence of a string is: `len` bytes from `offset`, the
+maximal subpart that one U+FFFD replaces, which `err` describes.
+
+| Field | Type |
+| --- | --- |
+| <code>offset</code> | <code>usize</code> |
+| <code>len</code> | <code>usize</code> |
+| <code>err</code> | <code>DecodeError</code> |
+
+## sequence_len
+
+```otr
+fn sequence_len(first: u8) ?usize
+```
+
+The length of the sequence that `first` starts, 1 to 4, or null for a byte that
+cannot start one (a continuation byte, `0xc0`, `0xc1` or `0xf5`-`0xff`).
+
+## encode_len
+
+```otr
+fn encode_len(cp: u21) ?usize
+```
+
+The number of bytes `cp` takes in UTF-8, or null when it is a surrogate or above
+U+10FFFF.
+
+## encode
+
+```otr
+fn encode(cp: u21) ?Encoded
+```
+
+`cp` in UTF-8, or null when it is not a scalar value (a surrogate or above
+U+10FFFF).
+
+## decode
+
+```otr
+fn decode(s: str) DecodeError!Decoded
+```
+
+Decodes the codepoint `s` starts with. An empty `s` is `Truncated`.
+
+## is_boundary
+
+```otr
+fn is_boundary(s: str, i: usize) bool
+```
+
+Whether `i` is the start of a codepoint in `s` or its end, so that `s[0..i]` and
+`s[i..]` split no sequence of valid input.
+
+## truncate
+
+```otr
+fn truncate(s: str, max_len: usize) str
+```
+
+The longest prefix of `s` at most `max_len` bytes long that splits no sequence.
+
+## is_valid
+
+```otr
+fn is_valid(s: str) bool
+```
+
+Whether `s` is entirely valid UTF-8.
+
+## find_invalid
+
+```otr
+fn find_invalid(s: str) ?Invalid
+```
+
+The first invalid sequence in `s`, or null when it is valid UTF-8.
+
+## count
+
+```otr
+fn count(s: str) usize
+```
+
+The number of codepoints in `s` when it is valid UTF-8. Invalid input is not checked:
+the result is then the number of bytes that are not continuation bytes, which can be
+fewer than the elements `iterate` yields.
+
+## iterate
+
+```otr
+fn iterate(s: str) Iterator
+```
+
+The codepoints of `s` with their byte offsets, each maximal invalid subpart yielded
+as one U+FFFD that is not `valid`.
+
+## Iterator
+
+```otr
+const Iterator = ref struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>s</code> | <code>str</code> | Read-only |
+| <code>i</code> | <code>usize</code> | Read-only |
+
+### Iterator.next
+
+```otr
+fn next(self: &mut Iterator) ?Codepoint
+```
+
+### Iterator.offset
+
+```otr
+fn offset(self: &Iterator) usize
+```
+
+The byte offset of the next codepoint.
+
+## write_codepoint
+
+```otr
+fn write_codepoint(w: anytype, cp: u21) void
+```
+
+Writes `cp` in UTF-8 to `w`, anything with `write_all(s: str)`; U+FFFD when it is not
+a scalar value.
+
+## write_lossy
+
+```otr
+fn write_lossy(w: anytype, s: str) void
+```
+
+Writes `s` to `w` with each maximal invalid subpart replaced by U+FFFD, so the output
+is valid UTF-8; valid runs are written whole.

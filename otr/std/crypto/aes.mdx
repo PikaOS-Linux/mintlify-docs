@@ -1,0 +1,182 @@
+---
+title: "std.crypto.aes"
+sidebarTitle: "crypto.aes"
+description: "The AES block cipher (FIPS-197) with 128- and 256-bit keys, encryption only, and CTR mode with a 32-bit big-endian counter in the last four bytes of the counter block (NIST SP 800-38A, as GCM, CCM and SMB 3 count)."
+---
+
+The AES block cipher (FIPS-197) with 128- and 256-bit keys, encryption only, and CTR mode
+with a 32-bit big-endian counter in the last four bytes of the counter block (NIST SP
+800-38A, as GCM, CCM and SMB 3 count). `init` expands the key once; `encrypt_block`
+encrypts one block, `encrypt_blocks` whole blocks in place, `ctr32_be` XORs the key stream
+into a buffer, and `cbc_mac` chains blocks for the MACs built on the cipher
+(`aes_cmac`, `aes_ccm`). `aes_gcm` runs on the same code.
+
+With AES-NI the work runs in runtime kernels (otr has no operations for those
+instructions), eight independent blocks at a time where the mode allows, and with VAES on
+AVX-512 sixteen or thirty-two. Elsewhere the
+cipher is bitsliced, four blocks in eight 64-bit planes with the S-box as a Boolean
+circuit (Boyar and Peralta), so no load address depends on the key or the data.
+
+```otr
+import std.crypto.aes
+```
+
+## Aes
+
+```otr
+fn Aes(comptime key_bytes: usize) type
+```
+
+AES with a `key_bytes`-byte key, 16 or 32.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>rk</code> | <code>[16 * (rounds + 1)]u8</code> | Read-only | The round keys in FIPS-197 byte order. |
+
+### Aes.init
+
+```otr
+fn init(key: &[key_bytes]u8) Self
+```
+
+### Aes.wipe
+
+```otr
+fn wipe(self: &mut Self) void
+```
+
+Clears the round keys, which give the key back, from the value in place.
+
+### Aes.encrypt_block
+
+```otr
+fn encrypt_block(self: &Self, block: &[16]u8) [16]u8
+```
+
+### Aes.encrypt_blocks
+
+```otr
+fn encrypt_blocks(self: &Self, buf: []mut u8) void
+```
+
+Encrypts `buf`, whole blocks, in place, each on its own (ECB). The kernel takes
+eight blocks at a time and the portable code four.
+
+### Aes.ctr32_be
+
+```otr
+fn ctr32_be(self: &Self, ctr: &mut [16]u8, buf: []mut u8) void
+```
+
+XORs the CTR key stream from counter block `ctr` on into `buf`, any length, and
+leaves `ctr` at the first block not used. Only the last four bytes count, as a
+big-endian integer that wraps mod 2^32 without carrying into the rest, so a stream
+is at most 2^32 blocks before it repeats.
+
+### Aes.ctr32_be_split
+
+```otr
+fn ctr32_be_split(self: &Self, ctr: &mut [16]u8, head: []mut u8, buf: []mut u8) void
+```
+
+`ctr32_be` over `head`, whole blocks, then `buf`, as one stream, so a mode's
+single masking block and a short message share one pass of the kernel.
+
+### Aes.cbc_mac
+
+```otr
+fn cbc_mac(self: &Self, chain: &mut [16]u8, blocks: []u8) void
+```
+
+CBC-MAC's chaining over `blocks`, whole blocks: `chain` becomes E(chain ^ block)
+for each in turn. Each block waits for the one before, so this runs at the
+cipher's latency rather than its throughput.
+
+| Name | Definition |
+| --- | --- |
+| <code>Aes.key_len</code> | <code>key_bytes</code> |
+| <code>Aes.block_len</code> | <code>16</code> |
+
+## Cipher
+
+```otr
+fn Cipher(comptime key_bytes: usize, comptime soft: bool) type
+```
+
+`soft` keeps to the portable code whatever the CPU has, so tests reach it everywhere; the
+modes built on the cipher pass their own `soft` through.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>rk</code> | <code>[16 * (rounds + 1)]u8</code> | Read-only | The round keys in FIPS-197 byte order. |
+
+### Cipher.init
+
+```otr
+fn init(key: &[key_bytes]u8) Self
+```
+
+### Cipher.wipe
+
+```otr
+fn wipe(self: &mut Self) void
+```
+
+Clears the round keys, which give the key back, from the value in place.
+
+### Cipher.encrypt_block
+
+```otr
+fn encrypt_block(self: &Self, block: &[16]u8) [16]u8
+```
+
+### Cipher.encrypt_blocks
+
+```otr
+fn encrypt_blocks(self: &Self, buf: []mut u8) void
+```
+
+Encrypts `buf`, whole blocks, in place, each on its own (ECB). The kernel takes
+eight blocks at a time and the portable code four.
+
+### Cipher.ctr32_be
+
+```otr
+fn ctr32_be(self: &Self, ctr: &mut [16]u8, buf: []mut u8) void
+```
+
+XORs the CTR key stream from counter block `ctr` on into `buf`, any length, and
+leaves `ctr` at the first block not used. Only the last four bytes count, as a
+big-endian integer that wraps mod 2^32 without carrying into the rest, so a stream
+is at most 2^32 blocks before it repeats.
+
+### Cipher.ctr32_be_split
+
+```otr
+fn ctr32_be_split(self: &Self, ctr: &mut [16]u8, head: []mut u8, buf: []mut u8) void
+```
+
+`ctr32_be` over `head`, whole blocks, then `buf`, as one stream, so a mode's
+single masking block and a short message share one pass of the kernel.
+
+### Cipher.cbc_mac
+
+```otr
+fn cbc_mac(self: &Self, chain: &mut [16]u8, blocks: []u8) void
+```
+
+CBC-MAC's chaining over `blocks`, whole blocks: `chain` becomes E(chain ^ block)
+for each in turn. Each block waits for the one before, so this runs at the
+cipher's latency rather than its throughput.
+
+| Name | Definition |
+| --- | --- |
+| <code>Cipher.key_len</code> | <code>key_bytes</code> |
+| <code>Cipher.block_len</code> | <code>16</code> |
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>Aes128</code> | <code>Aes(16)</code> |
+| <code>Aes256</code> | <code>Aes(32)</code> |

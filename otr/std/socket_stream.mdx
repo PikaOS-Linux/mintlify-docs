@@ -1,0 +1,263 @@
+---
+title: "std.socket_stream"
+sidebarTitle: "socket_stream"
+description: "Concrete stream byte/FD queues, sharing zoo wire's cursor and end-watermark rules."
+---
+
+Concrete stream byte/FD queues, sharing zoo wire's cursor and end-watermark rules.
+Protocol framing stays with the caller; no callback or object registry lives here.
+
+```otr
+import std.socket_stream
+```
+
+## Example
+
+```otr
+import std
+import std.linux
+import std.socket_stream
+
+// A frame is bytes plus the descriptors that travel with them.
+fn greeting(counter: &linux.Fd) socket_stream.Error!socket_stream.Frame {
+    var frame = socket_stream.Frame.init(std.mem.heap)
+    errdefer frame.deinit()
+    try frame.append("hello, ")
+    try frame.append("here is a counter")
+    try frame.append_fd(counter)
+    return frame
+}
+
+pub fn main() !void {
+    heap := std.mem.heap
+    pair := try linux.socketpair(linux.SOCK.stream | linux.SOCK.nonblock)
+    a, b := pair
+    var tx = socket_stream.Stream.init(heap, a)
+    defer tx.deinit()
+    var rx = socket_stream.Stream.init(heap, b)
+    defer rx.deinit()
+
+    counter := try linux.eventfd(7, linux.EFD.nonblock)
+    defer counter.deinit()
+    // enqueue queues the frame; flush writes what the socket takes now.
+    try tx.enqueue(try greeting(&counter))
+    std.io.printf("wants to write: {}\n", .{ tx.interest().write })
+    var control = std.mem.splat(8, u64, 0)
+    std.io.printf("flush: {}\n", .{ @tag_name(try tx.flush(&mut control[0..])) })
+
+    // receive reads up to a limit into the stream's buffer, descriptors beside it.
+    var scratch = socket_stream.Scratch.init(heap)
+    defer scratch.deinit()
+    try scratch.prepare(4)
+    std.io.printf("receive: {}\n", .{ @tag_name(try rx.receive(64, &mut scratch)) })
+    std.io.printf("bytes: {}\n", .{ rx.bytes() })
+
+    // The caller frames the bytes itself and consumes what it has handled.
+    try rx.consume(7)
+    std.io.printf("after consume: {}\n", .{ rx.bytes() })
+    passed := rx.take_fd() orelse return error.MissingFd
+    defer passed.deinit()
+    std.io.printf("counter read through the passed descriptor: {}\n", .{ try passed.read_u64() })
+}
+```
+
+```text
+wants to write: true
+flush: progress
+receive: progress
+bytes: hello, here is a counter
+after consume: here is a counter
+counter read through the passed descriptor: 7
+```
+
+## Progress
+
+```otr
+const Progress = enum
+```
+
+| Variant |
+| --- |
+| <code>idle</code> |
+| <code>progress</code> |
+| <code>eof</code> |
+
+## Interest
+
+```otr
+const Interest = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>read</code> | <code>bool</code> |
+| <code>write</code> | <code>bool</code> |
+
+## Frame
+
+```otr
+const Frame = struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>bytes</code> | <code>list.List(u8)</code> | Public |
+| <code>fds</code> | <code>list.List(linux.Fd)</code> | Public |
+| <code>sent</code> | <code>usize</code> | Read-only |
+| <code>fds_sent</code> | <code>usize</code> | Read-only |
+
+### Frame.init
+
+```otr
+fn init(alloc: mem.Allocator) Frame
+```
+
+### Frame.append
+
+```otr
+fn append(self: &mut Frame, bytes: []u8) Error!void
+```
+
+### Frame.append_fd
+
+```otr
+fn append_fd(self: &mut Frame, fd: &linux.Fd) Error!void
+```
+
+### Frame.deinit
+
+```otr
+fn deinit(self: Frame) void
+```
+
+## Scratch
+
+```otr
+const Scratch = struct
+```
+
+Borrow one scratch set across active connections instead of reserving 1024 per peer.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>control</code> | <code>list.List(u64)</code> | Read-only |
+| <code>fds</code> | <code>list.List(linux.Fd)</code> | Read-only |
+
+### Scratch.init
+
+```otr
+fn init(alloc: mem.Allocator) Scratch
+```
+
+### Scratch.prepare
+
+```otr
+fn prepare(self: &mut Scratch, fd_capacity: usize) Error!void
+```
+
+### Scratch.deinit
+
+```otr
+fn deinit(self: Scratch) void
+```
+
+## Stream
+
+```otr
+const Stream = struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>sock</code> | <code>?linux.Fd</code> | Read-only |
+| <code>rx</code> | <code>list.List(u8)</code> | Read-only |
+| <code>rx_start</code> | <code>usize</code> | Read-only |
+| <code>rx_fds</code> | <code>deque.Deque(linux.Fd)</code> | Read-only |
+| <code>tx</code> | <code>deque.Deque(Frame)</code> | Read-only |
+| <code>eof</code> | <code>bool</code> | Read-only |
+
+### Stream.init
+
+```otr
+fn init(alloc: mem.Allocator, owned_fd: linux.Fd) Stream
+```
+
+Owns `owned_fd`, including inherited blocking sockets. Pump calls use DONTWAIT.
+
+### Stream.fd
+
+```otr
+fn fd(self: &Stream) ?i32
+```
+
+### Stream.bytes
+
+```otr
+fn bytes(self: &Stream) []u8
+```
+
+### Stream.consume
+
+```otr
+fn consume(self: &mut Stream, n: usize) Error!void
+```
+
+### Stream.take_fd
+
+```otr
+fn take_fd(self: &mut Stream) ?linux.Fd
+```
+
+### Stream.pending_fds
+
+```otr
+fn pending_fds(self: &Stream) usize
+```
+
+### Stream.enqueue
+
+```otr
+fn enqueue(self: &mut Stream, owned_frame: Frame) Error!void
+```
+
+Atomic admission: this frame is consumed on failure too, older frames unchanged.
+
+### Stream.receive
+
+```otr
+fn receive(self: &mut Stream, max_bytes: usize, scratch: &mut Scratch) Error!Progress
+```
+
+One bounded syscall. A reservation failure happens before consuming kernel data.
+
+### Stream.flush
+
+```otr
+fn flush(self: &mut Stream, control: []mut u64) Error!Progress
+```
+
+One syscall, keeping later frames' rights off earlier frames (D-Bus framing).
+
+### Stream.interest
+
+```otr
+fn interest(self: &Stream) Interest
+```
+
+### Stream.close
+
+```otr
+fn close(self: &mut Stream) void
+```
+
+### Stream.deinit
+
+```otr
+fn deinit(self: Stream) void
+```
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>Error</code> | <code>socket_ancillary.Error \|\| error &#123; Closed, InvalidFrame &#125;</code> |

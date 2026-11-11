@@ -1,0 +1,237 @@
+---
+title: "std.crypto.x509"
+sidebarTitle: "crypto.x509"
+description: "X.509 v3 certificates (RFC 5280)."
+---
+
+X.509 v3 certificates (RFC 5280): parsing, signature checks between certificates, and
+host name matching (RFC 6125, by `hostname`). A `Certificate` records where each field lies in the
+DER it was parsed from, so it is a small copyable value that borrows nothing; the
+methods that read a field take that DER again.
+
+Parsing is strict DER and rejects what RFC 5280 forbids: mismatched inner and outer
+signature algorithms, repeated extensions, and critical extensions this module does
+not enforce, since accepting a constraint without checking it would widen what a CA
+was allowed to sign. Name constraints are kept whether critical or not and checked by
+`names_permitted`. Chain building and the trust store live in `ca_bundle`.
+
+```otr
+import std.crypto.x509
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>Malformed</code> |  |
+| <code>UnsupportedAlgorithm</code> | A signature or key algorithm, curve, or RSA-PSS parameter set that is not supported. |
+| <code>UnsupportedCriticalExtension</code> | A critical extension this module cannot enforce. |
+
+## SignatureError
+
+```otr
+const SignatureError = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>UnsupportedAlgorithm</code> |  |
+| <code>KeyMismatch</code> | The key's type does not fit the signature algorithm. |
+| <code>BadSignature</code> |  |
+
+## SigAlg
+
+```otr
+const SigAlg = enum
+```
+
+How a certificate (or a TLS handshake) is signed.
+
+| Variant |
+| --- |
+| <code>rsa_pkcs1_sha256</code> |
+| <code>rsa_pkcs1_sha384</code> |
+| <code>rsa_pkcs1_sha512</code> |
+| <code>rsa_pss_sha256</code> |
+| <code>rsa_pss_sha384</code> |
+| <code>rsa_pss_sha512</code> |
+| <code>ecdsa_sha256</code> |
+| <code>ecdsa_sha384</code> |
+| <code>ecdsa_sha512</code> |
+| <code>ed25519</code> |
+
+## KeyAlg
+
+```otr
+const KeyAlg = enum
+```
+
+`other` is a well-formed key of an algorithm or curve not supported here, such as
+P-521: a root holding one parses, and fails only if a chain needs its signatures.
+
+| Variant |
+| --- |
+| <code>rsa</code> |
+| <code>ec_p256</code> |
+| <code>ec_p384</code> |
+| <code>ed25519</code> |
+| <code>other</code> |
+
+## PublicKey
+
+```otr
+const PublicKey = struct
+```
+
+A SubjectPublicKeyInfo: the key's algorithm and its bits, which are an `RSAPublicKey`
+for RSA, a SEC 1 point for EC and the 32-byte key for Ed25519.
+
+| Field | Type |
+| --- | --- |
+| <code>alg</code> | <code>KeyAlg</code> |
+| <code>key</code> | <code>asn1.BitString</code> |
+
+### PublicKey.bytes
+
+```otr
+fn bytes(self: PublicKey, der: []u8) []u8
+```
+
+## key_usage
+
+```otr
+const key_usage = struct
+```
+
+`keyUsage` bits (RFC 5280 §4.2.1.3), bit 0 being the first named bit.
+
+| Name | Definition |
+| --- | --- |
+| <code>key_usage.digital_signature</code> | <code>1 &lt;&lt; 0</code> |
+| <code>key_usage.key_encipherment</code> | <code>1 &lt;&lt; 2</code> |
+| <code>key_usage.key_cert_sign</code> | <code>1 &lt;&lt; 5</code> |
+
+## Certificate
+
+```otr
+const Certificate = struct
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>version</code> | <code>u8</code> |  |
+| <code>tbs</code> | <code>asn1.Element</code> | The signed part, `tbs.raw(der)`. |
+| <code>serial</code> | <code>asn1.Element</code> |  |
+| <code>sig_alg</code> | <code>?SigAlg</code> | Null for an algorithm not supported here, such as SHA-1 on an old root, whose own signature is never checked; any check of it fails with `UnsupportedAlgorithm`. |
+| <code>signature</code> | <code>asn1.BitString</code> |  |
+| <code>issuer</code> | <code>asn1.Element</code> |  |
+| <code>subject</code> | <code>asn1.Element</code> |  |
+| <code>not_before</code> | <code>i64</code> | Seconds since the Unix epoch, both inclusive. |
+| <code>not_after</code> | <code>i64</code> |  |
+| <code>key</code> | <code>PublicKey</code> |  |
+| <code>san</code> | <code>?asn1.Element</code> | The `subjectAltName` GeneralNames, when present. |
+| <code>is_ca</code> | <code>bool</code> | From `basicConstraints`: whether the key may sign certificates, and how many intermediates may follow below this one. |
+| <code>path_len</code> | <code>?u32</code> |  |
+| <code>key_usage</code> | <code>?u16</code> | The `keyUsage` bits, or null when the extension is absent (any use). |
+| <code>server_auth</code> | <code>bool</code> | Whether `extKeyUsage` is absent or allows TLS server authentication. |
+| <code>name_constraints</code> | <code>?asn1.Element</code> | The `nameConstraints` SEQUENCE, when present: its subtrees are `[0]` (permitted) and `[1]` (excluded), each base checked to be a single GeneralName. |
+
+### Certificate.self_issued
+
+```otr
+fn self_issued(self: Certificate, der: []u8) bool
+```
+
+Whether `der`'s issuer and subject are the same name.
+
+### Certificate.valid_at
+
+```otr
+fn valid_at(self: Certificate, now: i64) bool
+```
+
+Whether the certificate is valid at `now`, seconds since the epoch.
+
+### Certificate.common_name
+
+```otr
+fn common_name(self: Certificate, der: []u8) ?[]u8
+```
+
+The subject's first common name, for messages; never used for host matching.
+
+### Certificate.signed
+
+```otr
+fn signed(self: Certificate, der: []u8, child: Certificate, child_der: []u8) SignatureError!void
+```
+
+Checks that `self`, the issuer, signed `child`: the names chain and the signature
+over `child`'s TBS bytes verifies under `self`'s key.
+
+## parse
+
+```otr
+fn parse(der: []u8) Error!Certificate
+```
+
+The certificate filling `der`.
+
+## parse_sig_alg
+
+```otr
+fn parse_sig_alg(der: []u8, alg: asn1.Element) Error!SigAlg
+```
+
+The signature algorithm an AlgorithmIdentifier names.
+
+## parse_spki
+
+```otr
+fn parse_spki(der: []u8, spki: asn1.Element) Error!PublicKey
+```
+
+The SubjectPublicKeyInfo `spki`.
+
+## parse_spki_der
+
+```otr
+fn parse_spki_der(der: []u8) Error!PublicKey
+```
+
+The SubjectPublicKeyInfo filling `der`, such as a bare public key in PEM.
+
+## names_permitted
+
+```otr
+fn names_permitted(ca: Certificate, ca_der: []u8, c: Certificate, der: []u8, host: ?[]u8) bool
+```
+
+Whether the leaf `c` of `der`, and `host` when given, keep to the name constraints of
+the CA `ca` of `ca_der` above it (RFC 5280 §4.2.1.10): each SAN entry, and the host the
+client asked for. The subject's directory name is not checked, since no host is ever
+matched against it here.
+
+## verify_signature
+
+```otr
+fn verify_signature(alg: SigAlg, key: PublicKey, key_der: []u8, msg: []u8, sig: []u8) SignatureError!void
+```
+
+Checks `sig` over `msg` under the public key `key` of `key_der`, by algorithm `alg`.
+TLS's CertificateVerify uses this as well as chain checks.
+
+## matches_host
+
+```otr
+fn matches_host(c: Certificate, der: []u8, host: []u8) bool
+```
+
+Whether the certificate `c` of `der` names `host`: an IP literal against its SAN
+iPAddress entries, anything else against its SAN dNSName entries. The subject's
+common name is never consulted (RFC 6125 §6.4.4; the CA/Browser Forum requires the
+SAN), so a certificate without one matches no host.

@@ -1,0 +1,28 @@
+import std
+import std.crypto.chacha20poly1305
+
+pub fn main() !void {
+    // Fixed bytes keep the output the same on every run; a real key is 32 random
+    // bytes, and a nonce must never repeat under one key.
+    key := std.mem.array(32, u8, fn(i: usize) u8 { return @int_cast(u8, i) })
+    nonce := std.mem.array(12, u8, fn(i: usize) u8 { return @int_cast(u8, i * 3) })
+    aead := chacha20poly1305.ChaCha20Poly1305.init(&key)
+
+    // The header is sent in clear but covered by the tag, so it cannot be changed.
+    header := "message 1"
+    message := "meet at the river"
+    var sealed: [17]u8 = std.mem.splat(17, u8, 0)
+    tag := aead.encrypt(&mut sealed[0..], message, header, &nonce)
+    std.io.printf("ChaCha20-Poly1305: {} bytes of ciphertext, {} byte tag\n", .{ sealed.len, tag.len })
+    std.io.printf("ciphertext differs from the message: {}\n", .{ !std.mem.eql(u8, sealed[0..], message) })
+
+    var opened: [17]u8 = std.mem.splat(17, u8, 0)
+    try aead.decrypt(&mut opened[0..], sealed[0..], &tag, header, &nonce)
+    std.io.printf("decrypted: {}\n", .{ opened[0..] })
+
+    // One flipped bit anywhere fails the tag check, and no plaintext is released.
+    sealed[0] ^= 1
+    if aead.decrypt(&mut opened[0..], sealed[0..], &tag, header, &nonce) |_| {} else |err| {
+        std.io.printf("tampered: {}\n", .{ err })
+    }
+}

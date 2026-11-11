@@ -1,0 +1,79 @@
+---
+title: "std.dtoa"
+sidebarTitle: "dtoa"
+description: "Conversions between f64 and decimal."
+---
+
+Conversions between `f64` and decimal. `shortest` gives the fewest significant digits
+that read back as the same value, by Ulf Adams's Ryū algorithm ("Ryū: fast
+float-to-string conversion", PLDI 2018), with its tables of 125-bit powers of five;
+`io.write_float` writes `f64`s and `f32`s through it. `from_decimal` is the other way, by the
+Eisel-Lemire algorithm (Lemire, "Number Parsing at a Gigabyte per Second", 2021),
+with a table of 128-bit powers of ten; `json` reads numbers through it.
+
+```otr
+import std.dtoa
+```
+
+## Decimal
+
+```otr
+const Decimal = struct
+```
+
+`digits * 10^exponent`, with no trailing zeros in `digits`.
+
+| Field | Type |
+| --- | --- |
+| <code>digits</code> | <code>u64</code> |
+| <code>exponent</code> | <code>i32</code> |
+
+## shortest
+
+```otr
+fn shortest(x: f64) Decimal
+```
+
+The shortest decimal that reads back as `x`, which is finite and positive or zero;
+zero is `0 * 10^0`.
+
+## shortest32
+
+```otr
+fn shortest32(x: f32) Decimal
+```
+
+`shortest` for an `f32`: the fewest digits that read back as the same `f32`. The `f64`
+tables are more precise than an `f32` needs, so the same steps serve.
+
+## write
+
+```otr
+fn write(w: anytype, x: f64) void
+```
+
+`x` (finite) as `io.write_float` prints it: the shortest digits, in positional notation
+when the leading digit's decimal exponent is from -4 up to 15 or below the number of
+digits, and in C's `%g` scientific notation (`1e+16`, `2.5e-07`) otherwise, with `.0`
+after a whole number in positional notation.
+
+## write32
+
+```otr
+fn write32(w: anytype, x: f32) void
+```
+
+`write` for an `f32`, with its own shortest digits (`0.1`, not `0.10000000149011612`).
+A whole number from 2^24 up to 10^16, which positional notation writes out, is written
+exactly (`2147483648.0`, not `2147483600.0`), as C's `%.0f` does.
+
+## from_decimal
+
+```otr
+fn from_decimal(digits: u64, exponent: i32, negative: bool) ?f64
+```
+
+`digits * 10^exponent` correctly rounded to the nearest `f64`, negated when `negative`;
+null in the rare cases the 128-bit product cannot decide the rounding, or when the
+result would be subnormal, infinite or out of the table's range, for the caller to
+settle another way (`fmt.parse_float`).

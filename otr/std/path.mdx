@@ -1,0 +1,116 @@
+---
+title: "std.path"
+sidebarTitle: "path"
+description: "Slash-separated file paths, taken apart without touching the file system."
+---
+
+Slash-separated file paths, taken apart without touching the file system.
+
+```otr
+import std.path
+```
+
+## Example
+
+```otr
+import std
+import std.path
+
+pub fn main() !void {
+    file := "/home/jade/notes/todo.tar.gz"
+    std.io.printf("dirname   {}\n", .{ path.dirname(file) orelse "" })
+    std.io.printf("basename  {}\n", .{ path.basename(file) })
+    std.io.printf("stem      {}\n", .{ path.stem(file) })
+    std.io.printf("extension {}\n", .{ path.extension(file) })
+
+    // A leading dot starts a hidden file's name, not an extension.
+    std.io.printf("[{}] [{}]\n", .{ path.extension(".profile"), path.basename("/var/log/") })
+    std.io.printf("dirname of a bare name is null: {}\n", .{ path.dirname("todo.txt") == null })
+
+    // join puts exactly one slash between its sides.
+    joined := path.join(std.mem.heap, "/etc/otter-shell/", "theme.conf")
+    defer joined.deinit()
+    std.io.println(joined.as_str())
+
+    // join_into builds on the stack and takes any number of parts.
+    var buf = path.Buf.init()
+    std.io.println(try path.join_into(&mut buf, [3]str{ "/usr", "share/icons", "hicolor" }))
+}
+```
+
+```text
+dirname   /home/jade/notes
+basename  todo.tar.gz
+stem      todo.tar
+extension .gz
+[] [log]
+dirname of a bare name is null: true
+/etc/otter-shell/theme.conf
+/usr/share/icons/hicolor
+```
+
+## dirname
+
+```otr
+fn dirname(path: str) ?str
+```
+
+Everything before the last component; null when there is none (`"a"`, `""`).
+
+## basename
+
+```otr
+fn basename(path: str) str
+```
+
+The last component, without trailing slashes.
+
+## extension
+
+```otr
+fn extension(path: str) str
+```
+
+The extension of the last component, with its dot; empty when there is none. A leading
+dot (`.profile`) starts a name, not an extension.
+
+## stem
+
+```otr
+fn stem(path: str) str
+```
+
+The last component without its extension.
+
+## join
+
+```otr
+fn join(alloc: mem.Allocator, a: str, b: str) string.String
+```
+
+`a` and `b` joined by exactly one slash; an empty side is left out.
+
+## max_len
+
+```otr
+const max_len = 4095
+```
+
+The longest path Linux accepts, without its NUL (`PATH_MAX - 1`).
+
+## Buf
+
+```otr
+const Buf = bounded.InlineString(max_len)
+```
+
+A path on the stack, long enough for any path the system accepts.
+
+## join_into
+
+```otr
+fn join_into(out: &mut Buf, parts: anytype) error { TooLong }!str
+```
+
+`parts`, an array or slice of strings, joined as `join` joins two into `out`, which is
+cleared first, and left empty when they do not fit.

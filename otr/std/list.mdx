@@ -1,0 +1,245 @@
+---
+title: "std.list"
+sidebarTitle: "list"
+description: "A growable array that owns its elements."
+---
+
+A growable array that owns its elements.
+
+```otr
+import std.list
+```
+
+## Example
+
+```otr
+import std
+import std.list
+
+pub fn main() void {
+    var xs = list.List(i64).init(std.mem.heap)
+    defer xs.deinit()
+
+    xs.push(5)
+    xs.push_slice(&[4]i64{ 3, 9, 1, 7 })
+    xs.insert(0, 4)
+    std.io.printf("len {} first {} last {}\n", .{ xs.len, xs[0], xs[xs.len - 1] })
+
+    for mut x in xs {
+        x.* *= 10
+    }
+    removed := xs.ordered_remove(1)
+    popped := xs.pop() orelse 0
+    std.io.printf("removed {} popped {}\n", .{ removed, popped })
+
+    xs.sort_by(fn(a: &i64, b: &i64) bool { return a.* < b.* })
+    var sum: i64 = 0
+    for x in xs.items() {
+        std.io.printf("{} ", .{ x })
+        sum += x
+    }
+    std.io.printf("\nsum {}\n", .{ sum })
+
+    xs.clear()
+    std.io.printf("len after clear {}\n", .{ xs.len })
+}
+```
+
+```text
+len 6 first 4 last 7
+removed 50 popped 70
+10 30 40 90 
+sum 170
+len after clear 0
+```
+
+## SoaList
+
+```otr
+const SoaList = soa_list.SoaList
+```
+
+Here too, so that switching a list's layout is a one-word change (spec D1).
+
+## List
+
+```otr
+fn List(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>buf</code> | <code>mem.RawBuf(T)</code> | Read-only |
+| <code>len</code> | <code>usize</code> | Read-only |
+| <code>cap</code> | <code>usize</code> | Read-only |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+
+### List.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### List.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+Frees the storage, deinitialising the elements first when they are resources (spec O8).
+
+### List.push
+
+```otr
+fn push(self: &mut Self, item: T) void
+```
+
+### List.push_with
+
+```otr
+fn push_with(self: &mut Self, fill: anytype) void
+```
+
+Appends the value `fill(out)` writes through `out`, which is the list's own
+storage for it, so a large element is built in place rather than on the stack
+and copied in: `xs.push_with(fn[id](out: &out Big) void { out.* = Big{ ... } })`.
+
+### List.push_slice
+
+```otr
+fn push_slice(self: &mut Self, xs: []T) void
+```
+
+Appends a copy of each element of `xs`.
+
+### List.insert
+
+```otr
+fn insert(self: &mut Self, i: usize, item: T) void
+```
+
+Puts `item` at `i`, moving the elements from `i` on up by one.
+
+### List.ordered_remove
+
+```otr
+fn ordered_remove(self: &mut Self, i: usize) T
+```
+
+Removes the element at `i` and returns it, keeping the order of the rest.
+
+### List.swap_remove
+
+```otr
+fn swap_remove(self: &mut Self, i: usize) T
+```
+
+Removes the element at `i` and returns it, moving the last one into its place.
+
+### List.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+Removes every element, keeping the storage.
+
+### List.truncate
+
+```otr
+fn truncate(self: &mut Self, n: usize) void
+```
+
+Shortens the list to its first `n` elements, deinitialising the rest when they are
+resources (spec O8); a longer `n` changes nothing.
+
+### List.reserve
+
+```otr
+fn reserve(self: &mut Self, additional: usize) void
+```
+
+Makes room for `additional` more elements, so that pushing them does not grow
+the storage again.
+
+### List.reserve_bounded
+
+```otr
+fn reserve_bounded(self: &mut Self, additional: usize, max: usize) bool
+```
+
+Reserves only within `max` elements. False means the requested length exceeds
+the limit; no allocation occurred. Existing capacity is not shrunk. Like the
+other list operations, allocator failure panics rather than returning an error.
+
+### List.try_reserve
+
+```otr
+fn try_reserve(self: &mut Self, additional: usize) error { NoMemory, Overflow }!void
+```
+
+Like `reserve`, but allocation failure preserves every existing element.
+
+### List.extend_zeroed
+
+```otr
+fn extend_zeroed(self: &mut Self, n: usize) void
+```
+
+Appends `n` elements whose bytes are all zero, with one memset, for a buffer a C
+function then fills, such as an image decoder's output; `T` is plain, so zero
+bytes make a value of it.
+
+### List.spare
+
+```otr
+fn spare(self: &mut Self) []out T
+```
+
+The storage past the elements, which `reserve` made: write-only, for a C function
+to fill before `set_len` counts what it wrote.
+
+### List.set_len
+
+```otr
+unsafe fn set_len(self: &mut Self, n: usize) void
+```
+
+Sets the length to `n`, at most the capacity `reserve` made, without writing the
+elements: for a buffer a C function has just filled through `spare` storage.
+Unsafe: every element below `n` must hold a value of `T` already.
+
+### List.pop
+
+```otr
+fn pop(self: &mut Self) ?T
+```
+
+### List.items
+
+```otr
+fn items(self: &Self) []T
+```
+
+### List.items_mut
+
+```otr
+fn items_mut(self: &mut Self) []mut T
+```
+
+### List.sort_by
+
+```otr
+fn sort_by(self: &mut Self, less: anytype) void
+```
+
+Sorts in place so that `less(&a, &b)` holds for no pair out of order (std.sort).
+
+### List.stable_sort_by
+
+```otr
+fn stable_sort_by(self: &mut Self, less: anytype) void
+```
+
+Sorts in place like `sort_by`, keeping equal elements in their order, with a
+buffer from the list's allocator (std.sort.stable_sort).

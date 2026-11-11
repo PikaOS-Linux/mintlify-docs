@@ -1,0 +1,323 @@
+---
+title: "std.crypto.chacha20poly1305"
+sidebarTitle: "crypto.chacha20poly1305"
+description: "ChaCha20-Poly1305 (RFC 8439), the AEAD of TLS 1.3, WireGuard and SSH."
+---
+
+ChaCha20-Poly1305 (RFC 8439), the AEAD of TLS 1.3, WireGuard and SSH: a 32-byte key, a
+12-byte nonce that must never repeat under one key, and a 16-byte tag. Its interface is
+`aes_gcm.AesGcm`'s: `init` takes the key, `seal` and `open` work in place, as records are
+encrypted where they are framed, and `encrypt` and `decrypt` copy first. `open` checks
+the tag before it decrypts anything, so a forged message never leaves plaintext behind.
+`XChaCha20Poly1305` is the same with a 24-byte nonce, random nonces being safe at that
+length (draft-irtf-cfrg-xchacha-03): `hchacha20` turns the key and the nonce's first 16
+bytes into a subkey, as libsodium and Zig do, so their files open here. The parts are
+public too: `ChaCha20` (RFC 8439 §2.4, a 32-bit counter and 96-bit nonce),
+`ChaCha20With64BitNonce` (Bernstein's original 64-bit counter and nonce, as SSH's
+chacha20-poly1305@openssh.com uses) and the one-time authenticator `Poly1305`.
+
+With AVX2 (at the x86-64-v3 SIMD level or above) both run in runtime kernels: ChaCha20
+with one state word per register and one block per lane, up to thirty-two blocks a step
+on AVX-512, and Poly1305 in radix 2^26 over four or eight blocks a step. Elsewhere
+ChaCha20 computes `Simd(u32).lanes / 4` blocks at once, one block per group of four lanes
+(rows of the state in lanes, as Zig's `std.crypto.stream.chacha` does), and Poly1305
+works in radix 2^64 through `u128`. None of it branches on or indexes by secret data.
+
+```otr
+import std.crypto.chacha20poly1305
+```
+
+## Example
+
+```otr
+import std
+import std.crypto.chacha20poly1305
+
+pub fn main() !void {
+    // Fixed bytes keep the output the same on every run; a real key is 32 random
+    // bytes, and a nonce must never repeat under one key.
+    key := std.mem.array(32, u8, fn(i: usize) u8 { return @int_cast(u8, i) })
+    nonce := std.mem.array(12, u8, fn(i: usize) u8 { return @int_cast(u8, i * 3) })
+    aead := chacha20poly1305.ChaCha20Poly1305.init(&key)
+
+    // The header is sent in clear but covered by the tag, so it cannot be changed.
+    header := "message 1"
+    message := "meet at the river"
+    var sealed: [17]u8 = std.mem.splat(17, u8, 0)
+    tag := aead.encrypt(&mut sealed[0..], message, header, &nonce)
+    std.io.printf("ChaCha20-Poly1305: {} bytes of ciphertext, {} byte tag\n", .{ sealed.len, tag.len })
+    std.io.printf("ciphertext differs from the message: {}\n", .{ !std.mem.eql(u8, sealed[0..], message) })
+
+    var opened: [17]u8 = std.mem.splat(17, u8, 0)
+    try aead.decrypt(&mut opened[0..], sealed[0..], &tag, header, &nonce)
+    std.io.printf("decrypted: {}\n", .{ opened[0..] })
+
+    // One flipped bit anywhere fails the tag check, and no plaintext is released.
+    sealed[0] ^= 1
+    if aead.decrypt(&mut opened[0..], sealed[0..], &tag, header, &nonce) |_| {} else |err| {
+        std.io.printf("tampered: {}\n", .{ err })
+    }
+}
+```
+
+```text
+ChaCha20-Poly1305: 17 bytes of ciphertext, 16 byte tag
+ciphertext differs from the message: true
+decrypted: meet at the river
+tampered: error.AuthenticationFailed
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>AuthenticationFailed</code> | The tag does not match: the ciphertext, the associated data, the nonce or the key differ from what sealed it. |
+
+## ChaCha20Poly1305
+
+```otr
+const ChaCha20Poly1305 = struct
+```
+
+ChaCha20-Poly1305 under one key. `init` turns the key into the cipher's words once, so a
+connection keeps the value and seals each record with its own nonce.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>k</code> | <code>[8]u32</code> | Read-only |
+
+### ChaCha20Poly1305.init
+
+```otr
+fn init(key: &[32]u8) ChaCha20Poly1305
+```
+
+### ChaCha20Poly1305.seal
+
+```otr
+fn seal(self: &ChaCha20Poly1305, buf: []mut u8, ad: []u8, nonce: &[12]u8) [16]u8
+```
+
+Encrypts `buf` in place and returns the tag over it and the associated data `ad`.
+
+### ChaCha20Poly1305.open
+
+```otr
+fn open(self: &ChaCha20Poly1305, buf: []mut u8, tag: &[16]u8, ad: []u8, nonce: &[12]u8) Error!void
+```
+
+Checks `tag` over the ciphertext `buf` and `ad`, then decrypts `buf` in place. On
+`AuthenticationFailed` `buf` is left as it was.
+
+### ChaCha20Poly1305.encrypt
+
+```otr
+fn encrypt(self: &ChaCha20Poly1305, out: []mut u8, msg: []u8, ad: []u8, nonce: &[12]u8) [16]u8
+```
+
+`msg` encrypted into `out`, which has its length; returns the tag.
+
+### ChaCha20Poly1305.decrypt
+
+```otr
+fn decrypt(self: &ChaCha20Poly1305, out: []mut u8, ct: []u8, tag: &[16]u8, ad: []u8, nonce: &[12]u8) Error!void
+```
+
+`ct` decrypted into `out`, which has its length. On `AuthenticationFailed` `out` is
+zeroed.
+
+| Name | Definition |
+| --- | --- |
+| <code>ChaCha20Poly1305.key_len</code> | <code>32</code> |
+| <code>ChaCha20Poly1305.nonce_len</code> | <code>12</code> |
+| <code>ChaCha20Poly1305.tag_len</code> | <code>16</code> |
+
+## XChaCha20Poly1305
+
+```otr
+const XChaCha20Poly1305 = struct
+```
+
+XChaCha20-Poly1305 under one key: ChaCha20-Poly1305 under the subkey `hchacha20` makes
+from the key and the nonce's first 16 bytes, with the nonce's last 8 bytes after four
+zero bytes as its 12-byte nonce. A 24-byte nonce can be drawn at random for every
+message. The subkey is wiped after each call.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>k</code> | <code>[8]u32</code> | Read-only |
+
+### XChaCha20Poly1305.init
+
+```otr
+fn init(key: &[32]u8) XChaCha20Poly1305
+```
+
+### XChaCha20Poly1305.seal
+
+```otr
+fn seal(self: &XChaCha20Poly1305, buf: []mut u8, ad: []u8, nonce: &[24]u8) [16]u8
+```
+
+Encrypts `buf` in place and returns the tag over it and the associated data `ad`.
+
+### XChaCha20Poly1305.open
+
+```otr
+fn open(self: &XChaCha20Poly1305, buf: []mut u8, tag: &[16]u8, ad: []u8, nonce: &[24]u8) Error!void
+```
+
+Checks `tag` over the ciphertext `buf` and `ad`, then decrypts `buf` in place. On
+`AuthenticationFailed` `buf` is left as it was.
+
+### XChaCha20Poly1305.encrypt
+
+```otr
+fn encrypt(self: &XChaCha20Poly1305, out: []mut u8, msg: []u8, ad: []u8, nonce: &[24]u8) [16]u8
+```
+
+`msg` encrypted into `out`, which has its length; returns the tag.
+
+### XChaCha20Poly1305.decrypt
+
+```otr
+fn decrypt(self: &XChaCha20Poly1305, out: []mut u8, ct: []u8, tag: &[16]u8, ad: []u8, nonce: &[24]u8) Error!void
+```
+
+`ct` decrypted into `out`, which has its length. On `AuthenticationFailed` `out` is
+zeroed.
+
+| Name | Definition |
+| --- | --- |
+| <code>XChaCha20Poly1305.key_len</code> | <code>32</code> |
+| <code>XChaCha20Poly1305.nonce_len</code> | <code>24</code> |
+| <code>XChaCha20Poly1305.tag_len</code> | <code>16</code> |
+
+## hchacha20
+
+```otr
+fn hchacha20(key: &[32]u8, nonce: &[16]u8) [32]u8
+```
+
+HChaCha20 (draft-irtf-cfrg-xchacha-03 §2.2): ChaCha20's twenty rounds over the key and a
+16-byte nonce in place of the counter and nonce, without the final addition, keeping
+rows 0 and 3. The result is a key, so it is secret.
+
+## ChaCha20
+
+```otr
+const ChaCha20 = struct
+```
+
+The ChaCha20 stream cipher of RFC 8439 §2.4: a 32-byte key, a 12-byte nonce and a 32-bit
+block counter. Encrypting and decrypting are the same xor; there is no tag, so on its own
+it is for protocols that authenticate some other way.
+
+### ChaCha20.xor
+
+```otr
+fn xor(key: &[32]u8, nonce: &[12]u8, counter: u32, buf: []mut u8) void
+```
+
+XORs the key stream of `key` and `nonce`, from block `counter` on, into `buf`. Panics
+when `buf` needs blocks past 2^32 - 1, where the counter would wrap and repeat the
+key stream.
+
+| Name | Definition |
+| --- | --- |
+| <code>ChaCha20.key_len</code> | <code>32</code> |
+| <code>ChaCha20.nonce_len</code> | <code>12</code> |
+| <code>ChaCha20.block_len</code> | <code>64</code> |
+
+## ChaCha20With64BitNonce
+
+```otr
+const ChaCha20With64BitNonce = struct
+```
+
+ChaCha20 as Bernstein first defined it: a 64-bit block counter in words 12 and 13 and an
+8-byte nonce in words 14 and 15, as libsodium's `crypto_stream_chacha20` and Zig's
+`ChaCha20With64BitNonce` lay it out.
+
+### ChaCha20With64BitNonce.xor
+
+```otr
+fn xor(key: &[32]u8, nonce: &[8]u8, counter: u64, buf: []mut u8) void
+```
+
+XORs the key stream of `key` and `nonce`, from block `counter` on, into `buf`; the
+counter carries from its low word into its high one.
+
+| Name | Definition |
+| --- | --- |
+| <code>ChaCha20With64BitNonce.key_len</code> | <code>32</code> |
+| <code>ChaCha20With64BitNonce.nonce_len</code> | <code>8</code> |
+| <code>ChaCha20With64BitNonce.block_len</code> | <code>64</code> |
+
+## Poly1305
+
+```otr
+const Poly1305 = struct
+```
+
+Poly1305 (RFC 8439 §2.5), the one-time authenticator: a 32-byte key that must MAC only
+one message, and a 16-byte tag. `update` takes the message in parts and `final` leaves
+the value as it was; `create` and `verify` do it in one call, `verify` comparing in
+constant time. The accumulator is two 64-bit words and a few bits above them,
+multiplied by r's two words through `u128` (radix 2^64, as Zig's
+`std.crypto.onetimeauth.Poly1305` does), which takes fewer multiplies than 44-bit limbs.
+The AEAD pads every part it MACs to 16 bytes, so it goes straight to whole blocks.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>r</code> | <code>[2]u64</code> | Read-only |  |
+| <code>h</code> | <code>[3]u64</code> | Read-only |  |
+| <code>pad</code> | <code>[2]u64</code> | Read-only |  |
+| <code>buf</code> | <code>[16]u8</code> | Read-only | The bytes of a block `update` has not completed yet. |
+| <code>buf_len</code> | <code>usize</code> | Read-only |  |
+
+### Poly1305.init
+
+```otr
+fn init(key: &[32]u8) Poly1305
+```
+
+### Poly1305.update
+
+```otr
+fn update(self: &mut Poly1305, msg: []u8) void
+```
+
+### Poly1305.final
+
+```otr
+fn final(self: &Poly1305) [16]u8
+```
+
+The tag of everything given to `update`.
+
+### Poly1305.create
+
+```otr
+fn create(key: &[32]u8, msg: []u8) [16]u8
+```
+
+The tag of `msg` under the one-time `key`.
+
+### Poly1305.verify
+
+```otr
+fn verify(key: &[32]u8, msg: []u8, tag: &[16]u8) bool
+```
+
+Whether `tag` is the tag of `msg` under `key`, compared in time that does not depend
+on where they differ.
+
+| Name | Definition |
+| --- | --- |
+| <code>Poly1305.key_len</code> | <code>32</code> |
+| <code>Poly1305.mac_len</code> | <code>16</code> |

@@ -1,0 +1,183 @@
+---
+title: "std.ffi_context"
+sidebarTitle: "ffi_context"
+description: "Typed state for the callbacks C code makes."
+---
+
+Typed state for the callbacks C code makes. A C library calls back (GLib, Wayland,
+sd-bus, PipeWire) while the program is inside one of its dispatch calls, so the program
+lends its state to a global `Context` for the length of that call, and each callback
+borrows it from there with `with`. C's `user_data` pointer is not needed, so the state
+may move between dispatches and need not outlive what C has registered:
+
+```otr
+const events = ffi.Context(App).init()
+
+fn on_tick(data: ?*anyopaque) i32 {
+    return events.with(fn(app: &App) i32 { ... }) orelse 0
+}
+
+events.lend(&app, fn[&app]() void { glib.g_main_loop_run(main_loop) })
+```
+
+The loan is shared, because C may call back while another callback runs, as a GTK
+handler that hides a widget runs the widget's `hide` handlers: what callbacks change
+goes in a `cell.Cell` or `cell.RefCell`. A callback on another thread, or while nothing
+is lent, gets null; threads each lend their own state at the same time, any number of
+them. A `lend` that is not nested costs a compare-and-swap and three plain stores, and
+each `with` a load per slot up to its own: one while a single thread lends. All are
+inline in release builds.
+
+```otr
+import std.ffi_context
+```
+
+## Example
+
+```otr
+import std
+import std.cell
+import std.ffi_context
+
+extern fn qsort(base: *anyopaque, n: usize, size: usize, compare: fn(?*const anyopaque, ?*const anyopaque) i32) void
+
+// State the C callback needs. qsort has no user_data argument to carry it.
+const Order = struct {
+    descending: bool
+    calls: cell.Cell(u32)
+}
+
+const sorting = ffi_context.Context(Order).init()
+
+fn compare(a: ?*const anyopaque, b: ?*const anyopaque) i32 {
+    x := unsafe { @ptr_cast(*const i32, a).* }
+    y := unsafe { @ptr_cast(*const i32, b).* }
+    // with borrows the state lent on this thread; null outside lend.
+    return sorting.with(fn[x, y](order: &Order) i32 {
+        order.calls.set(order.calls.get() + 1)
+        diff: i32 = if x < y { -1 } else if x > y { 1 } else { 0 }
+        return if order.descending { -diff } else { diff }
+    }) orelse 0
+}
+
+pub fn main() void {
+    var numbers = [5]i32{ 42, -7, 19, 0, 3 }
+    order := Order{ descending: true, calls: cell.Cell(u32).init(0) }
+
+    // The state is lent only while the C call that calls back is running.
+    sorting.lend(&order, fn[&mut numbers]() void {
+        unsafe { qsort(@ptr_cast(*anyopaque, &mut numbers), 5, @size_of(i32), compare) }
+    })
+    std.io.printf("sorted: {} {} {} {} {}\n", .{ numbers[0], numbers[1], numbers[2], numbers[3], numbers[4] })
+    std.io.printf("callback saw the state: {}\n", .{ order.calls.get() > 0 })
+    outside := sorting.with(fn(o: &Order) bool { return o.descending })
+    std.io.printf("state reachable outside lend: {}\n", .{ outside != null })
+}
+```
+
+```text
+sorted: 42 19 3 0 -7
+callback saw the state: true
+state reachable outside lend: false
+```
+
+## Context
+
+```otr
+fn Context(comptime Ctx: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>first</code> | <code>Slots</code> | Read-only |
+
+### Context.threads
+
+```otr
+const threads = 8
+```
+
+Threads that may hold a loan at once before another block of slots is made.
+
+### Context.init
+
+```otr
+fn init() Self
+```
+
+### Context.lend
+
+```otr
+fn lend(self: &Self, ctx: &Ctx, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f`, which dispatches C callbacks (`g_main_loop_run`, `wl_display_dispatch`),
+with `ctx` lent to those made on this thread, and returns what `f` returns. A
+`lend` inside a callback lends its own state until it returns. Other threads lend
+their own states at the same time, each in a slot of its own.
+
+### Context.expect
+
+```otr
+fn expect(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+`with`, for a callback that cannot do without the state, such as libinput's
+`open_restricted`: panics when none is lent, which means a call that can call back
+was made outside `lend`.
+
+### Context.with
+
+```otr
+fn with(self: &Self, f: anytype) ?@return_type(@type_of(f))
+```
+
+Runs `f` on the state lent on this thread, from a callback; null when this
+thread lent none. `f` cannot return a borrow, since the state is lent only for now.
+
+## MutContext
+
+```otr
+fn MutContext(comptime Ctx: type) type
+```
+
+Exclusive callback state. `lend(&mut ctx, f)` lends only while `f` runs; callbacks
+use `with(fn(ctx: &mut Ctx) OwnedResult { ... })` or `expect`. A callback cannot
+borrow the same entry again unless it explicitly lends a mutable reborrow.
+State may contain scoped references and may move between calls to `lend`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>active</code> | <code>sync.Atomic</code> | Read-only |
+
+### MutContext.init
+
+```otr
+fn init() Self
+```
+
+### MutContext.lend
+
+```otr
+fn lend(self: &Self, ctx: &mut Ctx, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f` with exclusive access to `ctx` available to this thread's callbacks.
+A nested `lend` restores the outer entry on return, including error returns.
+
+### MutContext.with
+
+```otr
+fn with(self: &Self, f: anytype) ?@return_type(@type_of(f))
+```
+
+Null when this thread lent nothing, or its current callback still holds the
+loan. The callback must own its captures and result, never borrow the state.
+
+### MutContext.expect
+
+```otr
+fn expect(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+Panics instead of returning null for a missing or already borrowed entry.

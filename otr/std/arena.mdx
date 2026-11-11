@@ -1,0 +1,566 @@
+---
+title: "std.arena"
+sidebarTitle: "arena"
+description: "Region allocators (spec §7.5)."
+---
+
+Region allocators (spec §7.5): memory that is freed all at once when the region ends.
+
+```otr
+import std.arena
+```
+
+## Example
+
+```otr
+import std
+import std.arena
+
+fn Node(comptime r: region) type {
+    return struct {
+        value: i64
+        next: ?&r Node(r)
+    }
+}
+
+pub fn main() void {
+    // Everything allocated from the region is freed together when it ends.
+    region r = arena.Arena.init(std.mem.heap)
+    defer r.deinit()
+
+    var head: ?&r Node(r) = null
+    for i in 0..5 {
+        head = r.new(Node(r){ value: @int_cast(i64, i), next: head })
+    }
+    var sum: i64 = 0
+    var it = head
+    for it != null {
+        node := it.?
+        sum += node.value
+        it = node.next
+    }
+    std.io.printf("linked sum {}\n", .{ sum })
+
+    // Region collections have no deinit of their own.
+    squares := r.list(i64)
+    for i in 1..5 {
+        squares.push(@int_cast(i64, i * i))
+    }
+    names := r.map(u32, []static u8)
+    names.put(7, "seven")
+    text := r.string()
+    text.push_str("in a region")
+    zeros := r.alloc(u8, 16, 0)
+
+    std.io.printf("{} squares, last {}\n", .{ squares.len(), squares.at(3) })
+    std.io.printf("{} {} {}\n", .{ names.get(7) orelse "?", text.as_str(), zeros.len })
+}
+```
+
+```text
+linked sum 10
+4 squares, last 16
+seven in a region 16
+```
+
+## ResetMode
+
+```otr
+const ResetMode = enum
+```
+
+| Variant |
+| --- |
+| <code>retain_capacity</code> |
+
+## Arena
+
+```otr
+const Arena = struct
+```
+
+Bump allocation in chunks. Each chunk starts with a header holding the previous
+chunk and the chunk's size, so `deinit` can free them all.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |
+| <code>chunk</code> | <code>?[*]u8</code> | Read-only |
+| <code>used</code> | <code>usize</code> | Read-only |
+| <code>cap</code> | <code>usize</code> | Read-only |
+
+### Arena.init
+
+```otr
+fn init(alloc: mem.Allocator) Arena
+```
+
+### Arena.deinit
+
+```otr
+fn deinit(self: Arena) void
+```
+
+### Arena.reset
+
+```otr
+fn reset(self: &mut Arena, mode: ResetMode) bool
+```
+
+Invalidates previous raw allocations and preheats one retained chunk. False means
+preheating failed; the arena remains usable with its last chunk. Region allocators
+are hidden behind the compiler's region lifetime boundary.
+
+### Arena.alloc_raw
+
+```otr
+fn alloc_raw(self: &mut Arena, size: usize, alignment: usize) [*]u8
+```
+
+`size` bytes aligned to `alignment` (a power of two), valid until the region ends.
+
+### Arena.try_alloc_raw
+
+```otr
+fn try_alloc_raw(self: &mut Arena, size: usize, alignment: usize) error { NoMemory, Overflow, InvalidAlignment }! [*]u8
+```
+
+Failure leaves earlier allocations and the bump cursor intact. Padding is based
+on the absolute address, since a chunk need not share the requested alignment.
+
+## FixedBuffer
+
+```otr
+const FixedBuffer = ref struct
+```
+
+A region allocator over a buffer the caller provides: nothing is allocated from the
+system, and running out of the buffer panics. It borrows the buffer, so the buffer
+outlives the region.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>buf</code> | <code>[]mut u8</code> | Read-only |
+| <code>used</code> | <code>usize</code> | Read-only |
+
+### FixedBuffer.init
+
+```otr
+fn init(buf: []mut u8) FixedBuffer
+```
+
+### FixedBuffer.deinit
+
+```otr
+fn deinit(self: FixedBuffer) void
+```
+
+### FixedBuffer.alloc_raw
+
+```otr
+fn alloc_raw(self: &mut FixedBuffer, size: usize, alignment: usize) [*]u8
+```
+
+## Pages
+
+```otr
+const Pages = struct
+```
+
+A region allocator that takes memory straight from the system in page-sized mappings,
+for large regions that should not stay in the C heap afterwards.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>arena</code> | <code>Arena</code> | Read-only |
+
+### Pages.init
+
+```otr
+fn init() Pages
+```
+
+### Pages.deinit
+
+```otr
+fn deinit(self: Pages) void
+```
+
+### Pages.alloc_raw
+
+```otr
+fn alloc_raw(self: &mut Pages, size: usize, alignment: usize) [*]u8
+```
+
+## Stack
+
+```otr
+const Stack = struct
+```
+
+A reserved address range that region frames are carved from in LIFO order: a second
+stack for data whose size is only known at run time. `reserve` maps address space
+only; pages become resident as frames touch them, and a frame that ends more than
+`keep` bytes above its start returns the excess to the system, so one large frame
+does not pin its peak for the rest of the program. A `Stack` is owned by one thread
+or task, so frames from different tasks never interleave on it.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>base</code> | <code>[*]u8</code> | Read-only |  |
+| <code>cap</code> | <code>usize</code> | Read-only |  |
+| <code>top</code> | <code>usize</code> | Read-only |  |
+| <code>keep</code> | <code>usize</code> | Read-only |  |
+| <code>live</code> | <code>u64</code> | Read-only | The frame allowed to allocate, and the last id handed out; 0 is no frame. |
+| <code>last</code> | <code>u64</code> | Read-only |  |
+
+### Stack.reserve
+
+```otr
+fn reserve(bytes: usize) error { NoMemory }!Stack
+```
+
+Reserves `bytes` of address space (rounded up to whole pages) without committing it.
+
+### Stack.deinit
+
+```otr
+fn deinit(self: Stack) void
+```
+
+### Stack.set_keep
+
+```otr
+fn set_keep(self: &mut Stack, bytes: usize) void
+```
+
+Bytes a frame may leave resident above its start when it ends.
+
+### Stack.used
+
+```otr
+fn used(self: &Stack) usize
+```
+
+Bytes currently allocated by live frames.
+
+### Stack.frame
+
+```otr
+fn frame(self: &mut Stack) Frame
+```
+
+The outermost frame: `region r = stack.frame()`.
+
+## Frame
+
+```otr
+const Frame = ref struct
+```
+
+A region allocator over the top of a `Stack`. It borrows the stack, so while a frame is
+live no other code can open one from the stack; `r.frame()` opens a nested frame
+(spec G11). Allocation is a bump of the stack's top and the end of the region pops it.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>stack</code> | <code>&amp;mut Stack</code> | Read-only |
+| <code>mark</code> | <code>usize</code> | Read-only |
+| <code>id</code> | <code>u64</code> | Read-only |
+| <code>parent</code> | <code>u64</code> | Read-only |
+
+### Frame.deinit
+
+```otr
+fn deinit(self: Frame) void
+```
+
+### Frame.frame
+
+```otr
+fn frame(self: &mut Frame) Frame
+```
+
+A frame above this one, ending before it (`r.frame()`).
+
+### Frame.alloc_raw
+
+```otr
+fn alloc_raw(self: &mut Frame, size: usize, alignment: usize) [*]u8
+```
+
+## alloc
+
+```otr
+fn alloc(r: region, comptime T: type, n: usize, fill: T) []r T
+```
+
+`r.alloc(T, n, fill)`: `n` copies of `fill` in region `r` (spec G6).
+
+## dupe
+
+```otr
+fn dupe(r: region, s: str) []r u8
+```
+
+`r.dupe(s)`: a copy of `s` in region `r`.
+
+## list
+
+```otr
+fn list(r: region, comptime T: type) &r RList(r, T)
+```
+
+`r.list(T)`: an empty list in region `r` (spec G10).
+
+## soa_list
+
+```otr
+fn soa_list(r: region, comptime T: type) &r RSoaList(r, T)
+```
+
+`r.soa_list(T)`: an empty struct-of-arrays list in region `r` (spec D1, G10).
+
+## string
+
+```otr
+fn string(r: region) &r RString(r)
+```
+
+`r.string()`: an empty string in region `r` (spec G10).
+
+## map
+
+```otr
+fn map(r: region, comptime K: type, comptime V: type) &r RMap(r, K, V)
+```
+
+`r.map(K, V)`: an empty hash map in region `r` (spec G10).
+
+## RList
+
+```otr
+fn RList(comptime r: region, comptime T: type) type
+```
+
+A growable list whose storage lives in region `r`. Growing copies into a new buffer
+and leaves the old one in place, so slices taken earlier keep their contents.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>arena</code> | <code>[*]u8</code> | Read-only | The region's allocator, untyped: it may borrow, which a field cannot (B8), and G4 keeps the collection inside the region's block anyway. |
+| <code>ptr</code> | <code>?[*]T</code> | Read-only |  |
+| <code>count</code> | <code>usize</code> | Read-only |  |
+| <code>cap</code> | <code>usize</code> | Read-only |  |
+
+### RList.len
+
+```otr
+fn len(self: &r Self) usize
+```
+
+### RList.push
+
+```otr
+fn push(self: &r Self, item: T) void
+```
+
+### RList.at
+
+```otr
+fn at(self: &r Self, i: usize) T
+```
+
+A copy of element `i`.
+
+### RList.set
+
+```otr
+fn set(self: &r Self, i: usize, item: T) void
+```
+
+### RList.items
+
+```otr
+fn items(self: &r Self) []r T
+```
+
+The current elements; a later growth does not change this slice.
+
+## RSoaList
+
+```otr
+fn RSoaList(comptime r: region, comptime T: type) type
+```
+
+`RList` with each field of the struct `T` in its own column (spec D1). Elements are
+copies in and out, as in `RList`; `items()` gives the columns as `soa []r T`.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>arena</code> | <code>[*]u8</code> | Read-only | The region's allocator, untyped: it may borrow, which a field cannot (B8), and G4 keeps the collection inside the region's block anyway. |
+| <code>base</code> | <code>?[*]u8</code> | Read-only |  |
+| <code>count</code> | <code>usize</code> | Read-only |  |
+| <code>cap</code> | <code>usize</code> | Read-only |  |
+
+### RSoaList.len
+
+```otr
+fn len(self: &r Self) usize
+```
+
+### RSoaList.push
+
+```otr
+fn push(self: &r Self, item: T) void
+```
+
+### RSoaList.at
+
+```otr
+fn at(self: &r Self, i: usize) T
+```
+
+A copy of element `i`.
+
+### RSoaList.set
+
+```otr
+fn set(self: &r Self, i: usize, item: T) void
+```
+
+### RSoaList.items
+
+```otr
+fn items(self: &r Self) soa []r T
+```
+
+The current elements; a later growth does not change this slice.
+
+## RString
+
+```otr
+fn RString(comptime r: region) type
+```
+
+A UTF-8 string in region `r`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>bytes</code> | <code>&amp;r RList(r, u8)</code> | Read-only |
+
+### RString.len
+
+```otr
+fn len(self: &r Self) usize
+```
+
+### RString.push
+
+```otr
+fn push(self: &r Self, c: u8) void
+```
+
+### RString.push_str
+
+```otr
+fn push_str(self: &r Self, s: str) void
+```
+
+### RString.as_str
+
+```otr
+fn as_str(self: &r Self) []r u8
+```
+
+## RMap
+
+```otr
+fn RMap(comptime r: region, comptime K: type, comptime V: type) type
+```
+
+A hash map in region `r` with open addressing. Keys are integers, booleans, enums or
+byte strings.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>arena</code> | <code>[*]u8</code> | Read-only | The region's allocator, untyped: it may borrow, which a field cannot (B8), and G4 keeps the collection inside the region's block anyway. |
+| <code>keys</code> | <code>?[*]K</code> | Read-only |  |
+| <code>values</code> | <code>?[*]V</code> | Read-only |  |
+| <code>used</code> | <code>?[*]bool</code> | Read-only |  |
+| <code>count</code> | <code>usize</code> | Read-only |  |
+| <code>cap</code> | <code>usize</code> | Read-only |  |
+
+### RMap.len
+
+```otr
+fn len(self: &r Self) usize
+```
+
+### RMap.get
+
+```otr
+fn get(self: &r Self, key: K) ?V
+```
+
+### RMap.contains
+
+```otr
+fn contains(self: &r Self, key: K) bool
+```
+
+### RMap.put
+
+```otr
+fn put(self: &r Self, key: K, value: V) void
+```
+
+Sets `key` to `value`, replacing any earlier value.
+
+### RMap.iter
+
+```otr
+fn iter(self: &r Self) RMapIter(r, K, V)
+```
+
+The entries, as copies, in no particular order. The iterator reads the buffers
+the map had when it began, which a growth leaves in place (G10), so a `put`
+while it runs is safe: it yields each entry present at the start once, and
+may or may not yield ones added meanwhile.
+
+## RMapEntry
+
+```otr
+fn RMapEntry(comptime K: type, comptime V: type) type
+```
+
+A key and its value copied out of an `RMap`.
+
+| Field | Type |
+| --- | --- |
+| <code>key</code> | <code>K</code> |
+| <code>value</code> | <code>V</code> |
+
+## RMapIter
+
+```otr
+fn RMapIter(comptime r: region, comptime K: type, comptime V: type) type
+```
+
+The entries of an `RMap`. It names the map, so its type mentions the region and stays
+inside it (G4, G8).
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>map</code> | <code>&amp;r RMap(r, K, V)</code> | Read-only |
+| <code>keys</code> | <code>?[*]K</code> | Read-only |
+| <code>values</code> | <code>?[*]V</code> | Read-only |
+| <code>used</code> | <code>?[*]bool</code> | Read-only |
+| <code>cap</code> | <code>usize</code> | Read-only |
+| <code>i</code> | <code>usize</code> | Read-only |
+
+### RMapIter.next
+
+```otr
+fn next(self: &mut Self) ?RMapEntry(K, V)
+```

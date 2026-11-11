@@ -1,0 +1,6 @@
+len 4 front 0 back 3
+0 10 2 3 
+popped 0 and 3, 2 left
+ran 10
+ran 2
+empty true

@@ -1,0 +1,181 @@
+---
+title: "std.http.url"
+sidebarTitle: "http.url"
+description: "The request side of std.http."
+---
+
+The request side of `std.http`: `http` and `https` URLs, IPv6 literals included,
+relative redirect locations resolved against them, proxies chosen by `no_proxy`, and the
+request head, written so a caller's header cannot split it.
+
+```otr
+import std.http.url
+```
+
+## Example
+
+```otr
+import std
+import std.http.url
+import std.list
+
+pub fn main() !void {
+    u := try url.Url.parse("https://user:secret@example.org:8443/search?q=otter#top")
+    std.io.printf("secure {} host {} port {} target {}\n", .{ u.secure, u.host, u.port, u.target })
+    std.io.printf("userinfo {}\n", .{ u.userinfo })
+
+    // The port defaults to the scheme's.
+    plain := try url.Url.parse("http://example.org")
+    std.io.printf("port {} target [{}]\n", .{ plain.port, plain.target })
+
+    for bad in ([2]str{ "ftp://example.org/", "example.org/path" }) {
+        if url.Url.parse(bad) |_| {} else |e| {
+            std.io.printf("{}: {}\n", .{ bad, e })
+        }
+    }
+
+    // The request head as it goes on the wire.
+    var out = list.List(u8).init(std.mem.heap)
+    defer out.deinit()
+    head := url.Head{ method: "GET", always_length: false, via_proxy: false, headers: "Accept: text/html\r\n", credentials: false, decode: false, proxy_auth: "", body: "" }
+    try url.write_request(&mut out, &plain, &head)
+    std.io.print(out.items())
+
+    proxy := url.Proxy.init(std.mem.heap, "http://proxy.lan:3128", "", "localhost, .internal")
+    defer proxy.deinit()
+    std.io.printf("example.org via {}\n", .{ proxy.for_host("example.org", false) orelse "direct" })
+    std.io.printf("db.internal via {}\n", .{ proxy.for_host("db.internal", false) orelse "direct" })
+}
+```
+
+```text
+secure true host example.org port 8443 target /search?q=otter
+userinfo user:secret
+port 80 target []
+ftp://example.org/: error.UnsupportedScheme
+example.org/path: error.InvalidUrl
+GET / HTTP/1.1
+Host: example.org
+Connection: close
+User-Agent: otr-std-http
+Accept: text/html
+
+example.org via http://proxy.lan:3128
+db.internal via direct
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>InvalidUrl</code> | The URL is not an absolute `http` or `https` URL with a host name, an IPv4 address or a bracketed IPv6 address. |
+| <code>UnsupportedScheme</code> | A URL or a proxy names a scheme other than `http` and `https`. |
+| <code>InvalidHeader</code> | A request header has a malformed name or a value with a line break, or is one the client writes itself (Host, Connection, Content-Length, Transfer-Encoding). |
+
+## Proxy
+
+```otr
+const Proxy = struct
+```
+
+Proxy URLs (`http://[user:pass@]host[:port]`, the scheme optional) for `http` and
+`https` requests, empty for none, and `no_proxy`, the hosts reached directly: a list
+separated by commas or spaces of names, each also matching its subdomains, or `*`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>http</code> | <code>String</code> | Read-only |
+| <code>https</code> | <code>String</code> | Read-only |
+| <code>no_proxy</code> | <code>String</code> | Read-only |
+
+### Proxy.init
+
+```otr
+fn init(alloc: mem.Allocator, http: str, https: str, no_proxy: str) Proxy
+```
+
+### Proxy.from_env
+
+```otr
+fn from_env(env: std.Env, alloc: mem.Allocator) Proxy
+```
+
+The proxies the environment names as curl reads them: `http_proxy` (lower case
+only, since CGI puts a request's `Proxy` header in `HTTP_PROXY`), `https_proxy`
+and `no_proxy` in either case.
+
+### Proxy.deinit
+
+```otr
+fn deinit(self: Proxy) void
+```
+
+### Proxy.for_host
+
+```otr
+fn for_host(self: &Proxy, host: str, secure: bool) ?[]u8
+```
+
+The proxy a request to `host` goes through, or null to go directly.
+
+## Url
+
+```otr
+const Url = ref struct
+```
+
+The parts of an `http` or `https` URL a request needs, borrowed from it.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>secure</code> | <code>bool</code> |  |
+| <code>userinfo</code> | <code>str</code> | `user:password`, still percent-encoded, or empty. |
+| <code>host</code> | <code>str</code> |  |
+| <code>port</code> | <code>u16</code> |  |
+| <code>target</code> | <code>str</code> | The path and query as written, which may be empty or start with `?`; the request line puts a `/` before those. The fragment is dropped. |
+
+### Url.parse
+
+```otr
+fn parse(url: str) Error!Url
+```
+
+## Head
+
+```otr
+const Head = ref struct
+```
+
+What a request head holds besides the URL.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>method</code> | <code>[]static u8</code> |  |
+| <code>always_length</code> | <code>bool</code> | Sends Content-Length even for an empty body, as POST, PUT and PATCH do. |
+| <code>via_proxy</code> | <code>bool</code> | Through an HTTP proxy, which takes the absolute URL. |
+| <code>headers</code> | <code>[]u8</code> | The caller's header lines, each ending in CRLF, as `serialize_headers` wrote them. |
+| <code>credentials</code> | <code>bool</code> | Whether the URL's credentials and the caller's Authorization and Cookie go along. |
+| <code>decode</code> | <code>bool</code> |  |
+| <code>proxy_auth</code> | <code>[]u8</code> |  |
+| <code>body</code> | <code>[]u8</code> |  |
+| <code>keep_alive</code> | <code>bool = false</code> | Leaves the connection open after the response (HTTP/1.1's default) instead of asking the server to close it. |
+
+## write_request
+
+```otr
+fn write_request(out: &mut List(u8), u: &Url, h: &Head) Error!void
+```
+
+Appends the request for `u` described by `h`, body included, to `out`.
+
+## write_connect
+
+```otr
+fn write_connect(out: &mut List(u8), host: []u8, port: u16, proxy_auth: []u8) void
+```
+
+Appends a CONNECT request for `host` and `port` to `out`, with the proxy's credentials.

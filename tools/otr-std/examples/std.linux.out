@@ -1,0 +1,5 @@
+nothing ready yet: true
+ready data sum: 3
+pipe: ping
+eventfd counter: 3
+after reading: 0 ready

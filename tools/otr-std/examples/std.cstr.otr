@@ -1,0 +1,25 @@
+import std
+import std.bounded
+import std.cstr
+
+extern fn strlen(s: [*]const u8) usize
+
+pub fn main() !void {
+    // to_cstr copies a string into a fixed buffer and adds the NUL that C expects.
+    var buf = bounded.InlineString(32).init()
+    name := try cstr.to_cstr(&mut buf, "otter")
+    std.io.printf("C sees {} bytes\n", .{ unsafe { strlen(name.ptr) } })
+
+    // span reads a C string back as a slice, up to its NUL.
+    back := unsafe { cstr.span(name.ptr) }
+    std.io.printf("back in otr: {}\n", .{ back })
+
+    // C would stop at an embedded NUL, so it is refused rather than truncated.
+    if cstr.to_cstr(&mut buf, "a\x00b") |_| {} else |err| {
+        std.io.printf("embedded NUL: {}\n", .{ err })
+    }
+    var tiny = bounded.InlineString(4).init()
+    if cstr.to_cstr(&mut tiny, "too long for four") |_| {} else |err| {
+        std.io.printf("small buffer: {}\n", .{ err })
+    }
+}

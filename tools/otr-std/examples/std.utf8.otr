@@ -1,0 +1,28 @@
+import std
+import std.utf8
+
+pub fn main() !void {
+    text := "naïve 日本"
+    std.io.printf("{} bytes, {} codepoints, valid: {}\n", .{ text.len, utf8.count(text), utf8.is_valid(text) })
+
+    var it = utf8.iterate(text)
+    for c in it {
+        std.io.printf("U+{X:0>4} at byte {} ({} long)\n", .{ c.cp, c.offset, c.len })
+    }
+
+    first := try utf8.decode("é!")
+    std.io.printf("decoded U+{X:0>4} from {} bytes\n", .{ first.cp, first.len })
+
+    if utf8.encode(0x1f9a6) |enc| {
+        std.io.printf("U+1F9A6 takes {} bytes: {x}\n", .{ enc.len, enc.as_str() })
+    }
+
+    // Cutting at byte 3 would split the two-byte "ï", so the cut moves back to 2.
+    std.io.printf("truncate to 3 bytes: {}\n", .{ utf8.truncate(text, 3) })
+    std.io.printf("boundary at 3: {}, at 4: {}\n", .{ utf8.is_boundary(text, 3), utf8.is_boundary(text, 4) })
+
+    broken := "ab\xffcd"
+    if utf8.find_invalid(broken) |bad| {
+        std.io.printf("invalid: {} byte(s) at {}, {}\n", .{ bad.len, bad.offset, bad.err })
+    }
+}

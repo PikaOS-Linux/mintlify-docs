@@ -1,0 +1,6 @@
+notes.txt: 18 bytes
+line one
+line two
+draft.txt exists: false
+notes.txt (file)
+reading draft.txt: error.NotFound

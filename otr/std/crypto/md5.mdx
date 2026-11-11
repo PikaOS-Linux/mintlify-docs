@@ -1,0 +1,96 @@
+---
+title: "std.crypto.md5"
+sidebarTitle: "crypto.md5"
+description: "MD5 (RFC 1321), 16-byte digests, for the legacy protocols that still name it, such as NTLMv2's HMAC-MD5."
+---
+
+MD5 (RFC 1321), 16-byte digests, for the legacy protocols that still name it, such as
+NTLMv2's HMAC-MD5. Collisions take seconds to find, so nothing new should use it, and
+never for signatures or integrity against an attacker. The hasher has the shape of the
+SHA-2 ones: `init`, `update`, `final`, which leaves the hasher as it was, `hash` for one
+slice, and the `digest_len` and `block_len` that `hmac.Hmac` needs.
+
+```otr
+import std.crypto.md5
+```
+
+## Example
+
+```otr
+import std
+import std.crypto.md5
+
+fn print_hex(label: str, bytes: []u8) void {
+    std.io.printf("{}: ", .{ label })
+    for b in bytes { std.io.printf("{x:0>2}", .{ b }) }
+    std.io.printf("\n", .{})
+}
+
+pub fn main() void {
+    // MD5 is broken for security; use it only where an old protocol or checksum asks.
+    whole := md5.Md5.hash("hello world")
+    print_hex("md5", whole[0..])
+
+    var h = md5.Md5.init()
+    h.update("hello ")
+    h.update("world")
+    parts := h.final()
+    std.io.printf("same digest in parts: {}\n", .{ std.mem.eql(u8, whole[0..], parts[0..]) })
+
+    empty := md5.Md5.hash("")
+    print_hex("md5 of nothing", empty[0..])
+    std.io.printf("digest is {} bytes\n", .{ md5.Md5.digest_len })
+}
+```
+
+```text
+md5: 5eb63bbbe01eeed093cb22bb8f5acdc3
+same digest in parts: true
+md5 of nothing: d41d8cd98f00b204e9800998ecf8427e
+digest is 16 bytes
+```
+
+## Md5
+
+```otr
+const Md5 = struct
+```
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>s</code> | <code>[4]u32</code> | Read-only |  |
+| <code>total_len</code> | <code>u64</code> | Read-only | Bytes so far; RFC 1321 counts bits modulo 2^64. |
+| <code>buf</code> | <code>[64]u8</code> | Read-only |  |
+| <code>buf_len</code> | <code>usize</code> | Read-only |  |
+
+### Md5.init
+
+```otr
+fn init() Md5
+```
+
+### Md5.update
+
+```otr
+fn update(self: &mut Md5, input: []u8) void
+```
+
+### Md5.final
+
+```otr
+fn final(self: &Md5) [16]u8
+```
+
+### Md5.hash
+
+```otr
+fn hash(input: []u8) [16]u8
+```
+
+Compresses the whole blocks straight from `input` and pads its tail, with no copy
+through the buffer `update` keeps.
+
+| Name | Definition |
+| --- | --- |
+| <code>Md5.digest_len</code> | <code>16</code> |
+| <code>Md5.block_len</code> | <code>64</code> |

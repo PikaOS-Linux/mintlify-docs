@@ -1,0 +1,152 @@
+---
+title: "std.testing_allocator"
+sidebarTitle: "testing_allocator"
+description: "Instance-local allocation fault injection."
+---
+
+Instance-local allocation fault injection. No process globals or allocation registry.
+
+```otr
+import std.testing_allocator
+```
+
+## Example
+
+```otr
+import std
+import std.list
+import std.testing_allocator
+
+test "counts what a container allocates and frees" {
+    // The state is declared first so that it outlives everything allocating from it.
+    state := testing_allocator.CountingAllocator.init()
+    defer state.deinit()
+    alloc := unsafe { state.allocator() }
+    {
+        var xs = list.List(u64).init(alloc)
+        defer xs.deinit()
+        try xs.try_reserve(8)
+        xs.push(1)
+        live := state.stats()
+        try std.testing.expect(live.allocations == 1)
+        try std.testing.expect(live.live_blocks == 1 and live.live_bytes >= 64)
+    }
+    after := state.stats()
+    try std.testing.expect(after.frees == 1 and after.live_blocks == 0)
+    try std.testing.expect(after.peak_blocks == 1)
+}
+
+test "an injected failure leaves the container intact" {
+    state := testing_allocator.CountingAllocator.init()
+    defer state.deinit()
+    alloc := unsafe { state.allocator() }
+    {
+        var bytes = list.List(u8).init(alloc)
+        defer bytes.deinit()
+        try bytes.try_reserve(16)
+        bytes.push_slice("otter")
+
+        // The next allocation or resize fails, once.
+        state.fail_after(1, false)
+        try std.testing.expect_error(error.NoMemory, bytes.try_reserve(4096))
+        try std.testing.expect_equal_slices(u8, "otter", bytes.items())
+        try std.testing.expect(state.stats().induced_failures == 1)
+
+        try bytes.try_reserve(4096)
+    }
+    try std.testing.expect(state.stats().live_blocks == 0)
+}
+```
+
+```text
+test "counts what a container allocates and frees" ... ok
+test "an injected failure leaves the container intact" ... ok
+2 passed, 0 failed
+```
+
+## Stats
+
+```otr
+const Stats = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>attempts</code> | <code>usize = 0</code> |
+| <code>alloc_attempts</code> | <code>usize = 0</code> |
+| <code>resize_attempts</code> | <code>usize = 0</code> |
+| <code>allocations</code> | <code>usize = 0</code> |
+| <code>resizes</code> | <code>usize = 0</code> |
+| <code>frees</code> | <code>usize = 0</code> |
+| <code>induced_failures</code> | <code>usize = 0</code> |
+| <code>upstream_failures</code> | <code>usize = 0</code> |
+| <code>live_blocks</code> | <code>usize = 0</code> |
+| <code>live_bytes</code> | <code>usize = 0</code> |
+| <code>peak_blocks</code> | <code>usize = 0</code> |
+| <code>peak_bytes</code> | <code>usize = 0</code> |
+
+## CountingAllocator
+
+```otr
+const CountingAllocator = struct
+```
+
+The mutex protects callbacks and control/statistics operations alike. Its one backing
+allocation belongs to this helper, not the observed allocator, and is freed by deinit.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>inner</code> | <code>sync.Mutex(State)</code> | Read-only |
+
+### CountingAllocator.init
+
+```otr
+fn init() CountingAllocator
+```
+
+### CountingAllocator.deinit
+
+```otr
+fn deinit(self: CountingAllocator) void
+```
+
+### CountingAllocator.allocator
+
+```otr
+unsafe fn allocator(self: &CountingAllocator) mem.Allocator
+```
+
+The state stays alive and unmoved until all allocator copies and containers/blocks
+are gone. Declare state first, defer its deinit, then declare/defer owners; destroy
+owners and check zero live blocks before leaving the state's scope. Never return
+this allocator with local state. Unsafe because Otr cannot carry this scoped borrow.
+
+### CountingAllocator.stats
+
+```otr
+fn stats(self: &CountingAllocator) Stats
+```
+
+### CountingAllocator.fail_after
+
+```otr
+fn fail_after(self: &CountingAllocator, n: usize, persistent: bool) void
+```
+
+Fails the Nth subsequent allocation/resize attempt (N >= 1), then optionally all
+later attempts. Existing blocks retain their accounting and allocator provenance.
+
+### CountingAllocator.disable
+
+```otr
+fn disable(self: &CountingAllocator) void
+```
+
+## check_rawbuf_alignment
+
+```otr
+fn check_rawbuf_alignment(alignment: usize, persistent: bool) !void
+```
+
+Exercises std-private byte storage whose requested alignment exceeds its type's.
+All storage and context stay local; both fallible and infallible growth are checked.

@@ -1,0 +1,115 @@
+---
+title: "std.crypto.hmac"
+sidebarTitle: "crypto.hmac"
+description: "HMAC (RFC 2104, FIPS 198-1) over any hasher with init, update, final, digest_len and block_len, such as sha2.Sha256, or hash.Sha1 and md5.Md5 for the legacy protocols that name them (HMAC-SHA1, NTLMv2's HMAC-MD5)."
+---
+
+HMAC (RFC 2104, FIPS 198-1) over any hasher with `init`, `update`, `final`,
+`digest_len` and `block_len`, such as `sha2.Sha256`, or `hash.Sha1` and `md5.Md5` for
+the legacy protocols that name them (HMAC-SHA1, NTLMv2's HMAC-MD5). The key's padded blocks are hashed
+once in `init`, so a `Hmac` value can be copied to MAC many messages under one key
+without hashing the key again; HKDF's expansion does that.
+
+```otr
+import std.crypto.hmac
+```
+
+## Example
+
+```otr
+import std
+import std.crypto
+import std.crypto.hmac
+
+fn print_hex(label: str, bytes: []u8) void {
+    std.io.printf("{}: ", .{ label })
+    for b in bytes { std.io.printf("{x:0>2}", .{ b }) }
+    std.io.printf("\n", .{})
+}
+
+pub fn main() void {
+    key := "a shared secret key"
+    message := "amount=100&to=jade"
+
+    // The sender computes a MAC and sends it with the message.
+    mac := hmac.HmacSha256.create(key, message)
+    print_hex("hmac-sha256", mac[0..])
+
+    // The receiver computes it again, here in parts, and compares in constant time.
+    var h = hmac.HmacSha256.init(key)
+    h.update("amount=100")
+    h.update("&to=jade")
+    expected := h.final()
+    std.io.printf("genuine message accepted: {}\n", .{ crypto.timing_safe_eql(mac[0..], expected[0..]) })
+
+    forged := hmac.HmacSha256.create(key, "amount=900&to=jade")
+    std.io.printf("changed message accepted: {}\n", .{ crypto.timing_safe_eql(mac[0..], forged[0..]) })
+    std.io.printf("mac is {} bytes\n", .{ hmac.HmacSha256.mac_len })
+}
+```
+
+```text
+hmac-sha256: 6143b8c6ce6eae9b75337335b1d7c6e6b20a4c727029d5cc8d0013735d3a7b1a
+genuine message accepted: true
+changed message accepted: false
+mac is 32 bytes
+```
+
+## Hmac
+
+```otr
+fn Hmac(comptime H: type) type
+```
+
+HMAC with the hash `H`; MACs are `H.digest_len` bytes.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>inner</code> | <code>H</code> | Read-only | The hasher after the inner padded key, and after the outer one. |
+| <code>outer</code> | <code>H</code> | Read-only |  |
+
+### Hmac.init
+
+```otr
+fn init(key: []u8) Self
+```
+
+Starts a MAC under `key`. A key longer than a block is hashed first, as RFC 2104
+says; any length is accepted, though one shorter than `mac_len` is weak.
+
+### Hmac.update
+
+```otr
+fn update(self: &mut Self, msg: []u8) void
+```
+
+### Hmac.final
+
+```otr
+fn final(self: &Self) [H.digest_len]u8
+```
+
+The MAC of everything given to `update`. The value is left as it was, so a MAC
+of a prefix can be read and the message fed on.
+
+### Hmac.create
+
+```otr
+fn create(key: []u8, msg: []u8) [H.digest_len]u8
+```
+
+The MAC of `msg` under `key`.
+
+| Name | Definition |
+| --- | --- |
+| <code>Hmac.mac_len</code> | <code>H.digest_len</code> |
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>HmacMd5</code> | <code>Hmac(md5.Md5)</code> |
+| <code>HmacSha1</code> | <code>Hmac(hash.Sha1)</code> |
+| <code>HmacSha256</code> | <code>Hmac(sha2.Sha256)</code> |
+| <code>HmacSha384</code> | <code>Hmac(sha2.Sha384)</code> |
+| <code>HmacSha512</code> | <code>Hmac(sha2.Sha512)</code> |

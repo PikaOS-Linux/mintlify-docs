@@ -1,0 +1,243 @@
+---
+title: "std.time"
+sidebarTitle: "time"
+description: "Clocks."
+---
+
+Clocks.
+
+```otr
+import std.time
+```
+
+## Example
+
+```otr
+import std
+import std.time
+
+fn busy_work() u64 {
+    var sum: u64 = 0
+    for i in 0..1000 {
+        sum += i
+    }
+    return sum
+}
+
+pub fn main() void {
+    // Durations are plain values; the constructors convert to nanoseconds.
+    timeout := time.Duration.s(2)
+    step := time.Duration.ms(250)
+    std.io.printf("{} ms, {} ns\n", .{ timeout.as_ms(), step.as_ns() })
+
+    // Instants are on the monotonic clock: only differences between them mean anything.
+    start := time.Instant.now()
+    deadline := start.add(timeout)
+    std.io.printf("deadline is {} ms after start\n", .{ deadline.since(start).as_ms() })
+    // since never goes negative: an earlier instant gives zero.
+    std.io.printf("start since deadline: {} ns\n", .{ start.since(deadline).as_ns() })
+
+    timer := time.Timer.start()
+    sum := busy_work()
+    took := timer.elapsed_ns()
+    // The measurement itself changes from run to run, so only its bound is printed.
+    std.io.printf("summed to {} in under a second: {}\n", .{ sum, took < 1000000000 })
+
+    a := time.monotonic_ns()
+    b := time.monotonic_ns()
+    std.io.printf("monotonic clock went backwards: {}\n", .{ b < a })
+
+    // The wall clock, for timestamps: seconds since 1970-01-01 UTC.
+    std.io.printf("wall clock is past 2026-01-01: {}\n", .{ time.unix_seconds() > 1767225600 })
+}
+```
+
+```text
+2000 ms, 250000000 ns
+deadline is 2000 ms after start
+start since deadline: 0 ns
+summed to 499500 in under a second: true
+monotonic clock went backwards: false
+wall clock is past 2026-01-01: true
+```
+
+## Timespec
+
+```otr
+const Timespec = extern struct
+```
+
+`struct timespec`.
+
+| Field | Type |
+| --- | --- |
+| <code>sec</code> | <code>i64</code> |
+| <code>nsec</code> | <code>i64</code> |
+
+## Local
+
+```otr
+const Local = struct
+```
+
+A moment on the local wall clock, in the system's time zone.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>year</code> | <code>i32</code> |  |
+| <code>month</code> | <code>u8</code> | 1 to 12. |
+| <code>day</code> | <code>u8</code> |  |
+| <code>hour</code> | <code>u8</code> |  |
+| <code>minute</code> | <code>u8</code> |  |
+| <code>second</code> | <code>u8</code> |  |
+| <code>weekday</code> | <code>u8</code> | 0 is Sunday. |
+
+## local
+
+```otr
+fn local(epoch_seconds: i64) Local
+```
+
+`epoch_seconds` on the local wall clock.
+
+## monotonic_ns
+
+```otr
+fn monotonic_ns() u64
+```
+
+Nanoseconds from an arbitrary fixed point; only differences mean anything, and it
+never goes backwards.
+
+## monotonic_ms
+
+```otr
+fn monotonic_ms() u64
+```
+
+`monotonic_ns` in milliseconds.
+
+## Duration
+
+```otr
+const Duration = struct
+```
+
+A length of time, in nanoseconds.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>nanos</code> | <code>u64</code> | Read-only |
+
+### Duration.ns
+
+```otr
+fn ns(n: u64) Duration
+```
+
+### Duration.ms
+
+```otr
+fn ms(n: u64) Duration
+```
+
+### Duration.s
+
+```otr
+fn s(n: u64) Duration
+```
+
+### Duration.as_ns
+
+```otr
+fn as_ns(self: Duration) u64
+```
+
+### Duration.as_ms
+
+```otr
+fn as_ms(self: Duration) u64
+```
+
+Whole milliseconds, rounded down.
+
+## Instant
+
+```otr
+const Instant = struct
+```
+
+A point in time on the monotonic clock (`monotonic_ns`), for deadlines and measuring.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>nanos</code> | <code>u64</code> | Read-only |
+
+### Instant.now
+
+```otr
+fn now() Instant
+```
+
+### Instant.add
+
+```otr
+fn add(self: Instant, d: Duration) Instant
+```
+
+### Instant.since
+
+```otr
+fn since(self: Instant, earlier: Instant) Duration
+```
+
+The time from `earlier` to `self`; zero when `earlier` is later.
+
+### Instant.elapsed
+
+```otr
+fn elapsed(self: Instant) Duration
+```
+
+The time from `self` until now.
+
+## unix_seconds
+
+```otr
+fn unix_seconds() i64
+```
+
+Seconds since 1970-01-01 UTC, from the wall clock, which can be changed.
+
+## unix_ns
+
+```otr
+fn unix_ns() i64
+```
+
+Nanoseconds since 1970-01-01 UTC, from the wall clock, which can be changed; an `i64`
+holds them until 2262.
+
+## Timer
+
+```otr
+const Timer = struct
+```
+
+Measures elapsed time from when it was started.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>start</code> | <code>u64</code> | Read-only |
+
+### Timer.start
+
+```otr
+fn start() Timer
+```
+
+### Timer.elapsed_ns
+
+```otr
+fn elapsed_ns(self: &Timer) u64
+```

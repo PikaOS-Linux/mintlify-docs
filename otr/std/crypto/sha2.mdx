@@ -1,0 +1,211 @@
+---
+title: "std.crypto.sha2"
+sidebarTitle: "crypto.sha2"
+description: "SHA-2 (FIPS 180-4)."
+---
+
+SHA-2 (FIPS 180-4): SHA-256, SHA-384 and SHA-512, the hashes TLS 1.3, HKDF and HMAC are
+built on. `Sha256` is `std.hash`'s, which runs on the CPU's SHA instructions where there
+are some; SHA-384 and SHA-512 share one 64-bit compression function, compiled for each
+CPU of the target list: on x86-64-v3 BMI2's `rorx` and `andn` take the place of `shld`
+and register copies, which makes it twice as fast as at the baseline. On AVX-512 a
+runtime kernel takes eight blocks at a time, 20% faster again. Each hasher
+has `init`, `update` and `final`, which leaves the hasher as it was, and `hash` for one
+slice at once; `digest_len` and `block_len` are what HMAC needs to know about it.
+`Hash` names the three as data, for signature code that takes the hash as a parameter:
+`digest` hashes a message and `Hasher` names the type for code that feeds one in parts.
+
+```otr
+import std.crypto.sha2
+```
+
+## Example
+
+```otr
+import std
+import std.crypto.sha2
+
+fn print_hex(label: str, bytes: []u8) void {
+    std.io.printf("{}: ", .{ label })
+    for b in bytes { std.io.printf("{x:0>2}", .{ b }) }
+    std.io.printf("\n", .{})
+}
+
+pub fn main() void {
+    // One call for a message that is already in memory.
+    whole := sha2.Sha256.hash("hello world")
+    print_hex("sha256", whole[0..])
+
+    // Or feed the message in parts, as when reading a file in chunks.
+    var h = sha2.Sha256.init()
+    h.update("hello ")
+    h.update("world")
+    parts := h.final()
+    std.io.printf("same digest in parts: {}\n", .{ std.mem.eql(u8, whole[0..], parts[0..]) })
+
+    wide := sha2.Sha512.hash("hello world")
+    print_hex("sha512", wide[0..])
+
+    // digest picks the hash at run time and gives a Digest of the right length.
+    for kind in ([3]sha2.Hash{ .sha256, .sha384, .sha512 }) {
+        d := sha2.digest(kind, "hello world")
+        std.io.printf("{} is {} bytes\n", .{ @tag_name(kind), d.bytes().len })
+    }
+}
+```
+
+```text
+sha256: b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+same digest in parts: true
+sha512: 309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f
+sha256 is 32 bytes
+sha384 is 48 bytes
+sha512 is 64 bytes
+```
+
+## Sha256
+
+```otr
+const Sha256 = hash.Sha256
+```
+
+SHA-256, 32-byte digests.
+
+## Sha384
+
+```otr
+const Sha384 = Sha512Of([8]u64{ 0xcbbb9d5dc1059ed8, 0x629a292a367cd507, 0x9159015a3070dd17, 0x152fecd8f70e5939, 0x67332667ffc00b31, 0x8eb44a8768581511, 0xdb0c2e0d64f98fa7, 0x47b5481dbefa4fa4, }, 48)
+```
+
+SHA-384: SHA-512 from its own initial state, cut to 48 bytes, so a SHA-384 digest is no
+prefix of a SHA-512 one.
+
+## Sha512
+
+```otr
+const Sha512 = Sha512Of([8]u64{ 0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1, 0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179, }, 64)
+```
+
+SHA-512, 64-byte digests.
+
+## Hash
+
+```otr
+const Hash = enum
+```
+
+The SHA-2 hashes that signatures in TLS and X.509 name.
+
+| Variant |
+| --- |
+| <code>sha256</code> |
+| <code>sha384</code> |
+| <code>sha512</code> |
+
+## digest_len_of
+
+```otr
+fn digest_len_of(h: Hash) usize
+```
+
+The length in bytes of `h`'s digests.
+
+## Hasher
+
+```otr
+fn Hasher(comptime h: Hash) type
+```
+
+The hasher type of `h`, known at compile time.
+
+## Digest
+
+```otr
+const Digest = struct
+```
+
+A digest of up to 64 bytes, for a hash chosen at run time; `bytes()` is the part
+`digest_len_of(h)` long.
+
+| Field | Type |
+| --- | --- |
+| <code>buf</code> | <code>[64]u8</code> |
+| <code>len</code> | <code>usize</code> |
+
+### Digest.bytes
+
+```otr
+fn bytes(self: &Digest) []u8
+```
+
+## widen
+
+```otr
+fn widen(comptime n: usize, d: [n]u8) Digest
+```
+
+The `n`-byte digest `d` as a `Digest`, for code that picks the hash at run time.
+
+## digest
+
+```otr
+fn digest(h: Hash, msg: []u8) Digest
+```
+
+The digest of `msg` under `h`.
+
+## digest_parts
+
+```otr
+fn digest_parts(h: Hash, parts: [][]u8) Digest
+```
+
+The digest under `h` of the concatenation of `parts`.
+
+## Sha512Of
+
+```otr
+fn Sha512Of(comptime iv: [8]u64, comptime out_len: usize) type
+```
+
+The SHA-512 hasher started from `iv` whose digest is the first `out_len` bytes of the
+state.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>s</code> | <code>[8]u64</code> | Read-only |  |
+| <code>total_len</code> | <code>u64</code> | Read-only | Bytes so far. FIPS 180-4 counts bits in 128 bits; 2^64 bytes is past any input. |
+| <code>buf</code> | <code>[128]u8</code> | Read-only |  |
+| <code>buf_len</code> | <code>usize</code> | Read-only |  |
+
+### Sha512Of.init
+
+```otr
+fn init() Self
+```
+
+### Sha512Of.update
+
+```otr
+fn update(self: &mut Self, input: []u8) void
+```
+
+### Sha512Of.final
+
+```otr
+fn final(self: &Self) [out_len]u8
+```
+
+### Sha512Of.hash
+
+```otr
+fn hash(input: []u8) [out_len]u8
+```
+
+Compresses the whole blocks straight from `input` and pads its tail, with no
+copy through the buffer `update` keeps.
+
+| Name | Definition |
+| --- | --- |
+| <code>Sha512Of.digest_len</code> | <code>out_len</code> |
+| <code>Sha512Of.block_len</code> | <code>128</code> |

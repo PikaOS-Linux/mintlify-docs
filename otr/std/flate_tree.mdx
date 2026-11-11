@@ -1,0 +1,71 @@
+---
+title: "std.flate_tree"
+sidebarTitle: "flate_tree"
+description: "Bounded canonical encoder trees and code-length RLE."
+---
+
+Bounded canonical encoder trees and code-length RLE. Overlong trees redistribute
+leaf counts within the length limit while preserving a complete prefix code.
+
+```otr
+import std.flate_tree
+```
+
+## Tree
+
+```otr
+const Tree = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>lengths</code> | <code>[288]u8</code> |
+| <code>codes</code> | <code>[288]u16</code> |
+
+### Tree.canonical
+
+```otr
+fn canonical(self: &mut Tree) void
+```
+
+### Tree.build
+
+```otr
+fn build(self: &mut Tree, freq: []u32, limit: usize) void
+```
+
+## Run
+
+```otr
+const Run = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>symbol</code> | <code>u8</code> |
+| <code>extra</code> | <code>u8</code> |
+| <code>bits</code> | <code>u8</code> |
+
+## Plan
+
+```otr
+const Plan = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>lit</code> | <code>Tree = .&#123;&#125;</code> |
+| <code>dist</code> | <code>Tree = .&#123;&#125;</code> |
+| <code>clen</code> | <code>Tree = .&#123;&#125;</code> |
+| <code>runs</code> | <code>[640]Run</code> |
+| <code>run_count</code> | <code>usize = 0</code> |
+| <code>nlit</code> | <code>usize = 286</code> |
+| <code>ndist</code> | <code>usize = 30</code> |
+| <code>nclen</code> | <code>usize = 19</code> |
+| <code>header_bits</code> | <code>usize = 0</code> |
+
+### Plan.build
+
+```otr
+fn build(self: &mut Plan, lit_freq: []u32, dist_freq: []u32) void
+```

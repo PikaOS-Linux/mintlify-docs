@@ -1,0 +1,380 @@
+---
+title: "std.datetime"
+sidebarTitle: "datetime"
+description: "Civil dates and times in the proleptic Gregorian calendar, and strftime/strptime formatting and parsing of them into caller buffers, without allocating."
+---
+
+Civil dates and times in the proleptic Gregorian calendar, and `strftime`/`strptime`
+formatting and parsing of them into caller buffers, without allocating. A `DateTime`
+is one instant seen at one UTC offset; `std.tz` finds the offset a time zone has at
+an instant. The day arithmetic is Neri and Schneider's (2021): no branches, no tables,
+a few multiplications.
+
+```otr
+import std.datetime
+```
+
+## Example
+
+```otr
+import std
+import std.datetime
+
+pub fn main() !void {
+    // A fixed instant, seen first at UTC and then at UTC+1.
+    utc := datetime.DateTime.from_unix(1790000000, datetime.Offset.utc())
+    std.io.printf("{}\n", .{ utc })
+    std.io.printf("{} {} {}, {}:{d:0>2}\n", .{ datetime.weekday_name(utc.weekday), utc.day, datetime.month_name(utc.month), utc.hour, utc.minute })
+
+    cet := utc.to_offset(datetime.Offset.fixed(3600, "CET"))
+    std.io.printf("{} (same instant: {})\n", .{ cet, cet.unix() == utc.unix() })
+
+    var buf: [64]u8 = unsafe { undefined }
+    if cet.strftime(&mut buf, "%A %d %B %Y, %H:%M %Z (week %V)") |text| {
+        std.io.println(text)
+    }
+
+    parsed := try datetime.strptime("2026-02-28 23:30:00 +0100", "%Y-%m-%d %H:%M:%S %z")
+    std.io.printf("parsed {} = {} unix\n", .{ parsed, parsed.unix() })
+
+    built := try datetime.DateTime.civil(2024, 2, 29, 12, 0, 0, datetime.Offset.utc())
+    std.io.printf("leap day {}, day {} of the year\n", .{ built, built.yday })
+    if datetime.DateTime.civil(2026, 2, 30, 0, 0, 0, datetime.Offset.utc()) |_| {} else |e| {
+        std.io.printf("February 30: {}\n", .{ e })
+    }
+
+    // Plain calendar arithmetic works in days since 1970-01-01.
+    days := datetime.days_from_civil(2026, 12, 25) - datetime.days_from_civil(2026, 11, 11)
+    week := datetime.iso_week(2027, 1, 1)
+    std.io.printf("{} days apart, 2028 leap: {}, February 2026 has {} days\n", .{ days, datetime.is_leap_year(2028), datetime.days_in_month(2026, 2) })
+    std.io.printf("2027-01-01 is in ISO week {} of {}\n", .{ week.week, week.year })
+}
+```
+
+```text
+2026-09-21T14:13:20Z
+Monday 21 September, 14:13
+2026-09-21T15:13:20+01:00 (same instant: true)
+Monday 21 September 2026, 15:13 CET (week 39)
+parsed 2026-02-28T23:30:00+01:00 = 1772317800 unix
+leap day 2024-02-29T12:00:00Z, day 60 of the year
+February 30: error.OutOfRange
+44 days apart, 2028 leap: true, February 2026 has 28 days
+2027-01-01 is in ISO week 53 of 2026
+```
+
+## unix_min
+
+```otr
+const unix_min: i64 = -67768100567971200
+```
+
+The first second of -2147483648-01-01 and the last of 2147483647-12-31, in seconds
+since 1970-01-01 UTC: the wall-clock instants a `DateTime` can hold.
+
+## Date
+
+```otr
+const Date = struct
+```
+
+A day of the calendar.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>year</code> | <code>i32</code> |  |
+| <code>month</code> | <code>u8</code> | 1 to 12. |
+| <code>day</code> | <code>u8</code> | 1 to the length of the month. |
+
+## days_from_civil
+
+```otr
+fn days_from_civil(year: i32, month: u8, day: u8) i64
+```
+
+The days from 1970-01-01 to a valid date, negative before it.
+
+## civil_from_days
+
+```otr
+fn civil_from_days(days: i64) Date
+```
+
+The date `days` after 1970-01-01, for days whose year fits an `i32`.
+
+## is_leap_year
+
+```otr
+fn is_leap_year(year: i32) bool
+```
+
+## days_in_month
+
+```otr
+fn days_in_month(year: i32, month: u8) u8
+```
+
+The days in `month` (1 to 12) of `year`.
+
+## weekday_from_days
+
+```otr
+fn weekday_from_days(days: i64) u8
+```
+
+The weekday of the day `days` after 1970-01-01, with 0 for Sunday.
+
+## day_of_year
+
+```otr
+fn day_of_year(year: i32, month: u8, day: u8) u16
+```
+
+The day of the year of a valid date, 1 to 366.
+
+## IsoWeek
+
+```otr
+const IsoWeek = struct
+```
+
+An ISO 8601 week: weeks start on Monday, and week 1 is the one holding the year's
+first Thursday, so the first and last days of a year may belong to a neighbour's week.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>year</code> | <code>i32</code> |  |
+| <code>week</code> | <code>u8</code> | 1 to 53. |
+
+## iso_week
+
+```otr
+fn iso_week(year: i32, month: u8, day: u8) IsoWeek
+```
+
+The ISO 8601 week of a valid date.
+
+## Abbrev
+
+```otr
+const Abbrev = struct
+```
+
+A time zone abbreviation such as `BST` or `+0530`, held inline; at most 15 bytes.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>bytes</code> | <code>[16]u8</code> | Read-only | The bytes, then the length in the last byte. |
+
+### Abbrev.from
+
+```otr
+fn from(s: str) Abbrev
+```
+
+The first `capacity` bytes of `s`.
+
+### Abbrev.len
+
+```otr
+fn len(self: &Abbrev) usize
+```
+
+### Abbrev.as_str
+
+```otr
+fn as_str(self: &Abbrev) str
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>Abbrev.capacity</code> | <code>15</code> |
+
+## Offset
+
+```otr
+const Offset = struct
+```
+
+A UTC offset and what a time zone calls it.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>seconds</code> | <code>i32</code> | Seconds east of UTC: 3600 for UTC+1. |
+| <code>is_dst</code> | <code>bool</code> | Whether the zone is on daylight saving (summer) time. |
+| <code>abbrev</code> | <code>Abbrev</code> |  |
+
+### Offset.utc
+
+```otr
+fn utc() Offset
+```
+
+UTC itself.
+
+### Offset.fixed
+
+```otr
+fn fixed(seconds: i32, abbrev: str) Offset
+```
+
+A fixed offset with the abbreviation `abbrev`, which may be empty.
+
+## Error
+
+```otr
+const Error = error { OutOfRange }
+```
+
+## DateTime
+
+```otr
+const DateTime = struct
+```
+
+One instant on the wall clock of one UTC offset. Its fields can be read from anywhere
+but are set only here, so the weekday and day of the year always match the date.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>year</code> | <code>i32</code> | Read-only |  |
+| <code>month</code> | <code>u8</code> | Read-only | 1 to 12. |
+| <code>day</code> | <code>u8</code> | Read-only | 1 to 31. |
+| <code>hour</code> | <code>u8</code> | Read-only |  |
+| <code>minute</code> | <code>u8</code> | Read-only |  |
+| <code>second</code> | <code>u8</code> | Read-only | 0 to 59; 60 only when parsed from a leap second. |
+| <code>weekday</code> | <code>u8</code> | Read-only | 0 is Sunday, as in `time.Local`. |
+| <code>yday</code> | <code>u16</code> | Read-only | The day of the year, 1 to 366. |
+| <code>nanosecond</code> | <code>u32</code> | Read-only |  |
+| <code>offset</code> | <code>Offset</code> | Read-only |  |
+
+### DateTime.from_unix
+
+```otr
+fn from_unix(seconds: i64, offset: Offset) DateTime
+```
+
+`seconds` since 1970-01-01 UTC on the wall clock of `offset`, for instants whose
+year fits an `i32` there: `seconds + offset.seconds` from `unix_min` to `unix_max`.
+
+### DateTime.from_unix_ns
+
+```otr
+fn from_unix_ns(ns: i64, offset: Offset) DateTime
+```
+
+`ns` nanoseconds since 1970-01-01 UTC, on the wall clock of `offset`.
+
+### DateTime.civil
+
+```otr
+fn civil(year: i32, month: u8, day: u8, hour: u8, minute: u8, second: u8, offset: Offset) Error!DateTime
+```
+
+A date and time on the wall clock of `offset`; `OutOfRange` when a field is not
+valid for it (February 30, hour 24). `second` may be 60, a leap second.
+
+### DateTime.with_nanosecond
+
+```otr
+fn with_nanosecond(self: DateTime, nanosecond: u32) Error!DateTime
+```
+
+The same date and time with `nanosecond` (below 10^9) instead.
+
+### DateTime.to_offset
+
+```otr
+fn to_offset(self: DateTime, offset: Offset) DateTime
+```
+
+The same instant on the wall clock of `offset`, whose year must fit an `i32`, as
+`from_unix` requires.
+
+### DateTime.unix
+
+```otr
+fn unix(self: &DateTime) i64
+```
+
+Seconds since 1970-01-01 UTC.
+
+### DateTime.date
+
+```otr
+fn date(self: &DateTime) Date
+```
+
+### DateTime.iso_week
+
+```otr
+fn iso_week(self: &DateTime) IsoWeek
+```
+
+### DateTime.strftime
+
+```otr
+fn strftime(self: &DateTime, out: []mut u8, spec: str) ?str
+```
+
+The text `spec` describes, written to the start of `out`; null when it does not
+fit. Conversions follow glibc's `strftime` in the C locale: `%a %A %b %B %c %C %d
+%D %e %F %g %G %h %H %I %j %k %l %m %M %n %p %P %r %R %s %S %t %T %u %U %V %w %W %x
+%X %y %Y %z %Z %%`, with GNU's flags (`-` no padding, `_` spaces, `0` zeros, `^`
+upper case, `#` upper case names and lower case `%p`), a field width, and the
+ignored `E`/`O` modifiers. Two extensions: `%:z` (`+01:00`) and `%f`
+(microseconds, six digits). Any other conversion is copied as written.
+
+### DateTime.format
+
+```otr
+fn format(self: DateTime, w: anytype) void
+```
+
+RFC 3339 for `{}` in `printf`: `2026-10-18T09:05:00+01:00`, or `...Z` at UTC.
+
+## weekday_name
+
+```otr
+fn weekday_name(weekday: u8) []static u8
+```
+
+The English name of a weekday, 0 for Sunday.
+
+## month_name
+
+```otr
+fn month_name(month: u8) []static u8
+```
+
+The English name of a month, 1 to 12.
+
+## ParseError
+
+```otr
+const ParseError = error { Mismatch, OutOfRange, Trailing, Unsupported }
+```
+
+## strptime
+
+```otr
+fn strptime(text: str, spec: str) ParseError!DateTime
+```
+
+The date and time `text` gives in the layout `spec`, read as glibc's `strptime` reads
+it in the C locale. White space in `spec` matches any run of it, possibly empty;
+numbers may be preceded by spaces; names match in any case, in full or by their first
+three letters. Fields not given default to 1970-01-01 00:00:00 UTC. The offset comes
+from `%z` (`Z`, `+hh`, `+hhmm` or `+hh:mm`, and no other count of digits), with
+`%Z`'s name kept as its abbreviation, and `%s` gives the instant itself, which is
+`OutOfRange` when its year on that offset's wall clock does not fit an `i32`. `%f`
+reads up to nine digits of a fraction of a second. `%y` alone is 1969 to 2068, as POSIX has it; with `%C` it is the year in that
+century. `%j` sets the month and day when neither is given. Weekdays and week numbers
+(`%a %A %u %w %U %W %V %G %g`) are read and checked to be well formed but do not set
+the date. All of `text` must be used.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>unix_max</code> | <code>67767976233532799</code> |

@@ -1,0 +1,153 @@
+---
+title: "std.math"
+sidebarTitle: "math"
+description: "Floating-point functions and constants."
+---
+
+Floating-point functions and constants. The f64 operations retain their C bindings.
+
+```otr
+import std.math
+```
+
+## Example
+
+```otr
+import std
+import std.math
+
+pub fn main() void {
+    std.io.printf("pi {d:.5}, e {d:.5}\n", .{ math.pi, math.e })
+    std.io.printf("sin(pi/2) {d:.3}, cos(pi) {d:.3}, tan(pi/4) {d:.3}\n", .{ math.sin(math.pi / 2.0), math.cos(math.pi), math.tan(math.pi / 4.0) })
+
+    // atan2 gives the angle of a point, here converted to degrees.
+    std.io.printf("angle of (1, 1): {d:.1} degrees\n", .{ math.atan2(1.0, 1.0) * 180.0 / math.pi })
+
+    std.io.printf("2^10 {d}, sqrt(2) {d:.4}, exp(1) {d:.4}, log(e) {d:.1}\n", .{ math.pow(2.0, 10.0), math.sqrt(2.0), math.exp(1.0), math.log(math.e) })
+
+    // round goes away from zero at a half; floor and ceil go down and up.
+    std.io.printf("floor {d}, ceil {d}, round {d}, round {d}\n", .{ math.floor(-2.5), math.ceil(-2.5), math.round(-2.5), math.round(2.4) })
+
+    // % is for integers; fmod is the float remainder.
+    std.io.printf("abs {d}, fmod {d}\n", .{ math.abs(-7.25), math.fmod(7.5, 2.0) })
+
+    hyp := math.sqrt(math.pow(3.0, 2.0) + math.pow(4.0, 2.0))
+    std.io.printf("hypotenuse of 3 and 4: {d}\n", .{ hyp })
+}
+```
+
+```text
+pi 3.14159, e 2.71828
+sin(pi/2) 1.000, cos(pi) -1.000, tan(pi/4) 1.000
+angle of (1, 1): 45.0 degrees
+2^10 1024, sqrt(2) 1.4142, exp(1) 2.7183, log(e) 1.0
+floor -3, ceil -2, round -3, round 2
+abs 7.25, fmod 1.5
+hypotenuse of 3 and 4: 5
+```
+
+## exp_f32
+
+```otr
+const exp_f32 = f32_impl.exp_f32
+```
+
+Native f32 value operations, rounded at f32 boundaries under default rounding.
+No errno, exception-flag, trapping or altered-rounding contract is specified.
+Exp preserves NaN bits; log preserves positive NaNs and computes negative-domain
+NaNs arithmetically. Pow canonicalizes NaN inputs after its zero/one identities;
+square-root special cases retain the source arithmetic's NaN behavior.
+
+## sin
+
+```otr
+fn sin(x: f64) f64
+```
+
+## cos
+
+```otr
+fn cos(x: f64) f64
+```
+
+## tan
+
+```otr
+fn tan(x: f64) f64
+```
+
+## atan2
+
+```otr
+fn atan2(y: f64, x: f64) f64
+```
+
+## exp
+
+```otr
+fn exp(x: f64) f64
+```
+
+## log
+
+```otr
+fn log(x: f64) f64
+```
+
+The natural logarithm.
+
+## pow
+
+```otr
+fn pow(x: f64, y: f64) f64
+```
+
+## floor
+
+```otr
+fn floor(x: f64) f64
+```
+
+## ceil
+
+```otr
+fn ceil(x: f64) f64
+```
+
+## round
+
+```otr
+fn round(x: f64) f64
+```
+
+Rounds halfway cases away from zero.
+
+## abs
+
+```otr
+fn abs(x: f64) f64
+```
+
+## fmod
+
+```otr
+fn fmod(x: f64, y: f64) f64
+```
+
+The remainder of `x / y` truncated toward zero, with the sign of `x`; `%` is for
+integers only.
+
+## sqrt
+
+```otr
+fn sqrt(x: f64) f64
+```
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>log_f32</code> | [<code>f32_impl.log_f32</code>](/otr/std/math/f32_impl#log_f32) |
+| <code>pow_f32</code> | [<code>f32_impl.pow_f32</code>](/otr/std/math/f32_impl#pow_f32) |
+| <code>pi</code> | <code>3.141592653589793</code> |
+| <code>e</code> | <code>2.718281828459045</code> |

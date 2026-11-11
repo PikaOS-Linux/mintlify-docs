@@ -1,0 +1,31 @@
+import std
+import std.http.url
+import std.list
+
+pub fn main() !void {
+    u := try url.Url.parse("https://user:secret@example.org:8443/search?q=otter#top")
+    std.io.printf("secure {} host {} port {} target {}\n", .{ u.secure, u.host, u.port, u.target })
+    std.io.printf("userinfo {}\n", .{ u.userinfo })
+
+    // The port defaults to the scheme's.
+    plain := try url.Url.parse("http://example.org")
+    std.io.printf("port {} target [{}]\n", .{ plain.port, plain.target })
+
+    for bad in ([2]str{ "ftp://example.org/", "example.org/path" }) {
+        if url.Url.parse(bad) |_| {} else |e| {
+            std.io.printf("{}: {}\n", .{ bad, e })
+        }
+    }
+
+    // The request head as it goes on the wire.
+    var out = list.List(u8).init(std.mem.heap)
+    defer out.deinit()
+    head := url.Head{ method: "GET", always_length: false, via_proxy: false, headers: "Accept: text/html\r\n", credentials: false, decode: false, proxy_auth: "", body: "" }
+    try url.write_request(&mut out, &plain, &head)
+    std.io.print(out.items())
+
+    proxy := url.Proxy.init(std.mem.heap, "http://proxy.lan:3128", "", "localhost, .internal")
+    defer proxy.deinit()
+    std.io.printf("example.org via {}\n", .{ proxy.for_host("example.org", false) orelse "direct" })
+    std.io.printf("db.internal via {}\n", .{ proxy.for_host("db.internal", false) orelse "direct" })
+}

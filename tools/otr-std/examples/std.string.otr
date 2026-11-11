@@ -1,0 +1,34 @@
+import std
+import std.string
+
+pub fn main() !void {
+    var s = string.String.from(std.mem.heap, "otter")
+    defer s.deinit()
+
+    s.push_str(" shell")
+    s.push('!')
+    s.print(" v{d}.{d}", .{ 1, 4 })
+    std.io.printf("{} ({} bytes)\n", .{ s.as_str(), s.len() })
+
+    std.io.printf("starts with otter: {}, contains shell: {}\n", .{ s.starts_with("otter"), s.contains("shell") })
+    if s.find("shell") |at| {
+        std.io.printf("shell is at byte {}\n", .{ at })
+    }
+
+    replaced := s.replace("otter", "river")
+    s.insert(0, "the ")
+    std.io.printf("{} ({} replaced)\n", .{ s.as_str(), replaced })
+
+    var csv = string.String.from(std.mem.heap, "10,20,30")
+    defer csv.deinit()
+    var total: i64 = 0
+    var fields = csv.split(",")
+    for field in fields {
+        total += try std.fmt.parse_int(i64, field, 10)
+    }
+    std.io.printf("sum of {} is {}\n", .{ csv.as_str(), total })
+
+    label := string.String.from_fmt(std.mem.heap, "{s}-{d:03}", .{ "run", 7 })
+    defer label.deinit()
+    std.io.println(label.as_str())
+}

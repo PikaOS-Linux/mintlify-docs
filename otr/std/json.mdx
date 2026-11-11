@@ -1,0 +1,300 @@
+---
+title: "std.json"
+sidebarTitle: "json"
+description: "JSON (RFC 8259) read into a region, and written back out."
+---
+
+JSON (RFC 8259) read into a region, and written back out. `parse` gives a dynamic
+`Value`; `parse_as` reads a document straight into a type, walking it with
+`@type_info`, and `stringify` writes any such value back.
+
+```otr
+import std.json
+```
+
+## Example
+
+```otr
+import std
+import std.arena
+import std.json
+import std.list
+import std.string
+
+const Settings = struct {
+    pub theme: string.String
+    pub volumes: list.List(u8)
+    pub dnd: bool = false
+
+    pub fn deinit(self: Settings) void {
+        self.theme.deinit()
+        self.volumes.deinit()
+    }
+}
+
+pub fn main() !void {
+    // Typed: the document is read straight into the struct's pub fields.
+    cfg := try json.parse_owned(Settings, "{\"theme\": \"nord\", \"volumes\": [10, 20]}", .{})
+    defer cfg.deinit()
+    std.io.printf("{} {} {}\n", .{ cfg.theme.as_str(), cfg.volumes.len, cfg.dnd })
+
+    var out = string.String.init(std.mem.heap)
+    defer out.deinit()
+    json.stringify(&mut out, &cfg, .{ whitespace: .indent_2 })
+    std.io.println(out.as_str())
+
+    // Dynamic: a Value tree that lives in a region and is freed with it.
+    region r = arena.Arena.init(std.mem.heap)
+    defer r.deinit()
+    doc := try json.parse(r, "{\"server\": {\"host\": \"localhost\", \"port\": 8080}}")
+    server := json.get(r, doc, "server") orelse return error.MissingServer
+    if json.get(r, server, "port") |port| {
+        switch port {
+            .number |n| => std.io.printf("port {d}\n", .{ n })
+            else => {}
+        }
+    }
+
+    if json.parse(r, "[1, 2,]") |_| {} else |e| {
+        std.io.printf("[1, 2,] is {}\n", .{ e })
+    }
+}
+```
+
+```text
+nord 2 false
+{
+  "theme": "nord",
+  "volumes": [
+    10,
+    20
+  ],
+  "dnd": false
+}
+port 8080
+[1, 2,] is error.Syntax
+```
+
+## Error
+
+```otr
+const Error = error { Syntax, TooDeep }
+```
+
+## Value
+
+```otr
+fn Value(comptime r: region) type
+```
+
+A JSON document lives in region `r`, which frees it all at once. Every number is an
+`f64`, exact for integers up to 2^53; larger ones, such as nanosecond timestamps, are read
+exactly with `parse_as` into an integer field.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| <code>nil</code> |  |  |
+| <code>boolean</code> | <code>bool</code> |  |
+| <code>number</code> | <code>f64</code> |  |
+| <code>string</code> | <code>[]r u8</code> |  |
+| <code>array</code> | <code>&amp;r arena.RList(r, Value(r))</code> |  |
+| <code>object</code> | <code>&amp;r arena.RList(r, Member(r))</code> | Members in document order; a repeated key keeps every occurrence. |
+
+## Member
+
+```otr
+fn Member(comptime r: region) type
+```
+
+| Field | Type |
+| --- | --- |
+| <code>key</code> | <code>[]r u8</code> |
+| <code>value</code> | <code>Value(r)</code> |
+
+## ExactValue
+
+```otr
+fn ExactValue(comptime r: region) type
+```
+
+A JSON document as `parse_exact` reads it, which keeps a number's kind as Zig's
+`std.json.Value` does: `integer` for a token with no fraction or exponent that fits an
+`i64`, `number_string` for a longer one, as written, and `float` otherwise.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| <code>nil</code> |  |  |
+| <code>boolean</code> | <code>bool</code> |  |
+| <code>integer</code> | <code>i64</code> |  |
+| <code>float</code> | <code>f64</code> |  |
+| <code>number_string</code> | <code>[]r u8</code> |  |
+| <code>string</code> | <code>[]r u8</code> |  |
+| <code>array</code> | <code>&amp;r arena.RList(r, ExactValue(r))</code> |  |
+| <code>object</code> | <code>&amp;r arena.RList(r, ExactMember(r))</code> | Members in document order; a repeated key keeps every occurrence. |
+
+## ExactMember
+
+```otr
+fn ExactMember(comptime r: region) type
+```
+
+| Field | Type |
+| --- | --- |
+| <code>key</code> | <code>[]r u8</code> |
+| <code>value</code> | <code>ExactValue(r)</code> |
+
+## parse
+
+```otr
+fn parse(r: region, text: str) Error!Value(r)
+```
+
+The document in `text`, which must hold exactly one value.
+
+## parse_exact
+
+```otr
+fn parse_exact(r: region, text: str) Error!ExactValue(r)
+```
+
+`parse`, keeping each number's kind (`ExactValue`): `1` and `1.0` differ, and integers
+past 2^53 keep every digit.
+
+## get
+
+```otr
+fn get(comptime r: region, v: anytype, key: str) ?@type_of(v)
+```
+
+The value of the first member named `key`, if `v` is an object that has one; `v` is a
+`Value(r)` or an `ExactValue(r)`.
+
+## write
+
+```otr
+fn write(comptime r: region, w: anytype, v: Value(r)) void
+```
+
+Writes `v` as compact JSON. Numbers that are whole and small print without a fraction;
+infinities and NaN, which JSON cannot express, print as `null`.
+
+## ParseError
+
+```otr
+const ParseError = error
+```
+
+Why `parse_as` rejected a document: its text is not JSON (`Syntax`, `TooDeep`), or it
+does not fit the type asked for.
+
+| Variant | Description |
+| --- | --- |
+| <code>Syntax</code> |  |
+| <code>TooDeep</code> |  |
+| <code>UnexpectedType</code> | The value is of another JSON kind than the type wants (a string for a number, …). |
+| <code>UnknownField</code> |  |
+| <code>MissingField</code> |  |
+| <code>DuplicateField</code> |  |
+| <code>InvalidNumber</code> | A number does not fit the integer type, or is not integral. |
+| <code>UnknownTag</code> | A string names no tag of the enum, or an object no variant of the union. |
+| <code>LengthMismatch</code> | An array has another length than the `[N]T` it is read into. |
+
+## UnknownFields
+
+```otr
+const UnknownFields = enum
+```
+
+What a struct does with a member none of its fields is named after.
+
+| Variant |
+| --- |
+| <code>reject</code> |
+| <code>ignore</code> |
+
+## ParseOptions
+
+```otr
+const ParseOptions = struct
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>unknown_fields</code> | <code>UnknownFields = .reject</code> |  |
+| <code>alloc</code> | <code>mem.Allocator = mem.heap</code> | Where `String` and `List` values allocate. |
+
+## parse_as
+
+```otr
+fn parse_as(comptime T: type, r: region, text: str, opts: ParseOptions) ParseError!T
+```
+
+The document in `text` as a `T`, which must hold exactly one value. Types map as:
+
+- `bool`, integers (up to 64 bits; `1e2` and `1.0` are read exactly as integral values,
+  as Zig's decoder reads them, while a fraction left over or a value out of range is
+  `InvalidNumber`) and floats (correctly rounded);
+- `?T`: `null` or a `T`;
+- strings: `[]r u8`, unescaped into the region, or `string.String`, owned and allocated
+  from `opts.alloc`;
+- arrays: `[]r T` in the region, `list.List(T)` owned, or `[N]T` of exactly N copyable
+  elements;
+- enums: the tag's name as a string;
+- unions: an object with one member, the variant's name, whose value is the payload
+  (`{}` for a variant without one);
+- structs: an object whose members name `pub` fields. A missing field takes its
+  default, or null when it is optional, and is `MissingField` otherwise; a repeated
+  member is `DuplicateField`; an unknown one follows `opts.unknown_fields`;
+- `Value(r)`: any JSON value, as `parse` gives it.
+
+Nothing in the result points into `text`. On an error, whatever was owned so far is
+freed.
+
+## parse_owned
+
+```otr
+fn parse_owned(comptime T: type, text: str, opts: ParseOptions) ParseError!T
+```
+
+`parse_as` for a `T` that owns everything it holds (`String`, `List`, numbers, …),
+so that no region is needed; scratch space is taken from `opts.alloc` and freed.
+
+## Whitespace
+
+```otr
+const Whitespace = enum
+```
+
+Layout of `stringify`'s output: everything on one line, or one member or element per
+line, indented by two or four spaces or a tab per level.
+
+| Variant |
+| --- |
+| <code>minified</code> |
+| <code>indent_2</code> |
+| <code>indent_4</code> |
+| <code>indent_tab</code> |
+
+## StringifyOptions
+
+```otr
+const StringifyOptions = struct
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>whitespace</code> | <code>Whitespace = .minified</code> |  |
+| <code>emit_null_fields</code> | <code>bool = true</code> | Whether a struct field holding null is written as `null` or left out. |
+
+## stringify
+
+```otr
+fn stringify(w: anytype, v: anytype, opts: StringifyOptions) void
+```
+
+Writes `*v`, a reference to any value `parse_as` reads, as JSON to `w` (anything with
+`write_all`, such as `string.String`). Every field of a struct is written, in
+declaration order. Floats print in their shortest exact form, and infinities and NaN,
+which JSON cannot express, as `null`. A byte slice or `String` is written as a string;
+it is meant to hold UTF-8, and its bytes are written as they are, with `"`, `\` and
+control characters escaped.

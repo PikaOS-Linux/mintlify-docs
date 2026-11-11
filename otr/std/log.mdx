@@ -1,0 +1,93 @@
+---
+title: "std.log"
+sidebarTitle: "log"
+description: "Messages for whoever runs the program, on standard error, each marked with its level."
+---
+
+Messages for whoever runs the program, on standard error, each marked with its level.
+
+```otr
+import std.log
+```
+
+## Example
+
+```otr
+import std
+import std.log
+
+const net = log.Scoped("net")
+
+pub fn main() void {
+    // Log lines go to standard error, so standard output stays free for the program's data.
+    log.info("starting, {} workers", .{ 4 })
+    log.debug("config read from {}", .{ "/etc/app.conf" })
+
+    net.info("connected to {}", .{ "example.org" })
+    net.warn("retrying in {} ms", .{ 250 })
+    net.err("gave up after {} attempts", .{ 3 })
+
+    std.io.println("result: 42")
+}
+```
+
+```text
+result: 42
+```
+
+## debug
+
+```otr
+fn debug(comptime fmt: []static u8, args: anytype) void
+```
+
+## info
+
+```otr
+fn info(comptime fmt: []static u8, args: anytype) void
+```
+
+## warn
+
+```otr
+fn warn(comptime fmt: []static u8, args: anytype) void
+```
+
+## err
+
+```otr
+fn err(comptime fmt: []static u8, args: anytype) void
+```
+
+## Scoped
+
+```otr
+fn Scoped(comptime scope: []static u8) type
+```
+
+Logging functions that mark each message with `scope` as well, as in `info(net): ...`:
+`const log = std.log.Scoped("net")`.
+
+### Scoped.debug
+
+```otr
+fn debug(comptime fmt: []static u8, args: anytype) void
+```
+
+### Scoped.info
+
+```otr
+fn info(comptime fmt: []static u8, args: anytype) void
+```
+
+### Scoped.warn
+
+```otr
+fn warn(comptime fmt: []static u8, args: anytype) void
+```
+
+### Scoped.err
+
+```otr
+fn err(comptime fmt: []static u8, args: anytype) void
+```

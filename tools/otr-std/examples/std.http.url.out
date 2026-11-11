@@ -1,0 +1,13 @@
+secure true host example.org port 8443 target /search?q=otter
+userinfo user:secret
+port 80 target []
+ftp://example.org/: error.UnsupportedScheme
+example.org/path: error.InvalidUrl
+GET / HTTP/1.1
+Host: example.org
+Connection: close
+User-Agent: otr-std-http
+Accept: text/html
+
+example.org via http://proxy.lan:3128
+db.internal via direct

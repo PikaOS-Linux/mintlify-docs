@@ -1,0 +1,37 @@
+import std
+import std.net
+
+// Answers one connection with what it was sent, in upper case.
+fn shout_once(io: std.Io, listener: &net.Listener) net.Error!void {
+    conn := try listener.accept(io)
+    defer conn.deinit()
+    var buf: [64]u8
+    got := try conn.read(io, &out buf)
+    for mut b in got {
+        if b.* >= 'a' and b.* <= 'z' { b.* -= 32 }
+    }
+    try conn.write_all(io, got)
+}
+
+pub fn main(env: std.Env) !void {
+    io := env.io
+
+    // Port 0 asks the kernel for a free port; listener.port() tells which.
+    listener := try net.listen(io, .{ host: "127.0.0.1" })
+    defer listener.deinit()
+    server := io.async(fn[io, &listener]() net.Error!void { return shout_once(io, &listener) })
+    // If the client fails, cancelling ends the server's wait in accept.
+    defer server.cancel(io) catch {}
+
+    conn := try net.connect(io, "127.0.0.1", listener.port())
+    defer conn.deinit()
+    try conn.write_all(io, "hello over tcp")
+
+    var buf: [64]u8
+    reply := try conn.read(io, &out buf)
+    std.io.printf("reply: {}\n", .{ reply })
+
+    // The server closed its end, so the next read is empty.
+    rest := try conn.read(io, &out buf)
+    std.io.printf("after close: {} bytes\n", .{ rest.len })
+}

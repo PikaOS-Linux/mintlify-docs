@@ -1,0 +1,34 @@
+import std
+import std.pool
+
+const Window = struct {
+    title: []static u8
+    width: i64
+}
+
+pub fn main() void {
+    var windows = pool.Pool(Window).init(std.mem.heap)
+    defer windows.deinit()
+
+    // A handle is a small copyable value that can be stored anywhere.
+    term := windows.insert(.{ title: "term", width: 640 })
+    files := windows.insert(.{ title: "files", width: 800 })
+
+    if windows.get_mut(term) |w| {
+        w.width = 1024
+    }
+    _ = windows.update(files, fn(w: &mut Window) void { w.width += 100 })
+    std.io.printf("{} {}\n", .{ windows.at(term).title, windows.at(term).width })
+    std.io.printf("{} {}\n", .{ windows.at(files).title, windows.at(files).width })
+
+    if windows.remove(term) |gone| {
+        std.io.printf("closed {}\n", .{ gone.title })
+    }
+
+    // The slot is reused, but the old handle no longer matches its generation.
+    editor := windows.insert(.{ title: "editor", width: 900 })
+    std.io.printf("stale handle: {}\n", .{ windows.get(term) == null })
+    if windows.get(editor) |w| {
+        std.io.printf("new window: {}\n", .{ w.title })
+    }
+}

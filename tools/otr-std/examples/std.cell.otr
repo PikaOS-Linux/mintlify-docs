@@ -1,0 +1,30 @@
+import std
+import std.cell
+import std.list
+
+fn record(hits: &cell.Cell(i64), log: &cell.RefCell(list.List(i64)), n: i64) void {
+    // Both parameters are shared references, yet both values change.
+    hits.set(hits.get() + 1)
+    log.update(fn[n](xs: &mut list.List(i64)) void { xs.push(n) })
+}
+
+pub fn main() void {
+    // Cell copies a value in and out; it never lends a reference.
+    hits := cell.Cell(i64).init(0)
+
+    // RefCell lends any value to a callback and checks the borrow at run time.
+    log := cell.RefCell(list.List(i64)).init(list.List(i64).init(std.mem.heap))
+    defer log.deinit()
+
+    record(&hits, &log, 7)
+    record(&hits, &log, 35)
+
+    sum := log.read(fn(xs: &list.List(i64)) i64 {
+        var s: i64 = 0
+        for x in xs.items() {
+            s += x
+        }
+        return s
+    })
+    std.io.printf("hits {} sum {}\n", .{ hits.get(), sum })
+}

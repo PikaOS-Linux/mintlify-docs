@@ -1,0 +1,23 @@
+---
+title: "std.crypto"
+sidebarTitle: "crypto"
+description: "Building blocks for code that handles secrets."
+---
+
+Building blocks for code that handles secrets. `timing_safe_eql` compares in time that
+depends only on the length, for MACs and tokens; clearing a secret before freeing it is
+`mem.secure_zero`, which the optimiser keeps.
+
+```otr
+import std.crypto
+```
+
+## timing_safe_eql
+
+```otr
+fn timing_safe_eql(a: []u8, b: []u8) bool
+```
+
+Whether `a` and `b` hold the same bytes, reading every byte whatever they hold, so the
+time taken tells nothing about where they differ. The lengths are not secret: different
+lengths compare unequal at once.

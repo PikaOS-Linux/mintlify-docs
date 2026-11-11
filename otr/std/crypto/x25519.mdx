@@ -1,0 +1,96 @@
+---
+title: "std.crypto.x25519"
+sidebarTitle: "crypto.x25519"
+description: "X25519 (RFC 7748)."
+---
+
+X25519 (RFC 7748): Diffie-Hellman over Curve25519, as TLS 1.3, WireGuard and Noise use.
+The field arithmetic is `field25519`'s, which `ed25519` shares. The ladder runs the same
+operations whatever the scalar holds: its bits only choose, through masks, which values
+are swapped, so neither the time taken nor the memory touched depends on the secret.
+
+```otr
+import std.crypto.x25519
+```
+
+## Example
+
+```otr
+import std
+import std.crypto.x25519
+
+pub fn main() !void {
+    // Fixed bytes keep the output the same on every run; real secrets are 32 random
+    // bytes each side keeps to itself.
+    alice_secret := std.mem.array(32, u8, fn(i: usize) u8 { return @int_cast(u8, i + 1) })
+    bob_secret := std.mem.array(32, u8, fn(i: usize) u8 { return @int_cast(u8, 200 - i) })
+
+    // Each side sends only its public key.
+    alice_public := x25519.public_key(&alice_secret)
+    bob_public := x25519.public_key(&bob_secret)
+
+    // Each combines its own secret with the other's public key.
+    alice_shared := try x25519.scalarmult(&alice_secret, &bob_public)
+    bob_shared := try x25519.scalarmult(&bob_secret, &alice_public)
+    std.io.printf("both sides agree: {}\n", .{ std.mem.eql(u8, alice_shared[0..], bob_shared[0..]) })
+    std.io.printf("shared secret is {} bytes\n", .{ alice_shared.len })
+
+    // A hostile public key of small order would force a known secret; it is refused.
+    zero := std.mem.splat(32, u8, 0)
+    if x25519.scalarmult(&alice_secret, &zero) |_| {} else |err| {
+        std.io.printf("all-zero public key: {}\n", .{ err })
+    }
+}
+```
+
+```text
+both sides agree: true
+shared secret is 32 bytes
+all-zero public key: error.IdentityElement
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>IdentityElement</code> | The shared secret came out as zero: the peer's public key has small order, so the result depends on nothing secret. RFC 7748 §6.1 lets a protocol reject it, and TLS 1.3 (RFC 8446 §7.4.2) and Noise do. |
+
+## key_len
+
+```otr
+const key_len: usize = 32
+```
+
+Bytes in a secret key, a public key and a shared secret.
+
+## base_point
+
+```otr
+const base_point = [32]u8{ 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+```
+
+The u-coordinate 9, whose multiples are the public keys.
+
+## scalarmult
+
+```otr
+fn scalarmult(secret: &[32]u8, public: &[32]u8) Error! [32]u8
+```
+
+The shared secret of `secret`, 32 random bytes, and a peer's `public` key. The scalar is
+clamped and the top bit of `public` ignored, as RFC 7748 §5 says, so any 32 bytes are
+accepted; a peer whose key has small order gives `IdentityElement`.
+
+## public_key
+
+```otr
+fn public_key(secret: &[32]u8) [32]u8
+```
+
+The public key of `secret`. A clamped scalar is 2^254 plus a multiple of 8 below 2^255,
+and no multiple of the base point's order (8L > 2^255) lies there, so unlike
+`scalarmult` this cannot give the identity.

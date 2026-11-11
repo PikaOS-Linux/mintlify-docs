@@ -1,0 +1,141 @@
+---
+title: "std.crypto.aes_gcm"
+sidebarTitle: "crypto.aes_gcm"
+description: "AES-128-GCM and AES-256-GCM (NIST SP 800-38D) with 12-byte nonces and 16-byte tags, the AEADs of TLS 1.3 and QUIC."
+---
+
+AES-128-GCM and AES-256-GCM (NIST SP 800-38D) with 12-byte nonces and 16-byte tags, the
+AEADs of TLS 1.3 and QUIC. `init` expands the key once; `seal` and `open` then work in
+place on a record, and `encrypt` and `decrypt` copy first. `open` checks the tag before
+it decrypts anything, so a forged message never leaves plaintext behind. A nonce must
+never repeat under one key.
+
+The cipher and CTR mode are `aes.Cipher`'s. With AES-NI and PCLMULQDQ the work runs in
+runtime kernels (otr has no operations for those instructions): CTR mode eight blocks at
+a time and GHASH folding eight blocks per reduction, and with VAES and VPCLMULQDQ sixteen
+and thirty-two, a long message being encrypted and hashed in one pass. Elsewhere the
+cipher is bitsliced and
+GHASH multiplies with integer multiplies that keep carries out of the bits used
+(BearSSL's `ghash_ctmul64`); neither uses tables, so no load address depends on the key
+or the data.
+
+```otr
+import std.crypto.aes_gcm
+```
+
+## Example
+
+```otr
+import std
+import std.crypto.aes_gcm
+
+pub fn main() !void {
+    // Fixed bytes keep the output the same on every run; a real key is 32 random
+    // bytes, and a nonce must never repeat under one key.
+    key := std.mem.array(32, u8, fn(i: usize) u8 { return @int_cast(u8, i) })
+    nonce := std.mem.array(12, u8, fn(i: usize) u8 { return @int_cast(u8, i * 3) })
+    aead := aes_gcm.Aes256Gcm.init(&key)
+
+    // The header is sent in clear but covered by the tag, so it cannot be changed.
+    header := "message 1"
+    message := "meet at the river"
+    var sealed: [17]u8 = std.mem.splat(17, u8, 0)
+    tag := aead.encrypt(&mut sealed[0..], message, header, &nonce)
+    std.io.printf("AES-256-GCM: {} bytes of ciphertext, {} byte tag\n", .{ sealed.len, tag.len })
+    std.io.printf("ciphertext differs from the message: {}\n", .{ !std.mem.eql(u8, sealed[0..], message) })
+
+    var opened: [17]u8 = std.mem.splat(17, u8, 0)
+    try aead.decrypt(&mut opened[0..], sealed[0..], &tag, header, &nonce)
+    std.io.printf("decrypted: {}\n", .{ opened[0..] })
+
+    // One flipped bit anywhere fails the tag check, and no plaintext is released.
+    sealed[0] ^= 1
+    if aead.decrypt(&mut opened[0..], sealed[0..], &tag, header, &nonce) |_| {} else |err| {
+        std.io.printf("tampered: {}\n", .{ err })
+    }
+}
+```
+
+```text
+AES-256-GCM: 17 bytes of ciphertext, 16 byte tag
+ciphertext differs from the message: true
+decrypted: meet at the river
+tampered: error.AuthenticationFailed
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>AuthenticationFailed</code> | The tag does not match: the ciphertext, the associated data, the nonce or the key differ from what sealed it. |
+
+## AesGcm
+
+```otr
+fn AesGcm(comptime key_bytes: usize) type
+```
+
+GCM over AES with a `key_bytes`-byte key, 16 or 32.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>cipher</code> | <code>aes.Cipher(key_bytes, soft)</code> | Read-only |  |
+| <code>h</code> | <code>[16]u8</code> | Read-only | The hash key H = AES(0), for the portable GHASH. |
+| <code>table</code> | <code>[128]u8</code> | Read-only | H^1 to H^8 in the layout of the runtime's GHASH kernel, when `hw`. |
+
+### AesGcm.init
+
+```otr
+fn init(key: &[key_bytes]u8) Self
+```
+
+### AesGcm.seal
+
+```otr
+fn seal(self: &Self, buf: []mut u8, ad: []u8, nonce: &[12]u8) [16]u8
+```
+
+Encrypts `buf` in place and returns the tag over it and the associated data `ad`.
+
+### AesGcm.open
+
+```otr
+fn open(self: &Self, buf: []mut u8, tag: &[16]u8, ad: []u8, nonce: &[12]u8) Error!void
+```
+
+Checks `tag` over the ciphertext `buf` and `ad`, then decrypts `buf` in place. On
+`AuthenticationFailed` `buf` is left as it was.
+
+### AesGcm.encrypt
+
+```otr
+fn encrypt(self: &Self, out: []mut u8, msg: []u8, ad: []u8, nonce: &[12]u8) [16]u8
+```
+
+`msg` encrypted into `out`, which has its length; returns the tag.
+
+### AesGcm.decrypt
+
+```otr
+fn decrypt(self: &Self, out: []mut u8, ct: []u8, tag: &[16]u8, ad: []u8, nonce: &[12]u8) Error!void
+```
+
+`ct` decrypted into `out`, which has its length. On `AuthenticationFailed` `out` is
+zeroed.
+
+| Name | Definition |
+| --- | --- |
+| <code>AesGcm.key_len</code> | <code>key_bytes</code> |
+| <code>AesGcm.nonce_len</code> | <code>12</code> |
+| <code>AesGcm.tag_len</code> | <code>16</code> |
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>Aes128Gcm</code> | <code>AesGcm(16)</code> |
+| <code>Aes256Gcm</code> | <code>AesGcm(32)</code> |

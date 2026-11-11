@@ -1,0 +1,311 @@
+---
+title: "std.tls.wire"
+sidebarTitle: "tls.wire"
+description: "The byte formats of std.tls."
+---
+
+The byte formats of `std.tls`: a bounds-checked reader over a received message, writers
+for the length-prefixed vectors TLS nests everything in, and the numbers the protocol
+gives versions, suites, groups, signature schemes, extensions and alerts. Readers return
+`error.DecodeError` for anything short or overlong, so a parser written with them cannot
+read past what the peer sent.
+
+```otr
+import std.tls.wire
+```
+
+## DecodeError
+
+```otr
+const DecodeError = error { DecodeError }
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+What can go wrong in `std.tls`.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| <code>DecodeError</code> |  | A record or handshake message the peer sent is malformed. |
+| <code>UnexpectedMessage</code> |  | The peer sent a message the protocol does not allow at this point. |
+| <code>RecordOverflow</code> |  | A record longer than the protocol allows. |
+| <code>BadRecordMac</code> |  | A record failed authentication: it was altered, or keys disagree. |
+| <code>IllegalParameter</code> |  | The server chose something the client did not offer, or a value the protocol forbids. |
+| <code>UnsupportedExtension</code> |  | The server sent an extension the client did not offer. |
+| <code>NoApplicationProtocol</code> |  | The server picked an application protocol the client did not offer. |
+| <code>HandshakeFailure</code> |  | The server refused renegotiation protection (a non-empty renegotiation_info). |
+| <code>ProtocolVersion</code> |  | The server speaks no version the client accepts, or the downgrade guard of RFC 8446 §4.1.3 fired. |
+| <code>DecryptError</code> |  | The server's handshake signature or Finished MAC is wrong. |
+| <code>AlertReceived</code> |  | The server sent a fatal alert; `Client.alert` holds its code. |
+| <code>Closed</code> |  | The connection has failed or closed, or this end has closed it. |
+| <code>MessageTooLong</code> |  | More application data than `seal`'s buffer or one record holds. |
+| <code>InvalidHost</code> |  | The host name is empty or longer than DNS allows. |
+| <code>NoEntropy</code> |  | The kernel's random source failed. |
+| <code>b</code> | <code>[]u8</code> |  |
+| <code>pos</code> | <code>usize</code> |  |
+
+## Reader
+
+```otr
+const Reader = ref struct
+```
+
+A received message being read front to back.
+
+| Field | Type |
+| --- | --- |
+| <code>b</code> | <code>[]u8</code> |
+| <code>pos</code> | <code>usize</code> |
+
+### Reader.init
+
+```otr
+fn init(b: []u8) Reader
+```
+
+### Reader.done
+
+```otr
+fn done(self: &Reader) bool
+```
+
+### Reader.finish
+
+```otr
+fn finish(self: &Reader) DecodeError!void
+```
+
+Fails unless every byte has been read.
+
+### Reader.bytes
+
+```otr
+fn bytes(self: &mut Reader, n: usize) DecodeError! []u8
+```
+
+### Reader.int8
+
+```otr
+fn int8(self: &mut Reader) DecodeError!u8
+```
+
+### Reader.int16
+
+```otr
+fn int16(self: &mut Reader) DecodeError!u16
+```
+
+### Reader.int24
+
+```otr
+fn int24(self: &mut Reader) DecodeError!u32
+```
+
+### Reader.vec8
+
+```otr
+fn vec8(self: &mut Reader) DecodeError! []u8
+```
+
+A vector with a one-, two- or three-byte length.
+
+### Reader.vec16
+
+```otr
+fn vec16(self: &mut Reader) DecodeError! []u8
+```
+
+### Reader.vec24
+
+```otr
+fn vec24(self: &mut Reader) DecodeError! []u8
+```
+
+## put16
+
+```otr
+fn put16(l: &mut list.List(u8), v: u16) void
+```
+
+## open
+
+```otr
+fn open(l: &mut list.List(u8), comptime width: usize) usize
+```
+
+Starts a vector whose `width`-byte length `close` fills in once its contents are
+written; returns where the length goes.
+
+## close
+
+```otr
+fn close(l: &mut list.List(u8), at: usize, comptime width: usize) void
+```
+
+## content
+
+```otr
+const content = struct
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>content.change_cipher_spec</code> | <code>20</code> |
+| <code>content.alert</code> | <code>21</code> |
+| <code>content.handshake</code> | <code>22</code> |
+| <code>content.application_data</code> | <code>23</code> |
+
+## msg
+
+```otr
+const msg = struct
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>msg.hello_request</code> | <code>0</code> |
+| <code>msg.client_hello</code> | <code>1</code> |
+| <code>msg.server_hello</code> | <code>2</code> |
+| <code>msg.new_session_ticket</code> | <code>4</code> |
+| <code>msg.encrypted_extensions</code> | <code>8</code> |
+| <code>msg.certificate</code> | <code>11</code> |
+| <code>msg.server_key_exchange</code> | <code>12</code> |
+| <code>msg.certificate_request</code> | <code>13</code> |
+| <code>msg.server_hello_done</code> | <code>14</code> |
+| <code>msg.certificate_verify</code> | <code>15</code> |
+| <code>msg.client_key_exchange</code> | <code>16</code> |
+| <code>msg.finished</code> | <code>20</code> |
+| <code>msg.key_update</code> | <code>24</code> |
+
+## ext
+
+```otr
+const ext = struct
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>ext.server_name</code> | <code>0</code> |
+| <code>ext.supported_groups</code> | <code>10</code> |
+| <code>ext.ec_point_formats</code> | <code>11</code> |
+| <code>ext.signature_algorithms</code> | <code>13</code> |
+| <code>ext.alpn</code> | <code>16</code> |
+| <code>ext.extended_master_secret</code> | <code>23</code> |
+| <code>ext.supported_versions</code> | <code>43</code> |
+| <code>ext.cookie</code> | <code>44</code> |
+| <code>ext.key_share</code> | <code>51</code> |
+| <code>ext.renegotiation_info</code> | <code>0xff01</code> |
+
+## alert
+
+```otr
+const alert = struct
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>alert.close_notify</code> | <code>0</code> |
+| <code>alert.unexpected_message</code> | <code>10</code> |
+| <code>alert.bad_record_mac</code> | <code>20</code> |
+| <code>alert.record_overflow</code> | <code>22</code> |
+| <code>alert.handshake_failure</code> | <code>40</code> |
+| <code>alert.bad_certificate</code> | <code>42</code> |
+| <code>alert.certificate_expired</code> | <code>45</code> |
+| <code>alert.illegal_parameter</code> | <code>47</code> |
+| <code>alert.unknown_ca</code> | <code>48</code> |
+| <code>alert.decode_error</code> | <code>50</code> |
+| <code>alert.decrypt_error</code> | <code>51</code> |
+| <code>alert.protocol_version</code> | <code>70</code> |
+| <code>alert.internal_error</code> | <code>80</code> |
+| <code>alert.user_canceled</code> | <code>90</code> |
+| <code>alert.unsupported_extension</code> | <code>110</code> |
+| <code>alert.no_application_protocol</code> | <code>120</code> |
+
+## alert_for
+
+```otr
+fn alert_for(e: Error) ?u8
+```
+
+The alert that tells the server why the connection failed with `e`, or null when the
+server's own alert or a close ended it.
+
+## Suite
+
+```otr
+const Suite = struct
+```
+
+A cipher suite: its record AEAD, the hash of its key schedule or PRF, the version it
+belongs to and, for TLS 1.2, whether the server signs with an ECDSA (or Ed25519) key
+rather than an RSA one.
+
+| Field | Type |
+| --- | --- |
+| <code>id</code> | <code>u16</code> |
+| <code>aead</code> | <code>keys.Aead</code> |
+| <code>hash</code> | <code>sha2.Hash</code> |
+| <code>tls13</code> | <code>bool</code> |
+| <code>ecdsa</code> | <code>bool</code> |
+
+## suites
+
+```otr
+const suites = [9]Suite
+```
+
+The suites offered, in order of preference: AES-GCM first, since the AEADs run it on the
+CPU's AES instructions; RFC 8446 and RFC 9325's recommended TLS 1.2 suites, all with
+forward secrecy and an AEAD.
+
+## find_suite
+
+```otr
+fn find_suite(id: u16, tls13: bool) ?Suite
+```
+
+The suite `id` of the version asked for, or null when it was not offered.
+
+## Scheme
+
+```otr
+const Scheme = struct
+```
+
+A signature scheme offered in `signature_algorithms`, the certificate signature it is,
+and the EC key it needs in TLS 1.3, which binds ECDSA schemes to one curve.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>id</code> | <code>u16</code> |  |
+| <code>alg</code> | <code>x509.SigAlg</code> |  |
+| <code>curve</code> | <code>x509.KeyAlg</code> |  |
+| <code>legacy</code> | <code>bool</code> | PKCS #1 v1.5 RSA, which TLS 1.3 allows in certificates but not in CertificateVerify. |
+
+## find_scheme
+
+```otr
+fn find_scheme(id: u16) ?Scheme
+```
+
+## hello_retry_random
+
+```otr
+const hello_retry_random = [32]u8
+```
+
+The random a server puts in a ServerHello to mean HelloRetryRequest (RFC 8446 §4.1.3).
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>version_tls12</code> | <code>0x0303</code> |
+| <code>version_tls13</code> | <code>0x0304</code> |
+| <code>group_x25519</code> | <code>0x001d</code> |
+| <code>group_secp256r1</code> | <code>0x0017</code> |
+| <code>schemes</code> | <code>[8]Scheme</code> |

@@ -1,0 +1,30 @@
+import std
+import std.box
+
+const Shape = interface {
+    fn area(self: &Self) f64
+}
+
+const Rect = struct {
+    w: f64
+    h: f64
+
+    pub fn area(self: &Rect) f64 {
+        return self.w * self.h
+    }
+}
+
+pub fn main() void {
+    var b = box.Box(Rect).init(.{ w: 3, h: 4 })
+    b.get_mut().w = 5
+    std.io.printf("boxed area {d:.1}\n", .{ b.get().area() })
+
+    // into_inner moves the value back out and frees the heap memory.
+    r := b.into_inner()
+    std.io.printf("unboxed {d:.1} x {d:.1}\n", .{ r.w, r.h })
+
+    // Box(dyn I) holds any type that implements the interface.
+    shape := box.Box(dyn Shape).init(Rect{ w: 2, h: 2 })
+    defer shape.deinit()
+    std.io.printf("dyn area {d:.1}\n", .{ shape.get().area() })
+}

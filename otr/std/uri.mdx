@@ -1,0 +1,101 @@
+---
+title: "std.uri"
+sidebarTitle: "uri"
+description: "Percent-encoding (RFC 3986) and file:// URIs."
+---
+
+Percent-encoding (RFC 3986) and `file://` URIs.
+
+```otr
+import std.uri
+```
+
+## Example
+
+```otr
+import std
+import std.uri
+
+pub fn main() !void {
+    var buf: [128]u8 = unsafe { undefined }
+
+    // A query value: everything but letters, digits and -._~ is escaped.
+    query := uri.percent_encode(&mut buf, "otter shell & more", "") orelse return error.NoSpaceLeft
+    std.io.printf("q={}\n", .{ query })
+
+    // A path: keep the slashes.
+    var path_buf: [128]u8 = unsafe { undefined }
+    path := uri.percent_encode(&mut path_buf, "/home/jade/My Files/été.txt", "/") orelse return error.NoSpaceLeft
+    std.io.println(path)
+
+    var plain: [128]u8 = unsafe { undefined }
+    std.io.println(try uri.percent_decode(&mut plain, path))
+
+    var local: [128]u8 = unsafe { undefined }
+    std.io.println(try uri.file_uri_to_path(&mut local, "file:///tmp/a%20b.txt"))
+
+    if uri.percent_decode(&mut plain, "50%zz") |_| {} else |e| {
+        std.io.printf("50%zz: {}\n", .{ e })
+    }
+    var small: [4]u8 = unsafe { undefined }
+    std.io.printf("fits in 4 bytes: {}\n", .{ uri.percent_encode(&mut small, "a b c", "") != null })
+}
+```
+
+```text
+q=otter%20shell%20%26%20more
+/home/jade/My%20Files/%C3%A9t%C3%A9.txt
+/home/jade/My Files/été.txt
+/tmp/a b.txt
+50%zz: error.InvalidEncoding
+fits in 4 bytes: false
+```
+
+## Error
+
+```otr
+const Error = error { NoSpaceLeft, InvalidEncoding }
+```
+
+## hex_value
+
+```otr
+fn hex_value(c: u8) ?u8
+```
+
+The value of the hexadecimal digit `c`, in either case.
+
+## hex_digit
+
+```otr
+fn hex_digit(n: u8) u8
+```
+
+The upper-case hexadecimal digit for `n`, below 16; RFC 3986 prefers upper case.
+
+## percent_encode
+
+```otr
+fn percent_encode(out: []mut u8, s: str, keep: str) ?str
+```
+
+`s` with every byte except letters, digits, `-._~` and those in `keep` written as
+`%XX`, into the start of `out`; null when it does not fit. `keep` is `"/"` for a path.
+
+## percent_decode
+
+```otr
+fn percent_decode(out: []mut u8, s: str) Error!str
+```
+
+`s` with each `%XX` replaced by its byte, into the start of `out`. A `+` stays as it
+is: it means a space only in HTML form data.
+
+## file_uri_to_path
+
+```otr
+fn file_uri_to_path(out: []mut u8, uri: str) Error!str
+```
+
+The local path a `file:` URI names (`file:///tmp/a%20b` is `/tmp/a b`), decoded into
+`out`. The host must be empty or `localhost`; anything else is `InvalidEncoding`.

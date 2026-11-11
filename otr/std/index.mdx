@@ -1,0 +1,170 @@
+---
+title: "Standard library reference"
+sidebarTitle: "All modules"
+description: "Every module of the otr standard library, with each public declaration."
+---
+
+Each page lists a module's public declarations with their signatures and doc comments, as `otr doc` prints them. For a guided tour with longer examples, read the [standard library guide](/otr/standard-library).
+
+Reach a module as `std.<name>` after `import std`, or import it on its own with `import std.<name>`.
+
+## Core
+
+| Module | Purpose |
+| --- | --- |
+| [`std`](/otr/std/std) | The otr standard library. |
+| [`std.runtime`](/otr/std/runtime) | The program environment and the default Io runtime (spec §10). |
+| [`std.io`](/otr/std/io) | Writing to standard output and standard error, formatting into anything with a write_all(self: &mut Self, s: str) void method, such as String, and reading standard input line by line. |
+| [`std.fmt`](/otr/std/fmt) | Reading numbers from text, and formatting into fixed buffers. |
+| [`std.log`](/otr/std/log) | Messages for whoever runs the program, on standard error, each marked with its level. |
+| [`std.debug`](/otr/std/debug) | Checks for conditions the program relies on. |
+| [`std.testing`](/otr/std/testing) | Assertions for test blocks. |
+| [`std.testing_allocator`](/otr/std/testing_allocator) | Instance-local allocation fault injection. |
+
+## Memory
+
+| Module | Purpose |
+| --- | --- |
+| [`std.mem`](/otr/std/mem) | Memory allocation. |
+| [`std.arena`](/otr/std/arena) | Region allocators (spec §7.5). |
+| [`std.box`](/otr/std/box) | Box(T) owns one heap value. |
+| [`std.rc`](/otr/std/rc) | Shared ownership within one thread. |
+| [`std.arc`](/otr/std/arc) | Shared ownership across threads. |
+| [`std.cell`](/otr/std/cell) | Shared mutation of copyable values on one thread (spec M1). |
+| [`std.pool`](/otr/std/pool) | Generational handles (spec §7.7). |
+
+## Collections
+
+| Module | Purpose |
+| --- | --- |
+| [`std.list`](/otr/std/list) | A growable array that owns its elements. |
+| [`std.soa_list`](/otr/std/soa_list) | A growable struct-of-arrays sequence. |
+| [`std.hash_map`](/otr/std/hash_map) | Hash maps that own their storage. |
+| [`std.btree`](/otr/std/btree) | An ordered map that owns its entries. |
+| [`std.deque`](/otr/std/deque) | A double-ended queue that owns its elements. |
+| [`std.priority_queue`](/otr/std/priority_queue) | A priority queue that owns its elements. |
+| [`std.bitset`](/otr/std/bitset) | Sets of small integers as bits in 64-bit words. |
+| [`std.bounded`](/otr/std/bounded) | Fixed-capacity containers that live inline, with no allocator. |
+| [`std.sort`](/otr/std/sort) | Sorting slices in place, and searching sorted ones. |
+| [`std.enums`](/otr/std/enums) | Sets of enum values. |
+
+## Text and encoding
+
+| Module | Purpose |
+| --- | --- |
+| [`std.string`](/otr/std/string) | An owned, growable UTF-8 string. |
+| [`std.utf8`](/otr/std/utf8) | UTF-8. |
+| [`std.ascii`](/otr/std/ascii) | ASCII character classes and case-insensitive comparison. |
+| [`std.base64`](/otr/std/base64) | Base64 (RFC 4648) in the standard alphabet and the URL- and filename-safe one, each with and without = padding. |
+| [`std.json`](/otr/std/json) | JSON (RFC 8259) read into a region, and written back out. |
+| [`std.uri`](/otr/std/uri) | Percent-encoding (RFC 3986) and file:// URIs. |
+| [`std.dtoa`](/otr/std/dtoa) | Conversions between f64 and decimal. |
+| [`std.ryu`](/otr/std/ryu) | The shortest decimal that reads back as a given float, by Ryu (Ulf Adams, "Ryū. |
+
+## Files and processes
+
+| Module | Purpose |
+| --- | --- |
+| [`std.fs`](/otr/std/fs) | Files and directories, and watching them for changes. |
+| [`std.path`](/otr/std/path) | Slash-separated file paths, taken apart without touching the file system. |
+| [`std.process`](/otr/std/process) | The running process, the signals it receives, and the programs it starts. |
+| [`std.xdg`](/otr/std/xdg) | Where programs keep their files, following the XDG Base Directory Specification. |
+
+## Concurrency
+
+| Module | Purpose |
+| --- | --- |
+| [`std.sync`](/otr/std/sync) | Synchronisation. |
+| [`std.thread`](/otr/std/thread) | Operating-system threads. |
+| [`std.callback`](/otr/std/callback) | Callbacks into an owner, without the owner's address stored anywhere. |
+
+## Time
+
+| Module | Purpose |
+| --- | --- |
+| [`std.time`](/otr/std/time) | Clocks. |
+| [`std.datetime`](/otr/std/datetime) | Civil dates and times in the proleptic Gregorian calendar, and strftime/strptime formatting and parsing of them into caller buffers, without allocating. |
+| [`std.tz`](/otr/std/tz) | Time zones. |
+
+## Math and hashing
+
+| Module | Purpose |
+| --- | --- |
+| [`std.math`](/otr/std/math) | Floating-point functions and constants. |
+| [`std.math.f32_impl`](/otr/std/math/f32_impl) | exp, log and pow for f32. |
+| [`std.rand`](/otr/std/rand) | Pseudo-random numbers (xoshiro256**). |
+| [`std.hash`](/otr/std/hash) | Checksums and hashes over bytes. |
+
+## Networking
+
+| Module | Purpose |
+| --- | --- |
+| [`std.net`](/otr/std/net) | TCP over IPv4 and IPv6, and Unix domain sockets. |
+| [`std.socket_stream`](/otr/std/socket_stream) | Concrete stream byte/FD queues, sharing zoo wire's cursor and end-watermark rules. |
+| [`std.socket_ancillary`](/otr/std/socket_ancillary) | Caller-sized SCM_RIGHTS operations. |
+| [`std.http`](/otr/std/http) | An HTTP/1.1 client (RFC 9110, RFC 9112) over std.net and std.tls. |
+| [`std.http.parser`](/otr/std/http/parser) | HTTP/1.1 responses (RFC 9112) read from bytes with no I/O, for std.http. |
+| [`std.http.url`](/otr/std/http/url) | The request side of std.http. |
+| [`std.tls`](/otr/std/tls) | A TLS client. |
+| [`std.tls.client`](/otr/std/tls/client) | std.tls's client as a state machine that does no I/O. |
+| [`std.tls.hello`](/otr/std/tls/hello) | The hello messages of std.tls. |
+| [`std.tls.keys`](/otr/std/tls/keys) | The cryptography under std.tls. |
+| [`std.tls.peer`](/otr/std/tls/peer) | The server's identity in std.tls. |
+| [`std.tls.record`](/otr/std/tls/record) | The record layer of std.tls (RFC 8446 §5, RFC 5246 §6.2). |
+| [`std.tls.wire`](/otr/std/tls/wire) | The byte formats of std.tls. |
+
+## Cryptography
+
+| Module | Purpose |
+| --- | --- |
+| [`std.crypto`](/otr/std/crypto) | Building blocks for code that handles secrets. |
+| [`std.crypto.sha2`](/otr/std/crypto/sha2) | SHA-2 (FIPS 180-4). |
+| [`std.crypto.md5`](/otr/std/crypto/md5) | MD5 (RFC 1321), 16-byte digests, for the legacy protocols that still name it, such as NTLMv2's HMAC-MD5. |
+| [`std.crypto.hmac`](/otr/std/crypto/hmac) | HMAC (RFC 2104, FIPS 198-1) over any hasher with init, update, final, digest_len and block_len, such as sha2.Sha256, or hash.Sha1 and md5.Md5 for the legacy protocols that name them (HMAC-SHA1, NTLMv2's HMAC-MD5). |
+| [`std.crypto.hkdf`](/otr/std/crypto/hkdf) | HKDF (RFC 5869), the key derivation of TLS 1.3. |
+| [`std.crypto.aes`](/otr/std/crypto/aes) | The AES block cipher (FIPS-197) with 128- and 256-bit keys, encryption only, and CTR mode with a 32-bit big-endian counter in the last four bytes of the counter block (NIST SP 800-38A, as GCM, CCM and SMB 3 count). |
+| [`std.crypto.aes_gcm`](/otr/std/crypto/aes_gcm) | AES-128-GCM and AES-256-GCM (NIST SP 800-38D) with 12-byte nonces and 16-byte tags, the AEADs of TLS 1.3 and QUIC. |
+| [`std.crypto.aes_ccm`](/otr/std/crypto/aes_ccm) | AES-CCM (NIST SP 800-38C, RFC 3610). |
+| [`std.crypto.aes_cmac`](/otr/std/crypto/aes_cmac) | AES-CMAC (RFC 4493, NIST SP 800-38B), the MAC of SMB 3 signing, with a 16- or 32-byte key and a 16-byte MAC. |
+| [`std.crypto.chacha20poly1305`](/otr/std/crypto/chacha20poly1305) | ChaCha20-Poly1305 (RFC 8439), the AEAD of TLS 1.3, WireGuard and SSH. |
+| [`std.crypto.x25519`](/otr/std/crypto/x25519) | X25519 (RFC 7748). |
+| [`std.crypto.ed25519`](/otr/std/crypto/ed25519) | Ed25519 signatures (RFC 8032). |
+| [`std.crypto.field25519`](/otr/std/crypto/field25519) | Arithmetic modulo p = 2^255 - 19, the field of Curve25519 and edwards25519, shared by x25519 and ed25519. |
+| [`std.crypto.ecc`](/otr/std/crypto/ecc) | The NIST prime curves P-256 and P-384 (FIPS 186-5, SEC 2), for checking ECDSA signatures and for ECDH key exchange (TLS's secp256r1 and secp384r1 groups). |
+| [`std.crypto.ecdsa`](/otr/std/crypto/ecdsa) | ECDSA signature verification (FIPS 186-5) over P-256 and P-384, as TLS and X.509 use it. |
+| [`std.crypto.rsa`](/otr/std/crypto/rsa) | RSA signature verification (RFC 8017). |
+| [`std.crypto.bigint`](/otr/std/crypto/bigint) | Arithmetic modulo an odd number of up to 64 * N bits, for checking signatures. |
+| [`std.crypto.asn1`](/otr/std/crypto/asn1) | A reader for DER (X.690), the encoding of certificates, keys and ECDSA signatures. |
+| [`std.crypto.x509`](/otr/std/crypto/x509) | X.509 v3 certificates (RFC 5280). |
+| [`std.crypto.ca_bundle`](/otr/std/crypto/ca_bundle) | Trust anchors and certificate chain verification. |
+| [`std.crypto.hostname`](/otr/std/crypto/hostname) | Host name and IP address matching for certificates (RFC 6125). |
+
+## Compression
+
+| Module | Purpose |
+| --- | --- |
+| [`std.flate`](/otr/std/flate) | Native resumable DEFLATE, zlib and gzip. |
+| [`std.flate_common`](/otr/std/flate_common) | Shared RFC 1950/1951/1952 wire types. |
+| [`std.flate_deflate`](/otr/std/flate_deflate) | Native bounded LZ77/Huffman compressor. |
+| [`std.flate_inflate`](/otr/std/flate_inflate) | Allocation-free resumable DEFLATE. |
+| [`std.flate_match`](/otr/std/flate_match) | Bounded hash-chain LZ77, with a complete block's lookahead for chunk-independent output. |
+| [`std.flate_tree`](/otr/std/flate_tree) | Bounded canonical encoder trees and code-length RLE. |
+
+## Linux
+
+| Module | Purpose |
+| --- | --- |
+| [`std.linux`](/otr/std/linux) | Linux system calls with typed results. |
+| [`std.linux.fd`](/otr/std/linux/fd) | Owned Linux descriptors and errno-typed calls. |
+| [`std.linux.mapping`](/otr/std/linux/mapping) | Owned shared mappings and SIGBUS-fault tracking. |
+| [`std.linux.metadata`](/otr/std/linux/metadata) | Allocation-free Linux file metadata and symbolic-link reads. |
+| [`std.linux.process`](/otr/std/linux/process) | Linux signals, calling-thread masks, resource limits and child status. |
+
+## C interop
+
+| Module | Purpose |
+| --- | --- |
+| [`std.ffi`](/otr/std/ffi) | Typed C callback state and scoped C handles. |
+| [`std.ffi_context`](/otr/std/ffi_context) | Typed state for the callbacks C code makes. |
+| [`std.cstr`](/otr/std/cstr) | NUL-terminated C strings. |
+| [`std.dl`](/otr/std/dl) | Shared libraries loaded at run time (dlopen), such as a Vulkan loader a program uses when it is installed. |

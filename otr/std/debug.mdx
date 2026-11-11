@@ -1,0 +1,50 @@
+---
+title: "std.debug"
+sidebarTitle: "debug"
+description: "Checks for conditions the program relies on."
+---
+
+Checks for conditions the program relies on.
+
+```otr
+import std.debug
+```
+
+## Example
+
+```otr
+import std
+import std.debug
+
+fn average(xs: []i64) i64 {
+    // An empty slice would divide by zero below; state the assumption instead.
+    debug.assert(xs.len > 0)
+    var sum: i64 = 0
+    for x in xs { sum += x }
+    return sum / @int_cast(i64, xs.len)
+}
+
+pub fn main() void {
+    marks := [4]i64{ 7, 9, 8, 4 }
+    std.io.printf("average {}\n", .{ average(marks[0..]) })
+
+    // A false condition panics in every build mode, release builds included.
+    debug.assert(marks[0] + marks[3] == 11)
+    std.io.println("assumptions hold")
+}
+```
+
+```text
+average 7
+assumptions hold
+```
+
+## assert
+
+```otr
+fn assert(ok: bool) void
+```
+
+Panics when `ok` is false. The check stays in every build mode, like the run-time
+checks of spec §7.8: an assertion compiled out would let a broken assumption carry on
+silently.

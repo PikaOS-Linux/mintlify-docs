@@ -1,0 +1,4 @@
+C sees 5 bytes
+back in otr: otter
+embedded NUL: error.ContainsNul
+small buffer: error.TooLong

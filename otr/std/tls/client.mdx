@@ -1,0 +1,172 @@
+---
+title: "std.tls.client"
+sidebarTitle: "tls.client"
+description: "std.tls's client as a state machine that does no I/O."
+---
+
+`std.tls`'s client as a state machine that does no I/O: the handshake of TLS 1.3 and
+TLS 1.2 over `hello`, `peer`, `keys` and `record`, and application data, KeyUpdate and
+alerts after it. `tls` re-exports what is public here.
+
+```otr
+import std.tls.client
+```
+
+## Recv
+
+```otr
+const Recv = struct
+```
+
+What `recv` did: how many bytes at the front of the buffer it used up (0 when they do
+not yet hold a whole record), and where application data it decrypted lies in them.
+
+| Field | Type |
+| --- | --- |
+| <code>consumed</code> | <code>usize</code> |
+| <code>data_start</code> | <code>usize</code> |
+| <code>data_len</code> | <code>usize</code> |
+
+## Client
+
+```otr
+const Client = struct
+```
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>alert</code> | <code>?u8</code> | Public | The code of the fatal alert the server sent, after `error.AlertReceived`. |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |  |
+| <code>trust</code> | <code>peer.Trust</code> | Read-only |  |
+| <code>now</code> | <code>?i64</code> | Read-only |  |
+| <code>host</code> | <code>bounded.InlineString(253)</code> | Read-only |  |
+| <code>offer_alpn</code> | <code>?[]static u8</code> | Read-only |  |
+| <code>state</code> | <code>State</code> | Read-only |  |
+| <code>allow_tls12</code> | <code>bool</code> | Read-only |  |
+| <code>retried</code> | <code>bool</code> | Read-only |  |
+| <code>suite</code> | <code>wire.Suite</code> | Read-only |  |
+| <code>transcript</code> | <code>keys.Transcript</code> | Read-only |  |
+| <code>client_random</code> | <code>[32]u8</code> | Read-only |  |
+| <code>server_random</code> | <code>[32]u8</code> | Read-only |  |
+| <code>session_id</code> | <code>[32]u8</code> | Read-only |  |
+| <code>x25519_secret</code> | <code>[32]u8</code> | Read-only | The ephemeral keys, zeroed once the server's share is agreed with. |
+| <code>x25519_public</code> | <code>[32]u8</code> | Read-only |  |
+| <code>p256_secret</code> | <code>[32]u8</code> | Read-only |  |
+| <code>p256_public</code> | <code>[65]u8</code> | Read-only |  |
+| <code>hs_secret</code> | <code>keys.Digest</code> | Read-only | TLS 1.3's handshake secret, zeroed after the server's Finished, and its current traffic secrets. |
+| <code>client_secret</code> | <code>keys.Digest</code> | Read-only |  |
+| <code>server_secret</code> | <code>keys.Digest</code> | Read-only |  |
+| <code>premaster</code> | <code>[32]u8</code> | Read-only | TLS 1.2's premaster secret, group and master secret, each zeroed once used. |
+| <code>group12</code> | <code>u16</code> | Read-only |  |
+| <code>master</code> | <code>[48]u8</code> | Read-only |  |
+| <code>ems</code> | <code>bool</code> | Read-only |  |
+| <code>rec</code> | <code>record.Records</code> | Read-only |  |
+| <code>cert_requested</code> | <code>bool</code> | Read-only |  |
+| <code>cert_context</code> | <code>bounded.InlineString(255)</code> | Read-only |  |
+| <code>hs_buf</code> | <code>List(u8)</code> | Read-only |  |
+| <code>out</code> | <code>List(u8)</code> | Read-only |  |
+| <code>leaf</code> | <code>List(u8)</code> | Read-only |  |
+| <code>alpn_got</code> | <code>bounded.InlineString(255)</code> | Read-only |  |
+| <code>closing</code> | <code>bool</code> | Read-only |  |
+
+### Client.init
+
+```otr
+fn init(alloc: mem.Allocator, host: str, options: hello.Options) Error!Client
+```
+
+Starts a handshake with `host`: the ClientHello is in `pending` when this returns.
+`host` is the name the certificate must carry, and is sent as SNI unless it is an
+IP address.
+
+### Client.deinit
+
+```otr
+fn deinit(self: Client) void
+```
+
+### Client.connected
+
+```otr
+fn connected(self: &Client) bool
+```
+
+Whether the handshake is done and application data may flow.
+
+### Client.closed
+
+```otr
+fn closed(self: &Client) bool
+```
+
+Whether the server has closed the connection with close_notify: `recv` gives no
+more data.
+
+### Client.version
+
+```otr
+fn version(self: &Client) hello.Version
+```
+
+The version the server chose, once it has.
+
+### Client.cipher_suite
+
+```otr
+fn cipher_suite(self: &Client) u16
+```
+
+### Client.alpn
+
+```otr
+fn alpn(self: &Client) ?[]u8
+```
+
+The protocol the server picked by ALPN, if any.
+
+### Client.pending
+
+```otr
+fn pending(self: &Client) []u8
+```
+
+Bytes waiting to be sent to the server.
+
+### Client.sent
+
+```otr
+fn sent(self: &mut Client, n: usize) void
+```
+
+Drops the first `n` bytes of `pending`, which the caller has sent.
+
+### Client.close
+
+```otr
+fn close(self: &mut Client) void
+```
+
+Queues close_notify. Received data is still read until the server closes too.
+
+### Client.recv
+
+```otr
+fn recv(self: &mut Client, buf: []mut u8) Error!Recv
+```
+
+Takes the record at the front of `buf`. Application data is decrypted in place and
+its place returned; handshake messages advance the handshake, and any reply lands in
+`pending`. After an error the connection is failed, and `pending` holds the alert
+that tells the server why.
+
+### Client.seal
+
+```otr
+fn seal(self: &mut Client, buf: []mut u8, n: usize) Error!record.Range
+```
+
+Seals the `n` bytes of application data at `buf[prefix_len..]` into one record, in
+place, and returns where in `buf` the record lies; `buf` needs `prefix_len + n +
+suffix_len` bytes. When the key has sealed its share of records, a KeyUpdate goes to
+`pending` first and the record is sealed under the next key, so `pending` must be
+sent before the record.

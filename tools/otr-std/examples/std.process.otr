@@ -1,0 +1,32 @@
+import std
+import std.process
+
+pub fn main(env: std.Env) !void {
+    heap := std.mem.heap
+
+    // run_output waits for the child and collects what it wrote.
+    out := try process.run_output(heap, &[3]str{ "echo", "hello", "child" })
+    defer out.deinit()
+    std.io.printf("stdout: {}", .{ out.stdout.as_str() })
+
+    // run passes this process's streams through and reports how the child ended.
+    term := try process.run(heap, &[1]str{ "false" })
+    switch term {
+        .exited |code| => std.io.printf("false exited with {}\n", .{ code })
+        .signal |sig| => std.io.printf("false was killed by signal {}\n", .{ sig })
+    }
+
+    // spawn starts a child without waiting; wait collects it later.
+    child := try process.spawn(heap, &[1]str{ "true" }, .{})
+    done := try child.wait(env.io)
+    switch done {
+        .exited |code| => std.io.printf("true exited with {}\n", .{ code })
+        .signal |sig| => std.io.printf("true was killed by signal {}\n", .{ sig })
+    }
+
+    if process.run(heap, &[1]str{ "no-such-program-here" }) |_| {} else |err| {
+        std.io.printf("missing program: {}\n", .{ err })
+    }
+
+    std.io.printf("PATH is set: {}\n", .{ process.get_env("PATH") != null })
+}

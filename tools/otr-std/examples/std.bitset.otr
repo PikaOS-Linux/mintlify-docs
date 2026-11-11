@@ -1,0 +1,31 @@
+import std
+import std.bitset
+
+pub fn main() void {
+    // StaticBitSet holds its bits inline and needs no allocator.
+    var seen = bitset.StaticBitSet(64).init_empty()
+    seen.set(3)
+    seen.set(17)
+    seen.set(40)
+    seen.toggle(17)
+    seen.set_range_value(8, 12, true)
+    std.io.printf("count {} bit 3 {} bit 17 {}\n", .{ seen.count(), seen.is_set(3), seen.is_set(17) })
+
+    var it = seen.iter()
+    for i in it {
+        std.io.printf("{} ", .{ i })
+    }
+    std.io.println("")
+
+    var mask = bitset.StaticBitSet(64).init_empty()
+    mask.set_range_value(0, 10, true)
+    seen.intersect_with(&mask)
+    std.io.printf("below 10: {}, lowest {}\n", .{ seen.count(), seen.find_first_set() orelse 0 })
+
+    // DynamicBitSet takes its length at run time and owns heap storage.
+    var free = bitset.DynamicBitSet.init_full(std.mem.heap, 100)
+    defer free.deinit()
+    free.unset(0)
+    free.unset(1)
+    std.io.printf("{} of {} free, first free {}\n", .{ free.count(), free.len(), free.find_first_set() orelse 0 })
+}

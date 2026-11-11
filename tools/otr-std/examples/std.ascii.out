@@ -1,0 +1,7 @@
+digit '7': true, alpha '_': false, space '\t': true
+upper of 'q': Q, lower of 'Q': q
+same header: true
+is http: true
+world at byte 6
+mixed case
+3 letters

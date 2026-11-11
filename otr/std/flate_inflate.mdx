@@ -1,0 +1,70 @@
+---
+title: "std.flate_inflate"
+sidebarTitle: "flate_inflate"
+description: "Allocation-free resumable DEFLATE."
+---
+
+Allocation-free resumable DEFLATE. History is independent of caller output storage.
+
+```otr
+import std.flate_inflate
+```
+
+## Inflater
+
+```otr
+const Inflater = struct
+```
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>progress</code> | <code>c.Progress = .&#123;&#125;</code> | Public | Counts remain valid on error, including initialized output preceding a bad trailer. |
+| <code>format</code> | <code>c.Format</code> | Read-only |  |
+| <code>limits</code> | <code>c.Limits</code> | Read-only |  |
+| <code>members</code> | <code>c.MemberPolicy</code> | Read-only |  |
+| <code>phase</code> | <code>Phase</code> | Read-only |  |
+| <code>bits</code> | <code>c.Bits = .&#123;&#125;</code> | Read-only |  |
+| <code>lit</code> | <code>c.Huffman(.literal) = .&#123;&#125;</code> | Read-only |  |
+| <code>dist</code> | <code>c.Huffman(.distance) = .&#123;&#125;</code> | Read-only |  |
+| <code>clen</code> | <code>c.Huffman(.code) = .&#123;&#125;</code> | Read-only |  |
+| <code>cursor</code> | <code>c.Cursor = .&#123;&#125;</code> | Read-only |  |
+| <code>history</code> | <code>[32768]u8 = mem.array(32768, u8, fn(i: usize) u8 &#123; _ = i</code> | Read-only |  |
+| <code>history_at</code> | <code>usize = 0</code> | Read-only |  |
+| <code>history_len</code> | <code>usize = 0</code> | Read-only |  |
+| <code>window</code> | <code>usize = 32768</code> | Read-only |  |
+| <code>check</code> | <code>c.Checksum = .&#123;&#125;</code> | Read-only |  |
+| <code>header_crc</code> | <code>hash.Crc32 = hash.Crc32.init()</code> | Read-only |  |
+| <code>header</code> | <code>[10]u8 = mem.array(10, u8, fn(i: usize) u8 &#123; _ = i</code> | Read-only |  |
+| <code>header_at</code> | <code>usize = 0</code> | Read-only |  |
+| <code>flags</code> | <code>u8 = 0</code> | Read-only |  |
+| <code>remaining</code> | <code>usize = 0</code> | Read-only |  |
+| <code>last</code> | <code>bool = false</code> | Read-only |  |
+| <code>lengths</code> | <code>[320]u8 = mem.array(320, u8, fn(i: usize) u8 &#123; _ = i</code> | Read-only |  |
+| <code>clens</code> | <code>[19]u8 = mem.array(19, u8, fn(i: usize) u8 &#123; _ = i</code> | Read-only |  |
+| <code>nlit</code> | <code>usize = 0</code> | Read-only |  |
+| <code>ndist</code> | <code>usize = 0</code> | Read-only |  |
+| <code>ncode</code> | <code>usize = 0</code> | Read-only |  |
+| <code>index</code> | <code>usize = 0</code> | Read-only |  |
+| <code>repeat</code> | <code>u16 = 0</code> | Read-only |  |
+| <code>value</code> | <code>u8 = 0</code> | Read-only |  |
+| <code>length</code> | <code>usize = 0</code> | Read-only |  |
+| <code>distance</code> | <code>usize = 0</code> | Read-only |  |
+| <code>extra</code> | <code>u8 = 0</code> | Read-only |  |
+| <code>total_input</code> | <code>usize = 0</code> | Read-only |  |
+| <code>total_output</code> | <code>usize = 0</code> | Read-only |  |
+| <code>checksum_at</code> | <code>usize = 0</code> | Read-only |  |
+
+### Inflater.init
+
+```otr
+fn init(format: c.Format, limits: c.Limits, members: c.MemberPolicy) Inflater
+```
+
+### Inflater.step
+
+```otr
+fn step(self: &mut Inflater, input: []u8, output: []mut u8, final_input: bool) c.Error!c.Progress
+```
+
+EOF is explicit. After done, repeated calls consume/write nothing. On error,
+inspect progress then discard/reset state. No input/output borrow is retained.

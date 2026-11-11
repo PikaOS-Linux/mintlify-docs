@@ -1,0 +1,32 @@
+import std
+import std.datetime
+
+pub fn main() !void {
+    // A fixed instant, seen first at UTC and then at UTC+1.
+    utc := datetime.DateTime.from_unix(1790000000, datetime.Offset.utc())
+    std.io.printf("{}\n", .{ utc })
+    std.io.printf("{} {} {}, {}:{d:0>2}\n", .{ datetime.weekday_name(utc.weekday), utc.day, datetime.month_name(utc.month), utc.hour, utc.minute })
+
+    cet := utc.to_offset(datetime.Offset.fixed(3600, "CET"))
+    std.io.printf("{} (same instant: {})\n", .{ cet, cet.unix() == utc.unix() })
+
+    var buf: [64]u8 = unsafe { undefined }
+    if cet.strftime(&mut buf, "%A %d %B %Y, %H:%M %Z (week %V)") |text| {
+        std.io.println(text)
+    }
+
+    parsed := try datetime.strptime("2026-02-28 23:30:00 +0100", "%Y-%m-%d %H:%M:%S %z")
+    std.io.printf("parsed {} = {} unix\n", .{ parsed, parsed.unix() })
+
+    built := try datetime.DateTime.civil(2024, 2, 29, 12, 0, 0, datetime.Offset.utc())
+    std.io.printf("leap day {}, day {} of the year\n", .{ built, built.yday })
+    if datetime.DateTime.civil(2026, 2, 30, 0, 0, 0, datetime.Offset.utc()) |_| {} else |e| {
+        std.io.printf("February 30: {}\n", .{ e })
+    }
+
+    // Plain calendar arithmetic works in days since 1970-01-01.
+    days := datetime.days_from_civil(2026, 12, 25) - datetime.days_from_civil(2026, 11, 11)
+    week := datetime.iso_week(2027, 1, 1)
+    std.io.printf("{} days apart, 2028 leap: {}, February 2026 has {} days\n", .{ days, datetime.is_leap_year(2028), datetime.days_in_month(2026, 2) })
+    std.io.printf("2027-01-01 is in ISO week {} of {}\n", .{ week.week, week.year })
+}

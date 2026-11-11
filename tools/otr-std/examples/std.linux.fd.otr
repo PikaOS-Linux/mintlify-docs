@@ -1,0 +1,44 @@
+import std
+import std.fs
+import std.linux.fd
+import std.path
+
+pub fn main() !void {
+    heap := std.mem.heap
+    dir := path.join(heap, fs.temp_dir(), "otr-example-linux-fd")
+    defer dir.deinit()
+    try fs.make_path(heap, dir.as_str())
+    name := path.join(heap, dir.as_str(), "lines.txt")
+    defer name.deinit()
+
+    // An Fd is a resource: deinit closes it.
+    {
+        out := try fd.open(name.as_str(), fd.O.wronly | fd.O.creat | fd.O.trunc, 0o600)
+        defer out.deinit()
+        n := try out.write("first line\nsecond line\n")
+        std.io.printf("wrote {} bytes\n", .{ n })
+    }
+
+    file := try fd.open(name.as_str(), fd.O.rdonly, 0)
+    defer file.deinit()
+    var first: [10]u8
+    var buf: [64]u8
+    // read and pread return the part of the buffer they filled.
+    std.io.printf("read: {}\n", .{ try file.read(&out first) })
+    std.io.printf("pread at 11: {}", .{ try file.pread(&out buf, 11) })
+    std.io.printf("at end of file: {} bytes\n", .{ (try file.pread(&out buf, 23)).len })
+
+    // A pipe: a is the read end, b the write end.
+    pipe := try fd.pipe2(0)
+    defer pipe.deinit()
+    _ = try pipe.b.write("through a pipe")
+    std.io.printf("pipe: {}\n", .{ try pipe.a.read(&out buf) })
+
+    try fd.unlink(name.as_str())
+    try fs.delete_dir(heap, dir.as_str())
+    if fd.open(name.as_str(), fd.O.rdonly, 0) |f| {
+        f.deinit()
+    } else |err| {
+        std.io.printf("after unlink: {}\n", .{ err })
+    }
+}

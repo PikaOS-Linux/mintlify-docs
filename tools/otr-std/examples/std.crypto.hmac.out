@@ -1,0 +1,4 @@
+hmac-sha256: 6143b8c6ce6eae9b75337335b1d7c6e6b20a4c727029d5cc8d0013735d3a7b1a
+genuine message accepted: true
+changed message accepted: false
+mac is 32 bytes

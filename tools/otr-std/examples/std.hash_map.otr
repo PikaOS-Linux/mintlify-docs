@@ -1,0 +1,42 @@
+import std
+import std.hash_map
+
+pub fn main() void {
+    heap := std.mem.heap
+
+    // StringMap owns a copy of each key and is looked up by str.
+    var stock = hash_map.StringMap(u32).init(heap)
+    defer stock.deinit()
+    _ = stock.put("apples", 4)
+    _ = stock.put("pears", 9)
+    old := stock.put("apples", 6) orelse 0
+    std.io.printf("apples was {}, {} keys\n", .{ old, stock.len() })
+
+    if stock.get("pears") |n| {
+        std.io.printf("pears {}\n", .{ n.* })
+    }
+    if stock.get_mut("pears") |n| {
+        n.* -= 1
+    }
+    _ = stock.remove("apples")
+    std.io.printf("apples {} pears {}\n", .{ stock.contains("apples"), stock.get("pears").?.* })
+
+    // HashMap takes integer, enum, bool and static string keys by value.
+    var counts = hash_map.HashMap(u8, u32).init(heap)
+    defer counts.deinit()
+    for c in "mississippi" {
+        counts.get_or_put_value(c, 0).value.* += 1
+    }
+    s: u8 = 's'
+    p: u8 = 'p'
+    z: u8 = 'z'
+    std.io.printf("s {} p {} z {}\n", .{ counts.get(&s).?.*, counts.get(&p).?.*, counts.contains(&z) })
+
+    // Iteration order is not defined, so only order-free results are printed.
+    var total: u32 = 0
+    var it = counts.iter()
+    for e in it {
+        total += e.value.*
+    }
+    std.io.printf("{} letters, {} distinct\n", .{ total, counts.len() })
+}

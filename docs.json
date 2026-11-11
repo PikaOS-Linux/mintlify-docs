@@ -348,8 +348,175 @@
             "group": "Tooling",
             "pages": [
               "otr/packages-and-builds",
-              "otr/testing-and-tools",
-              "otr/standard-library"
+              "otr/testing-and-tools"
+            ]
+          },
+          {
+            "group": "Standard library",
+            "pages": [
+              "otr/standard-library",
+              "otr/std/index",
+              {
+                "group": "Core",
+                "pages": [
+                  "otr/std/std",
+                  "otr/std/runtime",
+                  "otr/std/io",
+                  "otr/std/fmt",
+                  "otr/std/log",
+                  "otr/std/debug",
+                  "otr/std/testing",
+                  "otr/std/testing_allocator"
+                ]
+              },
+              {
+                "group": "Memory",
+                "pages": [
+                  "otr/std/mem",
+                  "otr/std/arena",
+                  "otr/std/box",
+                  "otr/std/rc",
+                  "otr/std/arc",
+                  "otr/std/cell",
+                  "otr/std/pool"
+                ]
+              },
+              {
+                "group": "Collections",
+                "pages": [
+                  "otr/std/list",
+                  "otr/std/soa_list",
+                  "otr/std/hash_map",
+                  "otr/std/btree",
+                  "otr/std/deque",
+                  "otr/std/priority_queue",
+                  "otr/std/bitset",
+                  "otr/std/bounded",
+                  "otr/std/sort",
+                  "otr/std/enums"
+                ]
+              },
+              {
+                "group": "Text and encoding",
+                "pages": [
+                  "otr/std/string",
+                  "otr/std/utf8",
+                  "otr/std/ascii",
+                  "otr/std/base64",
+                  "otr/std/json",
+                  "otr/std/uri",
+                  "otr/std/dtoa",
+                  "otr/std/ryu"
+                ]
+              },
+              {
+                "group": "Files and processes",
+                "pages": [
+                  "otr/std/fs",
+                  "otr/std/path",
+                  "otr/std/process",
+                  "otr/std/xdg"
+                ]
+              },
+              {
+                "group": "Concurrency",
+                "pages": [
+                  "otr/std/sync",
+                  "otr/std/thread",
+                  "otr/std/callback"
+                ]
+              },
+              {
+                "group": "Time",
+                "pages": [
+                  "otr/std/time",
+                  "otr/std/datetime",
+                  "otr/std/tz"
+                ]
+              },
+              {
+                "group": "Math and hashing",
+                "pages": [
+                  "otr/std/math",
+                  "otr/std/math/f32_impl",
+                  "otr/std/rand",
+                  "otr/std/hash"
+                ]
+              },
+              {
+                "group": "Networking",
+                "pages": [
+                  "otr/std/net",
+                  "otr/std/socket_stream",
+                  "otr/std/socket_ancillary",
+                  "otr/std/http",
+                  "otr/std/http/parser",
+                  "otr/std/http/url",
+                  "otr/std/tls",
+                  "otr/std/tls/client",
+                  "otr/std/tls/hello",
+                  "otr/std/tls/keys",
+                  "otr/std/tls/peer",
+                  "otr/std/tls/record",
+                  "otr/std/tls/wire"
+                ]
+              },
+              {
+                "group": "Cryptography",
+                "pages": [
+                  "otr/std/crypto",
+                  "otr/std/crypto/sha2",
+                  "otr/std/crypto/md5",
+                  "otr/std/crypto/hmac",
+                  "otr/std/crypto/hkdf",
+                  "otr/std/crypto/aes",
+                  "otr/std/crypto/aes_gcm",
+                  "otr/std/crypto/aes_ccm",
+                  "otr/std/crypto/aes_cmac",
+                  "otr/std/crypto/chacha20poly1305",
+                  "otr/std/crypto/x25519",
+                  "otr/std/crypto/ed25519",
+                  "otr/std/crypto/field25519",
+                  "otr/std/crypto/ecc",
+                  "otr/std/crypto/ecdsa",
+                  "otr/std/crypto/rsa",
+                  "otr/std/crypto/bigint",
+                  "otr/std/crypto/asn1",
+                  "otr/std/crypto/x509",
+                  "otr/std/crypto/ca_bundle",
+                  "otr/std/crypto/hostname"
+                ]
+              },
+              {
+                "group": "Compression",
+                "pages": [
+                  "otr/std/flate",
+                  "otr/std/flate_common",
+                  "otr/std/flate_deflate",
+                  "otr/std/flate_inflate",
+                  "otr/std/flate_match",
+                  "otr/std/flate_tree"
+                ]
+              },
+              {
+                "group": "Linux",
+                "pages": [
+                  "otr/std/linux",
+                  "otr/std/linux/fd",
+                  "otr/std/linux/mapping",
+                  "otr/std/linux/metadata",
+                  "otr/std/linux/process"
+                ]
+              },
+              {
+                "group": "C interop",
+                "pages": [
+                  "otr/std/ffi",
+                  "otr/std/ffi_context",
+                  "otr/std/cstr",
+                  "otr/std/dl"
+                ]
+              }
             ]
           },
           {

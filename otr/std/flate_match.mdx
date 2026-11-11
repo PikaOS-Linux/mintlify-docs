@@ -1,0 +1,68 @@
+---
+title: "std.flate_match"
+sidebarTitle: "flate_match"
+description: "Bounded hash-chain LZ77, with a complete block's lookahead for chunk-independent output."
+---
+
+Bounded hash-chain LZ77, with a complete block's lookahead for chunk-independent output.
+
+```otr
+import std.flate_match
+```
+
+## Token
+
+```otr
+const Token = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>value</code> | <code>u16</code> |
+| <code>distance</code> | <code>u16</code> |
+
+## Matcher
+
+```otr
+const Matcher = struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>data</code> | <code>[65536]u8</code> |
+| <code>history</code> | <code>usize = 0</code> |
+| <code>len</code> | <code>usize = 0</code> |
+| <code>indexed</code> | <code>usize = 0</code> |
+| <code>head</code> | <code>[32768]u16</code> |
+| <code>prev</code> | <code>[65536]u16</code> |
+| <code>head4</code> | <code>[65536]u16</code> |
+| <code>prev4</code> | <code>[65536]u16</code> |
+| <code>rank</code> | <code>[65536]u16</code> |
+| <code>tokens</code> | <code>[32768]Token</code> |
+| <code>count</code> | <code>usize = 0</code> |
+| <code>lit_freq</code> | <code>[286]u32</code> |
+| <code>dist_freq</code> | <code>[30]u32</code> |
+
+### Matcher.tokenize
+
+```otr
+fn tokenize(self: &mut Matcher, level: c.Level) void
+```
+
+### Matcher.retain_history
+
+```otr
+fn retain_history(self: &mut Matcher) void
+```
+
+## length_index
+
+```otr
+fn length_index(n: usize) usize
+```
+
+## distance_index
+
+```otr
+fn distance_index(n: usize) usize
+```

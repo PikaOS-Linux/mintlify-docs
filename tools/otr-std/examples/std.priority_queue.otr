@@ -1,0 +1,32 @@
+import std
+import std.priority_queue
+
+const Task = struct {
+    priority: u32
+    name: []static u8
+}
+
+// The queue is a min-heap: pop returns the element that is less than the rest.
+fn sooner(a: &Task, b: &Task) bool {
+    return a.priority < b.priority
+}
+
+pub fn main() void {
+    var tasks = priority_queue.PriorityQueue(Task, sooner).init(std.mem.heap)
+    defer tasks.deinit()
+
+    tasks.push(.{ priority: 3, name: "write tests" })
+    tasks.push(.{ priority: 1, name: "fix crash" })
+    tasks.push(.{ priority: 5, name: "tidy docs" })
+    tasks.push(.{ priority: 2, name: "review patch" })
+
+    if tasks.peek() |next| {
+        std.io.printf("{} queued, next: {}\n", .{ tasks.len(), next.name })
+    }
+
+    for {
+        task := tasks.pop() orelse break
+        std.io.printf("{} {}\n", .{ task.priority, task.name })
+    }
+    std.io.printf("left {}\n", .{ tasks.len() })
+}

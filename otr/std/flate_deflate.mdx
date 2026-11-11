@@ -1,0 +1,50 @@
+---
+title: "std.flate_deflate"
+sidebarTitle: "flate_deflate"
+description: "Native bounded LZ77/Huffman compressor."
+---
+
+Native bounded LZ77/Huffman compressor. Whole 32 KiB blocks make output independent
+of caller chunking. No flush operation; finish is resumable and emits one trailer.
+
+```otr
+import std.flate_deflate
+```
+
+## Deflater
+
+```otr
+const Deflater = struct
+```
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>blocks</code> | <code>[3]usize</code> | Public | Stored, fixed, dynamic block counts, for size/resource receipts. |
+| <code>progress</code> | <code>c.Progress = .&#123;&#125;</code> | Public | Valid on errors as well as successful returns; discard state after errors. |
+| <code>format</code> | <code>c.Format</code> | Read-only |  |
+| <code>level</code> | <code>c.Level</code> | Read-only |  |
+| <code>limits</code> | <code>c.Limits</code> | Read-only |  |
+| <code>matcher</code> | <code>m.Matcher = .&#123;&#125;</code> | Read-only |  |
+| <code>check</code> | <code>c.Checksum = .&#123;&#125;</code> | Read-only |  |
+| <code>pending</code> | <code>[32832]u8 = mem.array(32832, u8, fn(i: usize) u8 &#123; _ = i</code> | Read-only |  |
+| <code>pending_len</code> | <code>usize = 0</code> | Read-only |  |
+| <code>pending_at</code> | <code>usize = 0</code> | Read-only |  |
+| <code>bits</code> | <code>u32 = 0</code> | Read-only |  |
+| <code>nbits</code> | <code>u8 = 0</code> | Read-only |  |
+| <code>started</code> | <code>bool = false</code> | Read-only |  |
+| <code>finished</code> | <code>bool = false</code> | Read-only |  |
+| <code>total_input</code> | <code>usize = 0</code> | Read-only |  |
+| <code>total_output</code> | <code>usize = 0</code> | Read-only |  |
+| <code>generated</code> | <code>usize = 0</code> | Read-only |  |
+
+### Deflater.init
+
+```otr
+fn init(format: c.Format, level: c.Level, limits: c.Limits) Deflater
+```
+
+### Deflater.step
+
+```otr
+fn step(self: &mut Deflater, input: []u8, output: []mut u8, action: c.Action) c.Error!c.Progress
+```

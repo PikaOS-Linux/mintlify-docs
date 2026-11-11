@@ -1,0 +1,3 @@
+sorted: 42 19 3 0 -7
+callback saw the state: true
+state reachable outside lend: false

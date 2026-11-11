@@ -1,0 +1,295 @@
+---
+title: "std.thread"
+sidebarTitle: "thread"
+description: "Operating-system threads."
+---
+
+Operating-system threads. A `Thread` is a resource: it must be joined (spec O3), so a
+spawned thread never outlives the code that started it by accident.
+
+```otr
+import std.thread
+```
+
+## Example
+
+```otr
+import std
+import std.sync
+import std.thread
+
+// Each thread has its own copy of a top-level thread.Local constant.
+const calls = thread.Local(u64).init(0)
+
+fn count_call() u64 {
+    calls.set(calls.get() + 1)
+    return calls.get()
+}
+
+const Progress = struct {
+    pub done: sync.Atomic
+}
+
+pub fn main() !void {
+    _ = count_call()
+    _ = count_call()
+
+    // spawn takes a closure that owns what it captures; join waits for it.
+    seen := sync.Channel(u64).init(std.mem.heap, 1)
+    defer seen.deinit()
+    tx := seen.clone()
+    t := try thread.spawn(fn[tx]() void {
+        defer tx.deinit()
+        _ = tx.try_send(count_call())
+    })
+    t.join()
+    std.io.printf("calls on main {}, on the new thread {}\n", .{ calls.get(), seen.try_recv() orelse 0 })
+
+    // Worker shares a value with its thread and hands it back on join.
+    w := try thread.Worker(Progress).start(Progress{ done: sync.Atomic.init(0) }, fn(p: &Progress) void {
+        for _ in 0..1000 { _ = p.done.fetch_add(1) }
+    })
+    progress := w.join()
+    std.io.printf("worker counted {}\n", .{ progress.done.load() })
+}
+```
+
+```text
+calls on main 2, on the new thread 1
+worker counted 1000
+```
+
+## Thread
+
+```otr
+const Thread = struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>id</code> | <code>u64</code> | Read-only |
+
+### Thread.join
+
+```otr
+fn join(self: Thread) void
+```
+
+Waits for the thread to finish.
+
+### Thread.detach
+
+```otr
+fn detach(self: Thread) void
+```
+
+Lets the thread run on its own; it ends when it returns or the program exits.
+
+### Thread.deinit
+
+```otr
+fn deinit(self: Thread) void
+```
+
+## spawn
+
+```otr
+fn spawn(f: anytype) error { SystemResources }!Thread
+```
+
+Runs the closure `f` on a new thread. It must own everything it captures and be
+safe to move between threads (spec C3). Allocation or thread creation failure returns
+`SystemResources`; the closure is consumed and its captures are dropped on failure.
+
+## Worker
+
+```otr
+fn Worker(comptime T: type) type
+```
+
+A thread working on a value it shares with its owner: `start(value, f)` moves `value`
+to the heap and runs `f(&value)` on a new thread, and the worker joins the thread
+before the value is dropped (`deinit`) or handed back (`join`). The value therefore
+outlives every use the thread makes of it, so `f` may hold the reference for as long
+as it runs. Both sides reach the value at once, so `T` must be `Sync`; the owner talks
+to the thread through what it contains, such as an `Atomic`, a `Mutex` or a
+`sync.Channel`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>value</code> | <code>*T</code> | Read-only |
+| <code>id</code> | <code>u64</code> | Read-only |
+
+### Worker.start
+
+```otr
+fn start(value: T, f: anytype) error { SystemResources }!Self
+```
+
+Takes ownership of `value` and `f`, dropping both on allocation or thread
+creation failure. No worker is published until the thread has started.
+
+### Worker.get
+
+```otr
+fn get(self: &Self) &T
+```
+
+The value the thread works on.
+
+### Worker.join
+
+```otr
+fn join(self: Self) T
+```
+
+Waits for the thread to finish and returns the value.
+
+### Worker.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+Waits for the thread to finish, then drops the value.
+
+## Local
+
+```otr
+fn Local(comptime T: type) type
+```
+
+A value each thread has a copy of: `const hits = thread.Local(u64).init(0)`, then
+`hits.set(hits.get() + 1)`. Only a top-level constant (or one in a type) of this type
+is thread-local, with every thread's copy starting from its initialiser, which must be
+known at compile time; such a constant can only be the receiver of these methods, which
+copy the value in and out and never lend it, so they cost a plain load or store and
+stay sound whatever thread a task runs on. A value of this type anywhere else is a
+plain cell, `Send` when `T` is and never `Sync`, so it cannot be shared between
+threads, and method syntax on it is refused as a likely mistake (spec C5).
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>value</code> | <code>mem.UnsafeCell(T)</code> | Read-only |
+
+### Local.init
+
+```otr
+fn init(v: T) Self
+```
+
+### Local.get
+
+```otr
+fn get(self: &Self) T
+```
+
+This thread's copy.
+
+### Local.set
+
+```otr
+fn set(self: &Self, v: T) void
+```
+
+### Local.replace
+
+```otr
+fn replace(self: &Self, v: T) T
+```
+
+Sets this thread's copy to `v` and returns what it was.
+
+## LocalCell
+
+```otr
+fn LocalCell(comptime T: type) type
+```
+
+A thread-local value lent to a call, for values worth changing in place, such as a
+scratch buffer: `const scratch = thread.LocalCell([4096]u8).init(std.mem.array(4096,
+u8, fn(i: usize) u8 { return 0 }))`. As with
+`Local`, only a constant of this type is thread-local and it is only a receiver. `with`
+and `read` lend this thread's copy for one call, checked as in `cell.RefCell`, so a
+callback that reaches it again panics instead of aliasing it. A task running on
+`Io.Uring` must not wait during the call: the runtime panics, because the task could
+resume on another thread while it holds the loan.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>value</code> | <code>cell.RefCell(T)</code> | Read-only |
+
+### LocalCell.init
+
+```otr
+fn init(v: T) Self
+```
+
+### LocalCell.with
+
+```otr
+fn with(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f` on this thread's copy, lent exclusively, and returns what it returns.
+
+### LocalCell.read
+
+```otr
+fn read(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f` on this thread's copy, shared with other readers, and returns what it returns.
+
+## LocalContext
+
+```otr
+fn LocalContext(comptime Ctx: type) type
+```
+
+A borrow lent to the code one call runs on this thread, for state that callbacks reach
+without a context pointer, such as the cancellation flag of the operation a worker
+thread is running, which a progress callback checks:
+
+```otr
+const active = thread.LocalContext(Cancel).init()
+
+active.lend(&cancel, fn[...]() void { copy_tree(...) })
+...
+stop := active.with(fn(c: &Cancel) bool { return c.requested() }) orelse false
+```
+
+As with `Local`, only a constant of this type is thread-local and it is only a receiver.
+`with` on another thread, or outside `lend`, gets null. The loan is shared, since `lend`
+may be re-entered, each `lend` lending its own state until it returns; what callbacks
+change goes in a `cell.Cell` or `cell.RefCell`. A task running on `Io.Uring` must not
+wait during `lend`: the runtime panics, because the task could resume on another thread
+while this thread's callbacks still reach its state. It is `ffi.Context` per thread, at
+the cost of two thread-local stores per `lend` and a load per `with`.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>ctx</code> | <code>mem.UnsafeCell(usize)</code> | Read-only | The address of the state lent on this thread, or 0. |
+
+### LocalContext.init
+
+```otr
+fn init() Self
+```
+
+### LocalContext.lend
+
+```otr
+fn lend(self: &Self, ctx: &Ctx, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f` with `ctx` lent to `with` on this thread, and returns what `f` returns.
+
+### LocalContext.with
+
+```otr
+fn with(self: &Self, f: anytype) ?@return_type(@type_of(f))
+```
+
+Runs `f` on the state lent on this thread; null when none is. `f` cannot return
+a borrow, since the state is lent only while `lend` runs.

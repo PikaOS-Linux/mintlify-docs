@@ -1,0 +1,26 @@
+import std
+import std.crypto.ed25519
+
+pub fn main() !void {
+    // Fixed bytes keep the output the same on every run; a real seed is 32 random
+    // bytes that stay secret.
+    seed := std.mem.array(32, u8, fn(i: usize) u8 { return @int_cast(u8, i + 1) })
+    var keys = ed25519.KeyPair.from_seed(&seed)
+    defer keys.wipe()
+
+    message := "release 1.2.3 is genuine"
+    sig := keys.sign(message)
+    std.io.printf("public key {} bytes, signature {} bytes\n", .{ keys.public_key.len, sig.len })
+
+    // Anyone holding the public key can check the signature.
+    try ed25519.verify(&keys.public_key, message, &sig)
+    std.io.println("signature accepted")
+
+    if ed25519.verify(&keys.public_key, "release 6.6.6 is genuine", &sig) |_| {} else |err| {
+        std.io.printf("changed message: {}\n", .{ err })
+    }
+
+    // Signing is deterministic: the same key and message give the same signature.
+    again := keys.sign(message)
+    std.io.printf("same signature again: {}\n", .{ std.mem.eql(u8, sig[0..], again[0..]) })
+}

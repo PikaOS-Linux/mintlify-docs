@@ -1,0 +1,289 @@
+---
+title: "std.io"
+sidebarTitle: "io"
+description: "Writing to standard output and standard error, formatting into anything with a write_all(self: &mut Self, s: str) void method, such as String, and reading standard input line by line."
+---
+
+Writing to standard output and standard error, formatting into anything with a
+`write_all(self: &mut Self, s: str) void` method, such as `String`, and reading
+standard input line by line.
+
+```otr
+import std.io
+```
+
+## Example
+
+```otr
+import std
+import std.string
+
+const Point = struct {
+    x: i32
+    y: i32
+
+    // A `format` method makes a type printable with `{}`.
+    pub fn format(self: Point, w: anytype) void {
+        std.io.format(w, "({}, {})", .{ self.x, self.y })
+    }
+}
+
+pub fn main() void {
+    std.io.println("plain line")
+    std.io.printf("{} items, {d:.2} average, done: {}\n", .{ 3, 4.5, true })
+    std.io.printf("[{d:>6}] [{d:0>6}] [{s:<8}] [{s:^8}]\n", .{ 42, 42, "left", "mid" })
+    std.io.printf("hex {x}, binary {b}, char {c}, codepoint {u}\n", .{ 255, 5, 'A', 0x3bb })
+    std.io.printf("point {}, optional {}, braces {{}}\n", .{ Point{ x: 3, y: -4 }, @as(?u8, null) })
+
+    // `format` writes to anything with `write_all`, such as a String.
+    var line = string.String.init(std.mem.heap)
+    defer line.deinit()
+    std.io.format(&mut line, "{s}={d}", .{ "width", 1920 })
+    std.io.printf("{} ({} bytes)\n", .{ line.as_str(), line.len() })
+
+    std.io.print("float: ")
+    std.io.print_float(0.1, 64)
+    std.io.print("\n")
+    std.io.eprintf("warning: {} goes to standard error\n", .{ "this" })
+}
+```
+
+```text
+plain line
+3 items, 4.50 average, done: true
+[    42] [000042] [left    ] [  mid   ]
+hex ff, binary 101, char A, codepoint λ
+point (3, -4), optional null, braces {}
+width=1920 (10 bytes)
+float: 0.1
+```
+
+## File
+
+```otr
+const File = struct
+```
+
+Standard output (`fd` 1) or standard error (`fd` 2) as a formatting target.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>fd</code> | <code>i32</code> | Read-only |
+
+### File.write_all
+
+```otr
+fn write_all(self: &mut File, s: str) void
+```
+
+## print
+
+```otr
+fn print(s: str) void
+```
+
+Writes `s` to standard output.
+
+## eprint
+
+```otr
+fn eprint(s: str) void
+```
+
+Writes `s` to standard error.
+
+## println
+
+```otr
+fn println(s: str) void
+```
+
+Writes `s` and a newline to standard output.
+
+## print_int
+
+```otr
+fn print_int(n: i64) void
+```
+
+## print_uint
+
+```otr
+fn print_uint(n: u64) void
+```
+
+## print_float
+
+```otr
+fn print_float(x: f64, bits: u8) void
+```
+
+The shortest decimal that reads back as `x` in a float type `bits` wide (16, 32 or
+64), e.g. `0.1`, `1.5e+20` or `3.0`.
+
+## print_bool
+
+```otr
+fn print_bool(b: bool) void
+```
+
+## write_int
+
+```otr
+fn write_int(w: anytype, n: i64) void
+```
+
+## write_uint
+
+```otr
+fn write_uint(w: anytype, n: u64) void
+```
+
+## write_int128
+
+```otr
+fn write_int128(w: anytype, n: i128) void
+```
+
+## write_uint128
+
+```otr
+fn write_uint128(w: anytype, n: u128) void
+```
+
+## write_float
+
+```otr
+fn write_float(w: anytype, x: f64, bits: u8) void
+```
+
+The shortest decimal that reads back as `x` in a float type `bits` wide (16, 32 or
+64): written out for decimal exponents from -4 to 15 (`0.001`, `250.0`, with `.0` on
+integral values) or below the number of digits, and as `1.5e+20` beyond. `f64` and
+`f32` go through `std.dtoa`, which keeps the C library's output this had before, and
+`f16` through `std.ryu`, except that a whole `f16` from 2048 up is written exactly
+(`65504.0`, not `65500.0`), as the C library wrote it.
+
+## write_float_fixed
+
+```otr
+fn write_float_fixed(w: anytype, x: f64, precision: usize) void
+```
+
+`x` with `precision` digits after the point, at most 100, rounded half to even from
+its exact binary value as C's `%.*f` is, without allocating: `nan`, `inf` and `-inf`
+for the values that are not finite, and a `-` for every negative value, `-0.0`
+included. The digits come from integer arithmetic for precisions up to 19 and
+magnitudes below 2^128, and from the C library otherwise.
+
+## printf
+
+```otr
+fn printf(comptime fmt: []static u8, args: anytype) void
+```
+
+Writes `fmt` to standard output with each placeholder replaced by the next value of
+the tuple `args` (see `format`). The output is gathered first and written with one
+write(2) when it fits in 4 KiB, so a line costs one system call and is not split up by
+other threads' or processes' writes to the same file.
+
+## eprintf
+
+```otr
+fn eprintf(comptime fmt: []static u8, args: anytype) void
+```
+
+`printf` to standard error.
+
+## format
+
+```otr
+fn format(w: anytype, comptime fmt: []static u8, args: anytype) void
+```
+
+`printf` into `w`, anything with `write_all(s: str)`. Each placeholder is replaced by
+the next value of `args`, written as its specifier says; the format is parsed at
+compile time, so a plain `{}` costs only the value's own writing.
+
+A placeholder is `{[specifier][:[[fill]alignment][width][.precision]]}`:
+
+- `{}` (also `{any}`, `{f}`): the value's natural form. Integers, floats (as `{d}`),
+  bools, strings, errors and enums can be formatted, and so can values of types with
+  a `format(self, w: anytype) void` method, which writes to `w`. An optional is its
+  payload formatted by the same placeholder, or `null`; a `?` before the specifier
+  (`{?}`, `{?d}`) is accepted for it and changes nothing.
+- `{d}` a number in decimal, `{s}` a string, `{x}`/`{X}` an integer in lower- or
+  upper-case hexadecimal or a string's bytes as hex pairs, `{b}` binary, `{o}` octal,
+  `{c}` a `u8` as that byte, `{u}` an integer as the UTF-8 of that codepoint (U+FFFD
+  when it is none, a negative value or one past U+10FFFF included), `{e}` a float in
+  scientific notation, `{t}` an enum's tag or an error's name, without `error.`.
+- Floats are written as Zig's `std.fmt` writes them: `{d}` the shortest digits that
+  read back (from `std.ryu`) in plain decimal, `3`, `0.00001`, `150000000000000000000`,
+  and `{e}` as `1.5e20`, `1e0`, `-2.5e-7`; `nan`, `inf`, `-inf`, and `-nan` for a NaN
+  whose sign is set. What does not fit Zig's 347-byte buffer is written `(float)`.
+- `width` pads to that many columns (bytes of numbers, codepoints of strings) with
+  `fill`, a space unless given, which may be any one codepoint. `alignment` is `<`,
+  `^` or `>`, and right by default: `{d:0>4}`, `{s:<12}`, `{x:0>2}`. A width that
+  starts with `0` and has no alignment pads with zeros, `{d:02}`.
+- `precision` gives a float that many digits after the point (`{d:.2}`, `{e:.3}`):
+  its shortest digits rounded half up there, as Zig does, so `{d:.1}` writes 0.25 as
+  `0.3` though its binary value is below it; `write_float_fixed` rounds the exact
+  value instead. Integers ignore it.
+
+`{{` and `}}` write `{` and `}`, as in Zig. A lone `{` that does not start a
+placeholder this way, such as one followed by a space or a quote, is written as it is,
+and so is a lone `}` outside a placeholder; so a JSON object closed after a value is
+`{}}}}`, not `{}}}`. An unknown specifier, or one that cannot format its argument's
+type, is a compile error.
+
+## write_value
+
+```otr
+fn write_value(w: anytype, x: anytype) void
+```
+
+Writes one value in its natural textual form.
+
+## Reader
+
+```otr
+const Reader = struct
+```
+
+Buffered reading from a file descriptor, such as standard input (`fd` 0). What it
+returns stays valid until the next read.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>fd</code> | <code>i32</code> | Read-only |  |
+| <code>buf</code> | <code>list.List(u8)</code> | Read-only |  |
+| <code>pos</code> | <code>usize</code> | Read-only | Start of the buffered bytes not returned yet. |
+
+### Reader.init
+
+```otr
+fn init(alloc: mem.Allocator, fd: i32) Reader
+```
+
+### Reader.deinit
+
+```otr
+fn deinit(self: Reader) void
+```
+
+### Reader.read_line
+
+```otr
+fn read_line(self: &mut Reader) ?str
+```
+
+The next line without its `\n`, or null at the end of the input. A last line
+that has no `\n` is returned too.
+
+### Reader.read_exact
+
+```otr
+fn read_exact(self: &mut Reader, n: usize) ?str
+```
+
+The next `n` bytes, or null if the input ends before them.

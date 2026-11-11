@@ -1,0 +1,16 @@
+import std
+import std.log
+
+const net = log.Scoped("net")
+
+pub fn main() void {
+    // Log lines go to standard error, so standard output stays free for the program's data.
+    log.info("starting, {} workers", .{ 4 })
+    log.debug("config read from {}", .{ "/etc/app.conf" })
+
+    net.info("connected to {}", .{ "example.org" })
+    net.warn("retrying in {} ms", .{ 250 })
+    net.err("gave up after {} attempts", .{ 3 })
+
+    std.io.println("result: 42")
+}

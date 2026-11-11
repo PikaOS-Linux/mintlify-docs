@@ -1,0 +1,44 @@
+import std
+import std.arena
+import std.json
+import std.list
+import std.string
+
+const Settings = struct {
+    pub theme: string.String
+    pub volumes: list.List(u8)
+    pub dnd: bool = false
+
+    pub fn deinit(self: Settings) void {
+        self.theme.deinit()
+        self.volumes.deinit()
+    }
+}
+
+pub fn main() !void {
+    // Typed: the document is read straight into the struct's pub fields.
+    cfg := try json.parse_owned(Settings, "{\"theme\": \"nord\", \"volumes\": [10, 20]}", .{})
+    defer cfg.deinit()
+    std.io.printf("{} {} {}\n", .{ cfg.theme.as_str(), cfg.volumes.len, cfg.dnd })
+
+    var out = string.String.init(std.mem.heap)
+    defer out.deinit()
+    json.stringify(&mut out, &cfg, .{ whitespace: .indent_2 })
+    std.io.println(out.as_str())
+
+    // Dynamic: a Value tree that lives in a region and is freed with it.
+    region r = arena.Arena.init(std.mem.heap)
+    defer r.deinit()
+    doc := try json.parse(r, "{\"server\": {\"host\": \"localhost\", \"port\": 8080}}")
+    server := json.get(r, doc, "server") orelse return error.MissingServer
+    if json.get(r, server, "port") |port| {
+        switch port {
+            .number |n| => std.io.printf("port {d}\n", .{ n })
+            else => {}
+        }
+    }
+
+    if json.parse(r, "[1, 2,]") |_| {} else |e| {
+        std.io.printf("[1, 2,] is {}\n", .{ e })
+    }
+}

@@ -1,0 +1,133 @@
+---
+title: "std.testing"
+sidebarTitle: "testing"
+description: "Assertions for test blocks."
+---
+
+Assertions for `test` blocks. Each returns an error, so `try` ends the test.
+
+```otr
+import std.testing
+```
+
+## Example
+
+```otr
+import std
+import std.list
+
+const ParseError = error { Empty, NotANumber }
+
+fn parse_digit(s: str) ParseError!u8 {
+    if s.len == 0 {
+        return error.Empty
+    }
+    if s[0] < '0' or s[0] > '9' {
+        return error.NotANumber
+    }
+    return s[0] - '0'
+}
+
+test "expect takes any condition" {
+    try std.testing.expect(1 + 1 == 2)
+}
+
+test "expect_equal names the type" {
+    try std.testing.expect_equal(u8, 7, try parse_digit("7"))
+}
+
+test "expect_equal_slices compares contents" {
+    var xs = list.List(u8).init(std.mem.heap)
+    defer xs.deinit()
+    xs.push_slice("abc")
+    try std.testing.expect_equal_slices(u8, "abc", xs.items())
+}
+
+test "expect_error checks which error came back" {
+    try std.testing.expect_error(error.Empty, parse_digit(""))
+}
+
+test "hex spells out a test vector" {
+    key := std.testing.hex(4, "deadbeef")
+    try std.testing.expect_equal_slices(u8, &[4]u8{ 0xde, 0xad, 0xbe, 0xef }, &key)
+}
+
+test "failing_allocator proves code does not allocate" {
+    // An empty list has no storage; any allocation here would panic.
+    var xs = list.List(u8).init(std.testing.failing_allocator)
+    defer xs.deinit()
+    try std.testing.expect(xs.len == 0)
+}
+```
+
+```text
+test "expect takes any condition" ... ok
+test "expect_equal names the type" ... ok
+test "expect_equal_slices compares contents" ... ok
+test "expect_error checks which error came back" ... ok
+test "hex spells out a test vector" ... ok
+test "failing_allocator proves code does not allocate" ... ok
+6 passed, 0 failed
+```
+
+## Failure
+
+```otr
+const Failure = error { TestExpectedTrue, TestExpectedEqual }
+```
+
+## expect
+
+```otr
+fn expect(ok: bool) Failure!void
+```
+
+## expect_equal
+
+```otr
+fn expect_equal(comptime T: type, expected: T, actual: T) Failure!void
+```
+
+## expect_equal_slices
+
+```otr
+fn expect_equal_slices(comptime T: type, expected: []T, actual: []T) Failure!void
+```
+
+## expect_error
+
+```otr
+fn expect_error(expected: anyerror, result: anytype) Failure!void
+```
+
+Whether `result` is the error `expected`.
+
+## failing_allocator
+
+```otr
+const failing_allocator = unsafe { mem.Allocator.from_fns(no_alloc, no_resize, no_free) }
+```
+
+An allocator with no memory: any allocation panics with "out of memory", so code given
+it is shown never to allocate.
+
+## runtime_dir
+
+```otr
+fn runtime_dir() []static u8
+```
+
+A private directory with a short path for a test's sockets and other runtime files:
+`otr test` makes one under /tmp for each run (mode 0700) and removes it after a run
+that passes. A Unix socket's path must fit in 108 bytes, which `fs.temp_dir()` in a
+deep worktree may not leave room for. Outside `otr test`, `fs.temp_dir()`.
+
+## hex
+
+```otr
+fn hex(comptime N: usize, h: str) [N]u8
+```
+
+The `N` bytes the hex digits `h` spell, for test vectors written as text; panics unless
+`h` is exactly `2 * N` lowercase or uppercase hex digits, so a mistyped vector fails
+loudly instead of testing other bytes.

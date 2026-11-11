@@ -1,0 +1,28 @@
+import std
+import std.ffi
+import c "stdio.h" as stdio safe {
+    fputs(s: [:0]u8, stream: ffi.Ref(FILE))
+    ftell(stream: ffi.Ref(FILE))
+    rewind(stream: ffi.Ref(FILE))
+}
+import c "stdio.h" as raw
+
+// A C object the program owns: deinit gives it back with fclose.
+const File = ffi.Owned(stdio.FILE, raw.fclose)
+
+pub fn main() !void {
+    p := unsafe { raw.tmpfile() } orelse return error.NoTempFile
+    file := unsafe { File.adopt(p) }
+    defer file.deinit()
+
+    // get lends the object as an ffi.Ref, which the safe list lets C take without unsafe.
+    _ = stdio.fputs("written through C\n", file.get())
+    std.io.printf("C wrote {} bytes\n", .{ stdio.ftell(file.get()) })
+    stdio.rewind(file.get())
+
+    // A string C hands back is read as an ffi.CStr, up to its NUL.
+    var buf: [64]u8 = std.mem.splat(64, u8, 0)
+    line := unsafe { raw.fgets(&mut buf[0], 64, file.get().raw()) } orelse return error.ReadFailed
+    text := unsafe { ffi.CStr.from_raw(line) }
+    std.io.printf("read back: {}", .{ text.get() })
+}

@@ -1,0 +1,259 @@
+---
+title: "std.crypto.bigint"
+sidebarTitle: "crypto.bigint"
+description: "Arithmetic modulo an odd number of up to 64 * N bits, for checking signatures."
+---
+
+Arithmetic modulo an odd number of up to `64 * N` bits, for checking signatures: the
+field and scalar arithmetic of P-256, P-384 and Ed25519, and RSA's modular powers.
+Numbers are `[N]u64` limbs, least significant first. Products are formed in Montgomery
+form (CIOS), so a reduction costs a second pass of multiplies rather than a division.
+
+Every input to a verification is public, so these routines may branch on values and
+take time that depends on them. The exceptions are `Modulus`'s `mul_ct`, `add_ct` and
+`sub_ct`, which choose their results with masks so they take the same time whatever the
+operands hold, for an ECDH key exchange on a secret scalar. Their branching twins stay
+for verification, where a well-predicted branch costs less than the masks.
+
+```otr
+import std.crypto.bigint
+```
+
+## zero
+
+```otr
+fn zero(comptime K: usize) [K]u64
+```
+
+`[K]u64` holding zero.
+
+## from_bytes
+
+```otr
+fn from_bytes(comptime N: usize, bytes: []u8) ?[N]u64
+```
+
+The big-endian `bytes` as limbs, or null when the value needs more than `N` limbs.
+Leading zero bytes are allowed, so DER integers and fixed-width fields read alike.
+
+## to_bytes
+
+```otr
+fn to_bytes(comptime N: usize, x: &[N]u64, out: []mut u8) bool
+```
+
+Writes `x` big-endian into all of `out`, or returns false when it does not fit.
+
+## less
+
+```otr
+fn less(comptime N: usize, a: &[N]u64, b: &[N]u64) bool
+```
+
+Whether `a < b`.
+
+## is_zero
+
+```otr
+fn is_zero(comptime N: usize, a: &[N]u64) bool
+```
+
+## bit_len
+
+```otr
+fn bit_len(comptime N: usize, a: &[N]u64) usize
+```
+
+The number of significant bits of `a`.
+
+## bit
+
+```otr
+fn bit(comptime N: usize, a: &[N]u64, i: usize) bool
+```
+
+Bit `i` of `a`.
+
+## select
+
+```otr
+fn select(comptime N: usize, mask: u64, a: &[N]u64, b: &[N]u64) [N]u64
+```
+
+`a` where `mask` is all ones and `b` where it is zero, read the same way either way.
+
+## shr
+
+```otr
+fn shr(comptime N: usize, a: &[N]u64, k: u6) [N]u64
+```
+
+`a` shifted right by `k < 64` bits.
+
+## add_small
+
+```otr
+fn add_small(comptime N: usize, a: &[N]u64, v: u64) [N]u64
+```
+
+`a + v`, wrapping at `2^(64N)`.
+
+## sub_small
+
+```otr
+fn sub_small(comptime N: usize, a: &[N]u64, v: u64) [N]u64
+```
+
+`a - v`, wrapping at zero.
+
+## Modulus
+
+```otr
+fn Modulus(comptime N: usize) type
+```
+
+An odd modulus `m > 1` and the constants its Montgomery products need. Elements
+passed to its methods are below `m`; `mul` and friends work on Montgomery forms
+(`x * R mod m` for `R = 2^(64N)`), which `to_mont` and `from_mont` convert to and from.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>m</code> | <code>[N]u64</code> | Public |  |
+| <code>one</code> | <code>[N]u64</code> | Public | `R mod m`, one in Montgomery form. |
+| <code>m0inv</code> | <code>u64</code> | Read-only | `-m^-1 mod 2^64`. |
+| <code>r2</code> | <code>[N]u64</code> | Read-only | `R^2 mod m`, which `to_mont` multiplies by. |
+
+### Modulus.init
+
+```otr
+fn init(m: [N]u64) ?Self
+```
+
+The modulus `m`, or null when it is even or below 3.
+
+### Modulus.mul
+
+```otr
+fn mul(self: &Self, a: &[N]u64, b: &[N]u64) [N]u64
+```
+
+The Montgomery product `a * b / R mod m`. It holds for any `a < R` when `b < m`,
+which `to_mont` relies on to reduce numbers above `m`.
+
+### Modulus.mul_ct
+
+```otr
+fn mul_ct(self: &Self, a: &[N]u64, b: &[N]u64) [N]u64
+```
+
+`mul` in time independent of the operands.
+
+### Modulus.sqr
+
+```otr
+fn sqr(self: &Self, a: &[N]u64) [N]u64
+```
+
+### Modulus.add
+
+```otr
+fn add(self: &Self, a: &[N]u64, b: &[N]u64) [N]u64
+```
+
+### Modulus.add_ct
+
+```otr
+fn add_ct(self: &Self, a: &[N]u64, b: &[N]u64) [N]u64
+```
+
+### Modulus.sub
+
+```otr
+fn sub(self: &Self, a: &[N]u64, b: &[N]u64) [N]u64
+```
+
+### Modulus.sub_ct
+
+```otr
+fn sub_ct(self: &Self, a: &[N]u64, b: &[N]u64) [N]u64
+```
+
+### Modulus.neg
+
+```otr
+fn neg(self: &Self, a: &[N]u64) [N]u64
+```
+
+### Modulus.to_mont
+
+```otr
+fn to_mont(self: &Self, x: &[N]u64) [N]u64
+```
+
+The Montgomery form of `x mod m`, for any `x < R`.
+
+### Modulus.from_mont
+
+```otr
+fn from_mont(self: &Self, x: &[N]u64) [N]u64
+```
+
+### Modulus.to_mont_ct
+
+```otr
+fn to_mont_ct(self: &Self, x: &[N]u64) [N]u64
+```
+
+`to_mont` in time independent of `x`, for a secret such as a signing nonce.
+
+### Modulus.from_mont_ct
+
+```otr
+fn from_mont_ct(self: &Self, x: &[N]u64) [N]u64
+```
+
+`from_mont` in time independent of `x`.
+
+### Modulus.reduce
+
+```otr
+fn reduce(self: &Self, x: &[N]u64) [N]u64
+```
+
+`x mod m` for any `x < R`.
+
+### Modulus.pow
+
+```otr
+fn pow(self: &Self, x: &[N]u64, e: &[N]u64) [N]u64
+```
+
+`x^e` of the Montgomery form `x`, left to right over the bits of `e`.
+
+### Modulus.inv_prime
+
+```otr
+fn inv_prime(self: &Self, x: &[N]u64) [N]u64
+```
+
+`x^-1` of the Montgomery form `x`, by Fermat's little theorem, so only for a
+prime modulus; zero has none and gives zero.
+
+### Modulus.inv_prime_ct
+
+```otr
+fn inv_prime_ct(self: &Self, x: &[N]u64) [N]u64
+```
+
+`inv_prime` in time independent of `x`: the exponent is public, so only the
+products need masks.
+
+### Modulus.eql
+
+```otr
+fn eql(self: &Self, a: &[N]u64, b: &[N]u64) bool
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>Modulus.limbs</code> | <code>N</code> |

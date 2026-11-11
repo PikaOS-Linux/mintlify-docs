@@ -1,0 +1,247 @@
+---
+title: "std.http.parser"
+sidebarTitle: "http.parser"
+description: "HTTP/1.1 responses (RFC 9112) read from bytes with no I/O, for std.http."
+---
+
+HTTP/1.1 responses (RFC 9112) read from bytes with no I/O, for `std.http`: the status
+line and header fields, and a body framed by Content-Length, chunked transfer coding or
+the end of the connection, each arriving in pieces split anywhere; and a body coded
+`gzip` or `deflate`, decoded by `std.flate`.
+
+```otr
+import std.http.parser
+```
+
+## Example
+
+```otr
+import std
+import std.http.parser
+
+pub fn main() !void {
+    // The parser does no I/O: feed it the bytes as they arrive, split anywhere.
+    pieces := [3]str{ "HTTP/1.1 200 OK\r\nContent-Ty", "pe: text/plain\r\nContent-Length: 11\r\n\r\nhello", " otter" }
+
+    var p = parser.Parser.init(std.mem.heap, false, 16 * 1024, 1024 * 1024)
+    errdefer p.deinit()
+    for piece in pieces {
+        used := try p.feed(piece)
+        std.io.printf("fed {} of {} bytes, done: {}\n", .{ used, piece.len, p.done() })
+    }
+    std.io.printf("keeps the connection open: {}\n", .{ p.keeps_open() })
+
+    response := p.into_response()
+    defer response.deinit()
+    std.io.printf("status {}\n", .{ response.status })
+    // Header names match in any case.
+    std.io.printf("type {}\n", .{ response.header("content-type") orelse "unknown" })
+    var headers = response.headers()
+    for h in headers {
+        std.io.printf("  {}: {}\n", .{ h.name, h.value })
+    }
+    std.io.printf("body {}\n", .{ response.body() })
+}
+```
+
+```text
+fed 27 of 27 bytes, done: false
+fed 43 of 43 bytes, done: false
+fed 6 of 6 bytes, done: true
+keeps the connection open: true
+status 200
+type text/plain
+  Content-Type: text/plain
+  Content-Length: 11
+body hello otter
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>InvalidResponse</code> | The status line or a header line of the response is malformed. |
+| <code>HeadersTooLong</code> | The response head is longer than `Options.max_head`. |
+| <code>BodyTooLarge</code> | The body is longer than `Options.max_body`, as sent or once decoded. |
+| <code>InvalidCompression</code> | A body coded `gzip` or `deflate` does not decode. |
+| <code>InvalidChunk</code> | A chunk of a chunked body is malformed. |
+| <code>InvalidContentLength</code> | Content-Length is not a number, or two of them disagree. |
+| <code>UnsupportedTransferEncoding</code> | The response uses a transfer coding other than chunked. |
+| <code>ConnectionClosed</code> | The server closed the connection before the response was complete, or, over TLS, without close_notify, so a body running to the end of the connection may have been cut short. |
+
+## Header
+
+```otr
+const Header = ref struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>name</code> | <code>str</code> |
+| <code>value</code> | <code>str</code> |
+
+## Response
+
+```otr
+const Response = struct
+```
+
+A response: its status, header fields and body.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>status</code> | <code>u16</code> | Public |  |
+| <code>fields</code> | <code>List(u8)</code> | Read-only | The header field lines, each ending in `\n`. |
+| <code>content</code> | <code>List(u8)</code> | Read-only |  |
+
+### Response.header
+
+```otr
+fn header(self: &Response, name: str) ?[]u8
+```
+
+The value of the first header field called `name`, in any case, with the spaces
+around it trimmed.
+
+### Response.headers
+
+```otr
+fn headers(self: &Response) HeaderIterator
+```
+
+The header fields in the order they came.
+
+### Response.body
+
+```otr
+fn body(self: &Response) []u8
+```
+
+### Response.take_body
+
+```otr
+fn take_body(self: Response) List(u8)
+```
+
+Takes the body, which then stays with the caller.
+
+### Response.deinit
+
+```otr
+fn deinit(self: Response) void
+```
+
+## HeaderIterator
+
+```otr
+const HeaderIterator = ref struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>rest</code> | <code>[]u8</code> | Read-only |
+
+### HeaderIterator.next
+
+```otr
+fn next(self: &mut HeaderIterator) ?Header
+```
+
+## Parser
+
+```otr
+const Parser = struct
+```
+
+Reads one response from bytes as they arrive, with no I/O: `feed` takes what it can
+of each piece, `finish` says the connection has ended, and once `done` the response
+is `into_response`'s. Header lines and chunk-size lines may arrive split anywhere.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>alloc</code> | <code>mem.Allocator</code> | Read-only |  |
+| <code>state</code> | <code>PState</code> | Read-only |  |
+| <code>head</code> | <code>List(u8)</code> | Read-only | The head as received; after it is complete, only the header field lines. |
+| <code>scan</code> | <code>usize</code> | Read-only | Where the next search for the end of the head starts. |
+| <code>status</code> | <code>u16</code> | Read-only |  |
+| <code>body</code> | <code>List(u8)</code> | Read-only |  |
+| <code>remaining</code> | <code>u64</code> | Read-only | What is left of the body or of the current chunk. |
+| <code>line</code> | <code>List(u8)</code> | Read-only | A chunk-size or trailer line not yet complete. |
+| <code>no_body</code> | <code>bool</code> | Read-only |  |
+| <code>max_head</code> | <code>usize</code> | Read-only |  |
+| <code>max_body</code> | <code>usize</code> | Read-only |  |
+| <code>persistent</code> | <code>bool</code> | Read-only | HTTP/1.1 without `Connection: close`, and a body framed by its length or chunks: the connection may carry another exchange once this one is done. |
+
+### Parser.init
+
+```otr
+fn init(alloc: mem.Allocator, no_body: bool, max_head: usize, max_body: usize) Parser
+```
+
+`no_body` is for responses that have none whatever their headers say: to HEAD,
+and a proxy's to CONNECT.
+
+### Parser.deinit
+
+```otr
+fn deinit(self: Parser) void
+```
+
+### Parser.done
+
+```otr
+fn done(self: &Parser) bool
+```
+
+### Parser.status_code
+
+```otr
+fn status_code(self: &Parser) u16
+```
+
+The status, once the head is complete.
+
+### Parser.started
+
+```otr
+fn started(self: &Parser) bool
+```
+
+Whether any of the response has arrived.
+
+### Parser.keeps_open
+
+```otr
+fn keeps_open(self: &Parser) bool
+```
+
+Whether the server keeps the connection open for another request after this
+response (RFC 9112 §9.3), once the response is done.
+
+### Parser.feed
+
+```otr
+fn feed(self: &mut Parser, data: []u8) Error!usize
+```
+
+Takes what it can of `data` and says how much: all of it until the response is
+done, and nothing after, so the caller knows where what follows it begins.
+
+### Parser.finish
+
+```otr
+fn finish(self: &mut Parser) Error!void
+```
+
+The connection ended. Only a body that runs to the end of the connection may end
+here; anything else is cut short.
+
+### Parser.into_response
+
+```otr
+fn into_response(self: Parser) Response
+```

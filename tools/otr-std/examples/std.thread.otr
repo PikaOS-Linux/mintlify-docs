@@ -1,0 +1,38 @@
+import std
+import std.sync
+import std.thread
+
+// Each thread has its own copy of a top-level thread.Local constant.
+const calls = thread.Local(u64).init(0)
+
+fn count_call() u64 {
+    calls.set(calls.get() + 1)
+    return calls.get()
+}
+
+const Progress = struct {
+    pub done: sync.Atomic
+}
+
+pub fn main() !void {
+    _ = count_call()
+    _ = count_call()
+
+    // spawn takes a closure that owns what it captures; join waits for it.
+    seen := sync.Channel(u64).init(std.mem.heap, 1)
+    defer seen.deinit()
+    tx := seen.clone()
+    t := try thread.spawn(fn[tx]() void {
+        defer tx.deinit()
+        _ = tx.try_send(count_call())
+    })
+    t.join()
+    std.io.printf("calls on main {}, on the new thread {}\n", .{ calls.get(), seen.try_recv() orelse 0 })
+
+    // Worker shares a value with its thread and hands it back on join.
+    w := try thread.Worker(Progress).start(Progress{ done: sync.Atomic.init(0) }, fn(p: &Progress) void {
+        for _ in 0..1000 { _ = p.done.fetch_add(1) }
+    })
+    progress := w.join()
+    std.io.printf("worker counted {}\n", .{ progress.done.load() })
+}

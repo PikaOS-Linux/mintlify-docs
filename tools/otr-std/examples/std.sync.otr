@@ -1,0 +1,45 @@
+import std
+import std.arc
+import std.sync
+import std.thread
+
+// A top-level constant of a synchronised type is shared by every thread.
+const jobs_done = sync.Atomic.init(0)
+
+pub fn main(env: std.Env) !void {
+    io := env.io
+
+    // Channel: workers send results, main receives them.
+    results := sync.Channel(i64).init(std.mem.heap, 4)
+    defer results.deinit()
+    for i in 1..5 {
+        tx := results.clone()
+        try io.spawn(fn[io, tx, n = @int_cast(i64, i)]() void {
+            defer tx.deinit()
+            _ = jobs_done.fetch_add(1)
+            tx.send(io, n * n) catch {}
+        })
+    }
+    var sum: i64 = 0
+    for _ in 0..4 {
+        sum += (try results.recv(io)) orelse 0
+    }
+    std.io.printf("sum of squares {}, jobs {}\n", .{ sum, jobs_done.load() })
+
+    // Mutex: owns its data; Arc shares it between threads.
+    total := arc.Arc(sync.Mutex(i64)).init(sync.Mutex(i64).init(100))
+    defer total.deinit()
+    other := total.clone()
+    t := try thread.spawn(fn[other]() void {
+        defer other.deinit()
+        var g = other.get().lock()
+        defer g.deinit()
+        g.get().* += 20
+    })
+    t.join()
+    after := total.get().with(fn(v: &mut i64) i64 {
+        v.* += 3
+        return v.*
+    })
+    std.io.printf("total {}\n", .{ after })
+}

@@ -1,0 +1,19 @@
+import std
+import std.debug
+
+fn average(xs: []i64) i64 {
+    // An empty slice would divide by zero below; state the assumption instead.
+    debug.assert(xs.len > 0)
+    var sum: i64 = 0
+    for x in xs { sum += x }
+    return sum / @int_cast(i64, xs.len)
+}
+
+pub fn main() void {
+    marks := [4]i64{ 7, 9, 8, 4 }
+    std.io.printf("average {}\n", .{ average(marks[0..]) })
+
+    // A false condition panics in every build mode, release builds included.
+    debug.assert(marks[0] + marks[3] == 11)
+    std.io.println("assumptions hold")
+}

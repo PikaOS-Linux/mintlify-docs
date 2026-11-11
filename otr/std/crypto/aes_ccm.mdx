@@ -1,0 +1,89 @@
+---
+title: "std.crypto.aes_ccm"
+sidebarTitle: "crypto.aes_ccm"
+description: "AES-CCM (NIST SP 800-38C, RFC 3610)."
+---
+
+AES-CCM (NIST SP 800-38C, RFC 3610): CTR-mode encryption with a CBC-MAC over the nonce,
+the associated data and the plaintext. The key, tag and nonce lengths are part of the
+type: `AesCcm(16, 16, 11)` is SMB 3's AES-128-CCM, and RFC 3610's packets are
+`AesCcm(16, 8, 13)`. A nonce of n bytes leaves 15 - n for the message length, so a
+13-byte nonce limits a message to 64 KiB. The interface is `aes_gcm.AesGcm`'s: `init`
+expands the key once, `seal` and `open` work in place, `encrypt` and `decrypt` copy first.
+
+The MAC is over the plaintext, so `open` decrypts before it can check the tag; on a
+mismatch it encrypts the buffer back, so a forged message never leaves plaintext behind.
+A nonce must never repeat under one key.
+
+```otr
+import std.crypto.aes_ccm
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>AuthenticationFailed</code> | The tag does not match: the ciphertext, the associated data, the nonce or the key differ from what sealed it. |
+
+## AesCcm
+
+```otr
+fn AesCcm(comptime key_bytes: usize, comptime tag_bytes: usize, comptime nonce_bytes: usize) type
+```
+
+CCM over AES with a `key_bytes`-byte key (16 or 32), a `tag_bytes`-byte tag (4 to 16,
+even) and a `nonce_bytes`-byte nonce (7 to 13).
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>cipher</code> | <code>aes.Cipher(key_bytes, soft)</code> | Read-only |
+
+### AesCcm.init
+
+```otr
+fn init(key: &[key_bytes]u8) Self
+```
+
+### AesCcm.seal
+
+```otr
+fn seal(self: &Self, buf: []mut u8, ad: []u8, nonce: &[nonce_bytes]u8) [tag_bytes]u8
+```
+
+Encrypts `buf` in place and returns the tag over it and the associated data `ad`.
+
+### AesCcm.open
+
+```otr
+fn open(self: &Self, buf: []mut u8, tag: &[tag_bytes]u8, ad: []u8, nonce: &[nonce_bytes]u8) Error!void
+```
+
+Checks `tag` over the ciphertext `buf` and `ad`, decrypting `buf` in place. On
+`AuthenticationFailed` `buf` is left as it was.
+
+### AesCcm.encrypt
+
+```otr
+fn encrypt(self: &Self, out: []mut u8, msg: []u8, ad: []u8, nonce: &[nonce_bytes]u8) [tag_bytes]u8
+```
+
+`msg` encrypted into `out`, which has its length; returns the tag.
+
+### AesCcm.decrypt
+
+```otr
+fn decrypt(self: &Self, out: []mut u8, ct: []u8, tag: &[tag_bytes]u8, ad: []u8, nonce: &[nonce_bytes]u8) Error!void
+```
+
+`ct` decrypted into `out`, which has its length. On `AuthenticationFailed` `out` is
+zeroed.
+
+| Name | Definition |
+| --- | --- |
+| <code>AesCcm.key_len</code> | <code>key_bytes</code> |
+| <code>AesCcm.nonce_len</code> | <code>nonce_bytes</code> |
+| <code>AesCcm.tag_len</code> | <code>tag_bytes</code> |

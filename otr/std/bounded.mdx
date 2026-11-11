@@ -1,0 +1,239 @@
+---
+title: "std.bounded"
+sidebarTitle: "bounded"
+description: "Fixed-capacity containers that live inline, with no allocator."
+---
+
+Fixed-capacity containers that live inline, with no allocator: `BoundedList(T, N)` and
+`InlineString(N)`, such as a path buffer on the stack.
+
+Their storage starts out undefined (spec K4), but only the elements written so far are
+ever handed out, so safe code never sees uninitialised memory.
+
+```otr
+import std.bounded
+```
+
+## Example
+
+```otr
+import std
+import std.bounded
+
+pub fn main() !void {
+    // Four slots on the stack, no allocator.
+    var recent = bounded.BoundedList(u32, 4).init()
+    try recent.push(10)
+    try recent.push(20)
+    try recent.push_slice(&[2]u32{ 30, 40 })
+
+    recent.push(50) catch {
+        std.io.println("list is full")
+    }
+
+    first := recent.ordered_remove(0)
+    last := recent.pop() orelse 0
+    std.io.printf("removed {} and {}, {} left:", .{ first, last, recent.items().len })
+    for x in recent {
+        std.io.printf(" {}", .{ x })
+    }
+    std.io.println("")
+
+    var name = bounded.InlineString(16).init()
+    try name.set("otter")
+    try name.push('-')
+    try name.push_str("shell")
+    std.io.printf("{} ({} of {} bytes)\n", .{ name.as_str(), name.len(), bounded.InlineString(16).capacity })
+
+    // set fails and leaves the contents alone; set_truncated keeps what fits.
+    name.set("a name that is far too long") catch {
+        std.io.printf("too long, still {}\n", .{ name.as_str() })
+    }
+    name.set_truncated("a name that is far too long")
+    std.io.printf("{}\n", .{ name.as_str() })
+}
+```
+
+```text
+list is full
+removed 10 and 40, 2 left: 20 30
+otter-shell (11 of 16 bytes)
+too long, still otter-shell
+a name that is f
+```
+
+## BoundedList
+
+```otr
+fn BoundedList(comptime T: type, comptime N: usize) type
+```
+
+Up to `N` elements of `T`. `for x in b` and `for mut x in b` go over `items()`. It holds
+resources too, such as a few descriptors queued without a heap; it is then one itself,
+and `deinit` deinitialises the elements it holds (spec O8).
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>buf</code> | <code>[N]T</code> | Read-only |
+| <code>len</code> | <code>usize</code> | Read-only |
+
+### BoundedList.init
+
+```otr
+fn init() Self
+```
+
+### BoundedList.deinit
+
+```otr
+fn deinit(self: Owner) void
+```
+
+### BoundedList.push
+
+```otr
+fn push(self: &mut Self, item: T) error { Full }!void
+```
+
+### BoundedList.push_slice
+
+```otr
+fn push_slice(self: &mut Self, xs: []T) error { Full }!void
+```
+
+Appends all of `xs`, or nothing when they do not fit.
+
+### BoundedList.pop
+
+```otr
+fn pop(self: &mut Self) ?T
+```
+
+### BoundedList.insert
+
+```otr
+fn insert(self: &mut Self, i: usize, item: T) error { Full }!void
+```
+
+Puts `item` at `i`, moving the elements from `i` on up by one.
+
+### BoundedList.ordered_remove
+
+```otr
+fn ordered_remove(self: &mut Self, i: usize) T
+```
+
+Removes the element at `i`, keeping the order of the rest.
+
+### BoundedList.swap_remove
+
+```otr
+fn swap_remove(self: &mut Self, i: usize) T
+```
+
+Removes the element at `i` by moving the last one into its place.
+
+### BoundedList.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+Removes every element, deinitialising them when they are resources.
+
+### BoundedList.items
+
+```otr
+fn items(self: &Self) []T
+```
+
+### BoundedList.items_mut
+
+```otr
+fn items_mut(self: &mut Self) []mut T
+```
+
+| Name | Definition |
+| --- | --- |
+| <code>BoundedList.capacity</code> | <code>N</code> |
+
+## InlineString
+
+```otr
+fn InlineString(comptime N: usize) type
+```
+
+A string of at most `N` bytes. A NUL byte always follows the contents, so `as_cstr`
+can hand them to C.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>buf</code> | <code>[N + 1]u8</code> | Read-only |
+| <code>used</code> | <code>usize</code> | Read-only |
+
+### InlineString.init
+
+```otr
+fn init() Self
+```
+
+### InlineString.set
+
+```otr
+fn set(self: &mut Self, s: str) error { Full }!void
+```
+
+Replaces the contents with `s`; unchanged when `s` does not fit.
+
+### InlineString.set_truncated
+
+```otr
+fn set_truncated(self: &mut Self, s: str) void
+```
+
+Replaces the contents with as much of `s` as fits, cut before a UTF-8 sequence
+that would not fit whole.
+
+### InlineString.push
+
+```otr
+fn push(self: &mut Self, c: u8) error { Full }!void
+```
+
+### InlineString.push_str
+
+```otr
+fn push_str(self: &mut Self, s: str) error { Full }!void
+```
+
+Appends all of `s`, or nothing when it does not fit.
+
+### InlineString.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+### InlineString.len
+
+```otr
+fn len(self: &Self) usize
+```
+
+### InlineString.as_str
+
+```otr
+fn as_str(self: &Self) str
+```
+
+### InlineString.as_cstr
+
+```otr
+fn as_cstr(self: &Self) [:0]u8
+```
+
+The contents, which a NUL byte follows, for C.
+
+| Name | Definition |
+| --- | --- |
+| <code>InlineString.capacity</code> | <code>N</code> |

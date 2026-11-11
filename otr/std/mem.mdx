@@ -1,0 +1,456 @@
+---
+title: "std.mem"
+sidebarTitle: "mem"
+description: "Memory allocation."
+---
+
+Memory allocation.
+
+An `Allocator` is a set of function pointers, so it is a plain copyable value
+that containers keep for their whole life (spec §8). `heap` is the C allocator.
+
+```otr
+import std.mem
+```
+
+## Example
+
+```otr
+import std
+
+pub fn main() void {
+    line := "  name = otter shell  "
+    clean := std.mem.trim(u8, line, " ")
+    std.io.printf("[{}]\n", .{ clean })
+
+    if std.mem.index_of(u8, clean, " = ") |at| {
+        std.io.printf("key [{}] value [{}]\n", .{ clean[0..at], clean[at + 3..] })
+    }
+    std.io.printf("starts with name: {}\n", .{ std.mem.starts_with(u8, clean, "name") })
+    std.io.printf("eql: {}\n", .{ std.mem.eql(u8, "abc", "abc") })
+
+    // split keeps empty pieces, tokenize skips runs of delimiters.
+    var fields = std.mem.split(u8, "a,b,,c", ",")
+    for f in fields {
+        std.io.printf("<{}>", .{ f })
+    }
+    std.io.println("")
+    var words = std.mem.tokenize(u8, " one  two three ", " ")
+    for w in words {
+        std.io.printf("<{}>", .{ w })
+    }
+    std.io.println("")
+
+    var buf = std.mem.splat(8, u8, 0)
+    std.mem.copy(u8, &mut buf[0..4], "abcd")
+    std.mem.write_int(u32, &mut buf[4..], 0x01020304, .big)
+    std.io.printf("{} {} {x}\n", .{ buf[0..4], buf[7], std.mem.read_int(u32, buf[4..], .little) })
+
+    var slot: ?i64 = 5
+    taken := std.mem.take(i64, &mut slot) orelse 0
+    std.io.printf("took {}, slot empty {}\n", .{ taken, slot == null })
+}
+```
+
+```text
+[name = otter shell]
+key [name] value [otter shell]
+starts with name: true
+eql: true
+<a><b><><c>
+<one><two><three>
+abcd 4 4030201
+took 5, slot empty true
+```
+
+## ContextVTable
+
+```otr
+const ContextVTable = struct
+```
+
+Immutable shared callbacks, kept outside each allocator value.
+
+| Field | Type |
+| --- | --- |
+| <code>alloc</code> | <code>unsafe fn(*anyopaque, usize, usize) ?[*]u8</code> |
+| <code>resize</code> | <code>unsafe fn(*anyopaque, [*]u8, usize, usize) ?[*]u8</code> |
+| <code>free</code> | <code>unsafe fn(*anyopaque, [*]u8, usize) void</code> |
+
+## Allocator
+
+```otr
+const Allocator = struct
+```
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>alloc_fn</code> | <code>unsafe fn(usize, usize) ?[*]u8</code> | Read-only | Returns `size` bytes aligned to `alignment`, or null when out of memory. |
+| <code>resize_fn</code> | <code>unsafe fn([*]u8, usize, usize) ?[*]u8</code> | Read-only | Grows or shrinks a block, possibly moving it; null when out of memory. |
+| <code>free_fn</code> | <code>unsafe fn([*]u8, usize) void</code> | Read-only |  |
+| <code>context_vtable</code> | <code>?&amp;static ContextVTable = null</code> | Read-only |  |
+| <code>context_address</code> | <code>usize = 0</code> | Read-only |  |
+
+### Allocator.from_context
+
+```otr
+unsafe fn from_context(ptr: *anyopaque, vtable: &static ContextVTable) Allocator
+```
+
+The caller keeps `ptr` alive and at the same address until every copy of this
+allocator, every container using it, and every outstanding block is gone. The
+callbacks obey `from_fns`'s contract, including retaining the old block on failed
+resize. Callbacks/context must support concurrent calls across threads and copies;
+state access outside callbacks must use the same synchronization. Context is only
+allocator bookkeeping: callbacks must not touch live user storage except the block
+explicitly passed to resize/free, or invalidate any other outstanding allocation.
+This is deliberately unsafe: a plain allocator cannot carry a scoped borrow.
+
+### Allocator.alloc_raw
+
+```otr
+unsafe fn alloc_raw(self: Allocator, size: usize, alignment: usize) ?[*]u8
+```
+
+Low-level allocation: the caller initializes and owns the returned storage.
+
+### Allocator.resize_raw
+
+```otr
+unsafe fn resize_raw(self: Allocator, ptr: [*]u8, old_size: usize, new_size: usize, alignment: usize) ?[*]u8
+```
+
+`ptr` belongs to this allocator and sizes are nonzero. The caller supplies the
+actual required power-of-two alignment; failure retains the old block and bytes.
+Strong alignment needs fresh storage before commit, never a post-realloc check.
+
+### Allocator.free_raw
+
+```otr
+unsafe fn free_raw(self: Allocator, ptr: [*]u8, size: usize) void
+```
+
+`ptr` is a live block of `size` bytes from this allocator, freed exactly once.
+
+### Allocator.from_fns
+
+```otr
+unsafe fn from_fns(alloc_fn: unsafe fn(usize, usize) ?[*]u8, resize_fn: unsafe fn([*]u8, usize, usize) ?[*]u8, free_fn: unsafe fn([*]u8, usize) void) Allocator
+```
+
+An allocator over custom functions. Containers trust what `alloc_fn` returns, so the
+caller vouches that it hands out fresh memory of the size and alignment asked for,
+retains old storage on failed resize, and supports concurrent calls (spec §11).
+
+### Allocator.leak
+
+```otr
+fn leak(self: Allocator, comptime T: type, value: T) &static T
+```
+
+Moves `value` into memory that is never freed, which makes it `&static` (spec B9).
+
+## c_allocator
+
+```otr
+const c_allocator = heap
+```
+
+The C library's `malloc`, which `heap` also uses today.
+
+## drop
+
+```otr
+fn drop(comptime T: type, v: T) void
+```
+
+Ends `v`, a resource: its `deinit`, or for an optional, its payload's when it holds one.
+Containers end their elements with it, so they may hold optional resources.
+
+## take
+
+```otr
+fn take(comptime T: type, slot: &mut ?T) ?T
+```
+
+Moves the value out of `slot`, leaving null (spec O5: resources cannot be moved out of a place directly).
+
+## replace
+
+```otr
+fn replace(comptime T: type, slot: &mut T, value: T) T
+```
+
+Puts `value` in `slot` and returns what was there.
+
+## array
+
+```otr
+fn array(comptime N: usize, comptime T: type, f: anytype) [N]T
+```
+
+The array whose element `i` is `f(i)`, for `i` from 0 up, so that a filled array
+needs no `undefined` first (spec K4).
+
+## to_bytes
+
+```otr
+fn to_bytes(comptime T: type, v: T) [@size_of(T)]u8
+```
+
+The bytes of `v`, for a plain `T` (`@is_plain`), such as a C or wire struct to send.
+They are a copy: a borrowed `[]u8` into a `T` would be a reference of a type the call's
+signature says cannot point into `T`, which B7c lets callers rely on (spec §7.2).
+
+## from_bytes
+
+```otr
+fn from_bytes(comptime T: type, bytes: []u8) ?T
+```
+
+The plain `T` in the first `@size_of(T)` bytes of `bytes`, which need not be aligned
+for it; null when there are fewer.
+
+## copy
+
+```otr
+fn copy(comptime T: type, dst: []mut T, src: []T) void
+```
+
+Copies `src` over `dst`, which must be as long: a length mismatch is a bug in the
+caller, so it panics rather than copying part.
+
+## splat
+
+```otr
+fn splat(comptime N: usize, comptime T: type, v: T) [N]T
+```
+
+`N` copies of `v`, such as a zeroed buffer: `splat(64, u8, 0)`.
+
+## copy_nontemporal
+
+```otr
+fn copy_nontemporal(dst: []mut u8, src: []u8) void
+```
+
+Copies `src` to the start of `dst` with stores that bypass the cache, for large buffers
+nothing reads back soon, such as pixels uploaded to a GPU; as much as fits.
+
+## secure_zero
+
+```otr
+fn secure_zero(buf: []mut u8) void
+```
+
+Overwrites `buf` with zeros even when nothing reads it afterwards, as before freeing
+a password; an ordinary loop of stores there may be removed by the optimiser.
+
+## secure_zero_value
+
+```otr
+fn secure_zero_value(comptime T: type, v: &mut T) void
+```
+
+`secure_zero` over the bytes of `v`, for a secret held in a typed value, such as a MAC's
+state or a key schedule, rather than in bytes.
+
+## eql
+
+```otr
+fn eql(comptime T: type, a: []T, b: []T) bool
+```
+
+Whether `a` and `b` hold the same elements.
+
+## starts_with
+
+```otr
+fn starts_with(comptime T: type, s: []T, prefix: []T) bool
+```
+
+## ends_with
+
+```otr
+fn ends_with(comptime T: type, s: []T, suffix: []T) bool
+```
+
+## index_of_scalar
+
+```otr
+fn index_of_scalar(comptime T: type, s: []T, x: T) ?usize
+```
+
+The position of the first `x` in `s`. Bytes are compared 64 at a time past the first
+16.
+
+## index_of_scalar_pos
+
+```otr
+fn index_of_scalar_pos(comptime T: type, s: []T, start: usize, x: T) ?usize
+```
+
+The position of the first `x` in `s` at or after `start`.
+
+## index_of_any
+
+```otr
+fn index_of_any(comptime T: type, s: []T, values: []T) ?usize
+```
+
+The position of the first element of `s` that is one of `values`.
+
+## last_index_of_scalar
+
+```otr
+fn last_index_of_scalar(comptime T: type, s: []T, x: T) ?usize
+```
+
+The position of the last `x` in `s`.
+
+## index_of
+
+```otr
+fn index_of(comptime T: type, s: []T, needle: []T) ?usize
+```
+
+The position of the first occurrence of `needle` in `s`; an empty needle is at 0.
+For bytes, a one-byte needle is `index_of_scalar`, and a longer one is looked for 32
+positions at a time by its first and last bytes, so only positions where both match
+are compared in full.
+
+## trim
+
+```otr
+fn trim(comptime T: type, s: []T, values: []T) []T
+```
+
+`s` without the elements of `values` at either end.
+
+## trim_end
+
+```otr
+fn trim_end(comptime T: type, s: []T, values: []T) []T
+```
+
+`s` without the elements of `values` at its end.
+
+## split
+
+```otr
+fn split(comptime T: type, s: []T, delimiter: []T) Split(T)
+```
+
+The pieces of `s` between occurrences of `delimiter`, in order; `next` returns null
+after the last. Two delimiters in a row give an empty piece.
+
+## Split
+
+```otr
+fn Split(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>rest</code> | <code>[]T</code> | Read-only |
+| <code>delimiter</code> | <code>[]T</code> | Read-only |
+| <code>done</code> | <code>bool</code> | Read-only |
+
+### Split.next
+
+```otr
+fn next(self: &mut Self) ?[]T
+```
+
+## tokenize
+
+```otr
+fn tokenize(comptime T: type, s: []T, delimiters: []T) Tokenize(T)
+```
+
+The pieces of `s` between runs of elements of `delimiters`, in order. Unlike `split`,
+there are no empty pieces: `tokenize(u8, " a  b ", " ")` gives `a` and `b`.
+
+## Tokenize
+
+```otr
+fn Tokenize(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>rest</code> | <code>[]T</code> | Read-only |
+| <code>delimiters</code> | <code>[]T</code> | Read-only |
+
+### Tokenize.next
+
+```otr
+fn next(self: &mut Self) ?[]T
+```
+
+## Endian
+
+```otr
+const Endian = enum
+```
+
+Byte order of integers in memory.
+
+| Variant |
+| --- |
+| <code>little</code> |
+| <code>big</code> |
+
+## read_int
+
+```otr
+fn read_int(comptime T: type, bytes: []u8, endian: Endian) T
+```
+
+The integer stored in the first `@size_of(T)` bytes of `bytes`; `T` has at most 64 bits.
+
+## write_int
+
+```otr
+fn write_int(comptime T: type, out: []mut u8, v: T, endian: Endian) void
+```
+
+Stores `v` in the first `@size_of(T)` bytes of `out`; `T` has at most 64 bits.
+
+## Halves
+
+```otr
+fn Halves(comptime T: type) type
+```
+
+The two sides of a slice split by `split_at_mut`.
+
+| Field | Type |
+| --- | --- |
+| <code>left</code> | <code>[]mut T</code> |
+| <code>right</code> | <code>[]mut T</code> |
+
+## split_at_mut
+
+```otr
+fn split_at_mut(comptime T: type, s: []mut T, mid: usize) Halves(T)
+```
+
+`s[0..mid]` and `s[mid..]` as two slices that may be borrowed mutably at the same time:
+elements of one slice otherwise always overlap (spec B6).
+
+## copy_within
+
+```otr
+fn copy_within(comptime T: type, s: []mut T, dst: usize, src: usize, n: usize) void
+```
+
+Copies the `n` elements of `s` from `src` on to `dst` on, as one memmove: the ranges may
+overlap, as when a sorted column makes room for an element or closes a gap. Both ranges
+must lie inside `s`; the elements are copied, so they must be copyable.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>heap</code> | <code>Allocator&#123; alloc_fn: c_alloc, resize_fn: c_resize, free_fn: c_free &#125;</code> |

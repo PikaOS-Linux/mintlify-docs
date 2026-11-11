@@ -1,0 +1,310 @@
+---
+title: "std.string"
+sidebarTitle: "string"
+description: "An owned, growable UTF-8 string."
+---
+
+An owned, growable UTF-8 string. Positions and lengths are in bytes; `std.utf8` finds
+codepoint boundaries (`utf8.is_boundary`, `utf8.truncate`) where they matter.
+
+```otr
+import std.string
+```
+
+## Example
+
+```otr
+import std
+import std.string
+
+pub fn main() !void {
+    var s = string.String.from(std.mem.heap, "otter")
+    defer s.deinit()
+
+    s.push_str(" shell")
+    s.push('!')
+    s.print(" v{d}.{d}", .{ 1, 4 })
+    std.io.printf("{} ({} bytes)\n", .{ s.as_str(), s.len() })
+
+    std.io.printf("starts with otter: {}, contains shell: {}\n", .{ s.starts_with("otter"), s.contains("shell") })
+    if s.find("shell") |at| {
+        std.io.printf("shell is at byte {}\n", .{ at })
+    }
+
+    replaced := s.replace("otter", "river")
+    s.insert(0, "the ")
+    std.io.printf("{} ({} replaced)\n", .{ s.as_str(), replaced })
+
+    var csv = string.String.from(std.mem.heap, "10,20,30")
+    defer csv.deinit()
+    var total: i64 = 0
+    var fields = csv.split(",")
+    for field in fields {
+        total += try std.fmt.parse_int(i64, field, 10)
+    }
+    std.io.printf("sum of {} is {}\n", .{ csv.as_str(), total })
+
+    label := string.String.from_fmt(std.mem.heap, "{s}-{d:03}", .{ "run", 7 })
+    defer label.deinit()
+    std.io.println(label.as_str())
+}
+```
+
+```text
+otter shell! v1.4 (17 bytes)
+starts with otter: true, contains shell: true
+shell is at byte 6
+the river shell! v1.4 (1 replaced)
+sum of 10,20,30 is 60
+run-007
+```
+
+## String
+
+```otr
+const String = struct
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>bytes</code> | <code>list.List(u8)</code> | Read-only |
+
+### String.init
+
+```otr
+fn init(alloc: mem.Allocator) String
+```
+
+### String.from
+
+```otr
+fn from(alloc: mem.Allocator, s: str) String
+```
+
+### String.with_capacity
+
+```otr
+fn with_capacity(alloc: mem.Allocator, n: usize) String
+```
+
+An empty string with room for `n` bytes.
+
+### String.from_fmt
+
+```otr
+fn from_fmt(alloc: mem.Allocator, comptime fmt: []static u8, args: anytype) String
+```
+
+`fmt` formatted as `printf` does.
+
+### String.from_int
+
+```otr
+fn from_int(alloc: mem.Allocator, n: anytype) String
+```
+
+An integer in decimal.
+
+### String.deinit
+
+```otr
+fn deinit(self: String) void
+```
+
+### String.push
+
+```otr
+fn push(self: &mut String, c: u8) void
+```
+
+### String.push_codepoint
+
+```otr
+fn push_codepoint(self: &mut String, cp: u21) void
+```
+
+Appends `cp` in UTF-8, or U+FFFD when it is not a scalar value.
+
+### String.print
+
+```otr
+fn print(self: &mut String, comptime fmt: []static u8, args: anytype) void
+```
+
+Appends `fmt` formatted as `printf` does.
+
+### String.write_all
+
+```otr
+fn write_all(self: &mut String, s: str) void
+```
+
+The formatting target interface (`std.io.format`).
+
+### String.push_str
+
+```otr
+fn push_str(self: &mut String, s: str) void
+```
+
+### String.as_str
+
+```otr
+fn as_str(self: &String) str
+```
+
+### String.len
+
+```otr
+fn len(self: &String) usize
+```
+
+### String.capacity
+
+```otr
+fn capacity(self: &String) usize
+```
+
+The bytes it can hold before growing.
+
+### String.reserve
+
+```otr
+fn reserve(self: &mut String, additional: usize) void
+```
+
+Makes room for `additional` more bytes, so appending them does not grow it again.
+
+### String.clear
+
+```otr
+fn clear(self: &mut String) void
+```
+
+Empties the string, keeping its memory for reuse.
+
+### String.truncate
+
+```otr
+fn truncate(self: &mut String, n: usize) void
+```
+
+Shortens the string to its first `n` bytes; a longer `n` changes nothing.
+
+### String.pop_codepoint
+
+```otr
+fn pop_codepoint(self: &mut String) ?u21
+```
+
+Removes the last codepoint and returns it, or null when the string is empty. An
+invalid sequence at the end comes back as U+FFFD, one byte at a time.
+
+### String.insert
+
+```otr
+fn insert(self: &mut String, i: usize, s: str) void
+```
+
+Inserts `s` at byte `i`, moving the bytes from `i` on after it. Panics when `i` is
+past the end.
+
+### String.remove_range
+
+```otr
+fn remove_range(self: &mut String, start: usize, end: usize) void
+```
+
+Removes the bytes `start..end`, moving the rest down. Panics when the range is
+reversed or past the end.
+
+### String.replace
+
+```otr
+fn replace(self: &mut String, needle: str, with: str) usize
+```
+
+Replaces every occurrence of `needle`, left to right and not overlapping, with
+`with`, and returns how many there were. Shrinking or same-length replacements
+happen in place; growing ones build the result once, at its final size.
+
+### String.find
+
+```otr
+fn find(self: &String, needle: str) ?usize
+```
+
+The position of the first occurrence of `needle`; an empty needle is at 0.
+
+### String.find_from
+
+```otr
+fn find_from(self: &String, from: usize, needle: str) ?usize
+```
+
+The position of the first occurrence of `needle` at or after `from`.
+
+### String.contains
+
+```otr
+fn contains(self: &String, needle: str) bool
+```
+
+### String.starts_with
+
+```otr
+fn starts_with(self: &String, prefix: str) bool
+```
+
+### String.ends_with
+
+```otr
+fn ends_with(self: &String, suffix: str) bool
+```
+
+### String.eql
+
+```otr
+fn eql(self: &String, s: str) bool
+```
+
+### String.split
+
+```otr
+fn split(self: &String, delimiter: str) mem.Split(u8)
+```
+
+The pieces between occurrences of `delimiter` (see `mem.split`), borrowing the
+string.
+
+### String.tokenize
+
+```otr
+fn tokenize(self: &String, delimiters: str) mem.Tokenize(u8)
+```
+
+The pieces between runs of bytes of `delimiters` (see `mem.tokenize`).
+
+### String.codepoints
+
+```otr
+fn codepoints(self: &String) utf8.Iterator
+```
+
+The codepoints with their byte offsets (see `utf8.iterate`).
+
+### String.parse_int
+
+```otr
+fn parse_int(self: &String, comptime T: type, base: u8) fmt.ParseError!T
+```
+
+The integer the whole string spells in `base` (see `fmt.parse_int`).
+
+### String.parse_float
+
+```otr
+fn parse_float(self: &String) fmt.ParseError!f64
+```
+
+The float the whole string spells (see `fmt.parse_float`).

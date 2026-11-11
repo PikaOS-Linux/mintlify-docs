@@ -1,0 +1,37 @@
+import std
+import std.time
+
+fn busy_work() u64 {
+    var sum: u64 = 0
+    for i in 0..1000 {
+        sum += i
+    }
+    return sum
+}
+
+pub fn main() void {
+    // Durations are plain values; the constructors convert to nanoseconds.
+    timeout := time.Duration.s(2)
+    step := time.Duration.ms(250)
+    std.io.printf("{} ms, {} ns\n", .{ timeout.as_ms(), step.as_ns() })
+
+    // Instants are on the monotonic clock: only differences between them mean anything.
+    start := time.Instant.now()
+    deadline := start.add(timeout)
+    std.io.printf("deadline is {} ms after start\n", .{ deadline.since(start).as_ms() })
+    // since never goes negative: an earlier instant gives zero.
+    std.io.printf("start since deadline: {} ns\n", .{ start.since(deadline).as_ns() })
+
+    timer := time.Timer.start()
+    sum := busy_work()
+    took := timer.elapsed_ns()
+    // The measurement itself changes from run to run, so only its bound is printed.
+    std.io.printf("summed to {} in under a second: {}\n", .{ sum, took < 1000000000 })
+
+    a := time.monotonic_ns()
+    b := time.monotonic_ns()
+    std.io.printf("monotonic clock went backwards: {}\n", .{ b < a })
+
+    // The wall clock, for timestamps: seconds since 1970-01-01 UTC.
+    std.io.printf("wall clock is past 2026-01-01: {}\n", .{ time.unix_seconds() > 1767225600 })
+}

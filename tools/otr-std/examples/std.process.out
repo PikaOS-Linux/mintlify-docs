@@ -1,0 +1,5 @@
+stdout: hello child
+false exited with 1
+true exited with 0
+missing program: error.NotFound
+PATH is set: true

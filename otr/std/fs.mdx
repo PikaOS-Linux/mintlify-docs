@@ -1,0 +1,430 @@
+---
+title: "std.fs"
+sidebarTitle: "fs"
+description: "Files and directories, and watching them for changes."
+---
+
+Files and directories, and watching them for changes.
+
+```otr
+import std.fs
+```
+
+## Example
+
+```otr
+import std
+import std.fs
+import std.path
+
+pub fn main() !void {
+    heap := std.mem.heap
+
+    dir := path.join(heap, fs.temp_dir(), "otr-example-fs")
+    defer dir.deinit()
+    try fs.make_path(heap, dir.as_str())
+
+    draft := path.join(heap, dir.as_str(), "draft.txt")
+    defer draft.deinit()
+    notes := path.join(heap, dir.as_str(), "notes.txt")
+    defer notes.deinit()
+
+    try fs.write_file(heap, draft.as_str(), "line one\nline two\n")
+    try fs.rename(heap, draft.as_str(), notes.as_str())
+
+    text := try fs.read_file(heap, notes.as_str())
+    defer text.deinit()
+    info := try fs.stat(heap, notes.as_str())
+    std.io.printf("notes.txt: {} bytes\n{}", .{ info.size, text.as_str() })
+    std.io.printf("draft.txt exists: {}\n", .{ fs.exists(heap, draft.as_str()) })
+
+    entries := try fs.list_dir(heap, dir.as_str())
+    defer entries.deinit()
+    for e in entries.items() {
+        std.io.printf("{} ({})\n", .{ e.name.as_str(), @tag_name(e.kind) })
+    }
+
+    if fs.read_file(heap, draft.as_str()) |gone| {
+        gone.deinit()
+    } else |err| {
+        std.io.printf("reading draft.txt: {}\n", .{ err })
+    }
+
+    try fs.delete_file(heap, notes.as_str())
+    try fs.delete_dir(heap, dir.as_str())
+}
+```
+
+```text
+notes.txt: 18 bytes
+line one
+line two
+draft.txt exists: false
+notes.txt (file)
+reading draft.txt: error.NotFound
+```
+
+## Error
+
+```otr
+const Error = error { NotFound, AccessDenied, AlreadyExists, NameTooLong, Io, Canceled }
+```
+
+## read_file
+
+```otr
+fn read_file(alloc: mem.Allocator, path: str) Error!string.String
+```
+
+The contents of the file at `path`.
+
+## write_file
+
+```otr
+fn write_file(alloc: mem.Allocator, path: str, data: str) Error!void
+```
+
+Replaces the file at `path` with `data`, creating it if needed with mode 0o666 less the
+umask, as open(2) and Zig's `createFile` do.
+
+## default_mode
+
+```otr
+const default_mode: u32 = 0o666
+```
+
+The mode a new file is created with, before the umask: 0o666.
+
+## Stat
+
+```otr
+const Stat = struct
+```
+
+What `stat` tells of a file.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>size</code> | <code>u64</code> |  |
+| <code>mtime_ns</code> | <code>i64</code> | When the file was last changed, in nanoseconds since 1970. |
+
+## stat
+
+```otr
+fn stat(alloc: mem.Allocator, path: str) Error!Stat
+```
+
+The size and modification time of the file at `path`, following symbolic links.
+
+## exists
+
+```otr
+fn exists(alloc: mem.Allocator, path: str) bool
+```
+
+Whether something exists at `path`.
+
+## delete_file
+
+```otr
+fn delete_file(alloc: mem.Allocator, path: str) Error!void
+```
+
+## delete_dir
+
+```otr
+fn delete_dir(alloc: mem.Allocator, path: str) Error!void
+```
+
+Removes the directory `path`, which must be empty.
+
+## make_dir
+
+```otr
+fn make_dir(alloc: mem.Allocator, path: str) Error!void
+```
+
+Creates the directory `path`, whose parent must exist, with mode 0o777 less the umask, as
+mkdir(2) and Zig's `createDir` do.
+
+## default_dir_mode
+
+```otr
+const default_dir_mode: u32 = 0o777
+```
+
+The mode a new directory is created with, before the umask: 0o777.
+
+## make_dir_mode
+
+```otr
+fn make_dir_mode(alloc: mem.Allocator, path: str, mode: u32) Error!void
+```
+
+`make_dir` with `mode` (less the umask), such as 0o700 for a directory only its owner
+may enter.
+
+## make_path
+
+```otr
+fn make_path(alloc: mem.Allocator, path: str) Error!void
+```
+
+Creates the directory `path` and any missing parents; an existing one is fine.
+
+## make_path_mode
+
+```otr
+fn make_path_mode(alloc: mem.Allocator, path: str, mode: u32) Error!void
+```
+
+`make_path`, creating each missing directory with `mode` (less the umask); existing
+ones keep theirs.
+
+## list_files
+
+```otr
+fn list_files(alloc: mem.Allocator, path: str) Error!list.List(string.String)
+```
+
+Names of the regular files directly in the directory `path`, in no particular order.
+
+## Kind
+
+```otr
+const Kind = enum
+```
+
+What a directory entry is; a symbolic link is reported as one, not followed.
+
+| Variant |
+| --- |
+| <code>file</code> |
+| <code>directory</code> |
+| <code>symlink</code> |
+| <code>other</code> |
+
+## Entry
+
+```otr
+const Entry = struct
+```
+
+One entry of `list_dir`.
+
+| Field | Type |
+| --- | --- |
+| <code>name</code> | <code>string.String</code> |
+| <code>kind</code> | <code>Kind</code> |
+
+### Entry.deinit
+
+```otr
+fn deinit(self: Entry) void
+```
+
+## list_dir
+
+```otr
+fn list_dir(alloc: mem.Allocator, path: str) Error!list.List(Entry)
+```
+
+The entries directly in the directory `path`, but not `.` and `..`, in the order the
+directory gives them.
+
+## rename
+
+```otr
+fn rename(alloc: mem.Allocator, old: str, new: str) Error!void
+```
+
+Moves `old` to `new`, replacing a file there; atomic within one file system.
+
+## Change
+
+```otr
+const Change = struct
+```
+
+What a `Watcher` reports, as bits of `Event.mask`; `add` takes the ones to watch.
+
+### Change.overflow
+
+```otr
+const overflow: u32 = 0x4000
+```
+
+Events were lost because the queue overflowed.
+
+### Change.ignored
+
+```otr
+const ignored: u32 = 0x8000
+```
+
+The watch is gone: removed, or its file deleted.
+
+### Change.is_dir
+
+```otr
+const is_dir: u32 = 0x40000000
+```
+
+The entry named by the event is a directory.
+
+| Name | Definition |
+| --- | --- |
+| <code>Change.access</code> | <code>0x1</code> |
+| <code>Change.modify</code> | <code>0x2</code> |
+| <code>Change.attrib</code> | <code>0x4</code> |
+| <code>Change.close_write</code> | <code>0x8</code> |
+| <code>Change.moved_from</code> | <code>0x40</code> |
+| <code>Change.moved_to</code> | <code>0x80</code> |
+| <code>Change.create</code> | <code>0x100</code> |
+| <code>Change.delete</code> | <code>0x200</code> |
+| <code>Change.delete_self</code> | <code>0x400</code> |
+| <code>Change.move_self</code> | <code>0x800</code> |
+
+## Wd
+
+```otr
+const Wd = i32
+```
+
+A watch added to a `Watcher`.
+
+## Event
+
+```otr
+const Event = ref struct
+```
+
+One change; `name` is the entry inside a watched directory, empty for the watched
+path itself. It points into the watcher's buffer, so it lasts until the next `next`.
+
+| Field | Type |
+| --- | --- |
+| <code>wd</code> | <code>Wd</code> |
+| <code>mask</code> | <code>u32</code> |
+| <code>name</code> | <code>str</code> |
+
+## Watcher
+
+```otr
+const Watcher = struct
+```
+
+Watches files and directories for changes (Linux inotify).
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>fd</code> | <code>i32</code> | Read-only |
+| <code>watches</code> | <code>usize</code> | Read-only |
+| <code>pos</code> | <code>usize</code> | Read-only |
+| <code>end</code> | <code>usize</code> | Read-only |
+| <code>buf</code> | <code>[4096]u8</code> | Read-only |
+
+### Watcher.init
+
+```otr
+fn init() Error!Watcher
+```
+
+### Watcher.add
+
+```otr
+fn add(self: &mut Watcher, path: str, mask: u32) Error!Wd
+```
+
+Starts reporting the `Change` bits in `mask` for `path`; a path watched already
+is `AlreadyExists`.
+
+### Watcher.remove
+
+```otr
+fn remove(self: &mut Watcher, wd: Wd) void
+```
+
+Stops a watch; `next` reports it once more, with `Change.ignored`.
+
+### Watcher.next
+
+```otr
+fn next(self: &mut Watcher, io: std.Io) std.Io.Canceled!?Event
+```
+
+Waits for the next change; null once no watch is left.
+
+### Watcher.poll
+
+```otr
+fn poll(self: &mut Watcher) ?Event
+```
+
+The next change already waiting, without waiting for one: null when there is none,
+as after a loop found `poll_fd` readable and took them all.
+
+### Watcher.poll_fd
+
+```otr
+fn poll_fd(self: &Watcher) i32
+```
+
+Ready when a change is waiting, for `Io.select`.
+
+### Watcher.deinit
+
+```otr
+fn deinit(self: Watcher) void
+```
+
+## write_file_durable
+
+```otr
+fn write_file_durable(alloc: mem.Allocator, path: str, data: str) Error!void
+```
+
+`write_file_atomic` that also survives a crash or power loss: the temporary file's data
+reaches the disk before the rename, and the rename before it returns, so after a crash
+`path` holds the old contents or the new, never an empty or partial file. Each call
+waits for the disk, so it is for configuration and state, not caches. The file gets mode
+0o666 less the umask, as `write_file`; `write_file_durable_mode` takes another.
+
+## write_file_durable_mode
+
+```otr
+fn write_file_durable_mode(alloc: mem.Allocator, path: str, data: str, mode: u32) Error!void
+```
+
+`write_file_durable` with `mode` (less the umask) for the file, such as 0o600 for one
+only its owner may read. The file is replaced by a rename, so the mode holds even when
+`path` existed with another.
+
+## write_file_atomic
+
+```otr
+fn write_file_atomic(alloc: mem.Allocator, path: str, data: str) Error!void
+```
+
+Replaces the file at `path` with `data` so that readers see the old contents or the
+new, never a mix: the data goes to a temporary file beside it, which is then renamed
+over `path`. It does not wait for the data to reach the disk.
+
+## temp_dir
+
+```otr
+fn temp_dir() []static u8
+```
+
+The directory for temporary files: `TMPDIR`, else `/tmp`. `otr test` and otr's test
+harness give each run a fresh one of its own.
+
+## real_path
+
+```otr
+fn real_path(alloc: mem.Allocator, path: str) Error!string.String
+```
+
+The absolute path `path` names with every symbolic link, `.` and `..` resolved
+(realpath(3)); the file must exist. Comparing it with `path` tells whether `path` was
+already canonical, as a privileged helper checks a path it is given.

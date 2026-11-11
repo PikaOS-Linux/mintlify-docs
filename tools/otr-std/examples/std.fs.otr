@@ -1,0 +1,40 @@
+import std
+import std.fs
+import std.path
+
+pub fn main() !void {
+    heap := std.mem.heap
+
+    dir := path.join(heap, fs.temp_dir(), "otr-example-fs")
+    defer dir.deinit()
+    try fs.make_path(heap, dir.as_str())
+
+    draft := path.join(heap, dir.as_str(), "draft.txt")
+    defer draft.deinit()
+    notes := path.join(heap, dir.as_str(), "notes.txt")
+    defer notes.deinit()
+
+    try fs.write_file(heap, draft.as_str(), "line one\nline two\n")
+    try fs.rename(heap, draft.as_str(), notes.as_str())
+
+    text := try fs.read_file(heap, notes.as_str())
+    defer text.deinit()
+    info := try fs.stat(heap, notes.as_str())
+    std.io.printf("notes.txt: {} bytes\n{}", .{ info.size, text.as_str() })
+    std.io.printf("draft.txt exists: {}\n", .{ fs.exists(heap, draft.as_str()) })
+
+    entries := try fs.list_dir(heap, dir.as_str())
+    defer entries.deinit()
+    for e in entries.items() {
+        std.io.printf("{} ({})\n", .{ e.name.as_str(), @tag_name(e.kind) })
+    }
+
+    if fs.read_file(heap, draft.as_str()) |gone| {
+        gone.deinit()
+    } else |err| {
+        std.io.printf("reading draft.txt: {}\n", .{ err })
+    }
+
+    try fs.delete_file(heap, notes.as_str())
+    try fs.delete_dir(heap, dir.as_str())
+}

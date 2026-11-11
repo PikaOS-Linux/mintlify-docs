@@ -1,0 +1,38 @@
+import std
+import std.cell
+import std.ffi_context
+
+extern fn qsort(base: *anyopaque, n: usize, size: usize, compare: fn(?*const anyopaque, ?*const anyopaque) i32) void
+
+// State the C callback needs. qsort has no user_data argument to carry it.
+const Order = struct {
+    descending: bool
+    calls: cell.Cell(u32)
+}
+
+const sorting = ffi_context.Context(Order).init()
+
+fn compare(a: ?*const anyopaque, b: ?*const anyopaque) i32 {
+    x := unsafe { @ptr_cast(*const i32, a).* }
+    y := unsafe { @ptr_cast(*const i32, b).* }
+    // with borrows the state lent on this thread; null outside lend.
+    return sorting.with(fn[x, y](order: &Order) i32 {
+        order.calls.set(order.calls.get() + 1)
+        diff: i32 = if x < y { -1 } else if x > y { 1 } else { 0 }
+        return if order.descending { -diff } else { diff }
+    }) orelse 0
+}
+
+pub fn main() void {
+    var numbers = [5]i32{ 42, -7, 19, 0, 3 }
+    order := Order{ descending: true, calls: cell.Cell(u32).init(0) }
+
+    // The state is lent only while the C call that calls back is running.
+    sorting.lend(&order, fn[&mut numbers]() void {
+        unsafe { qsort(@ptr_cast(*anyopaque, &mut numbers), 5, @size_of(i32), compare) }
+    })
+    std.io.printf("sorted: {} {} {} {} {}\n", .{ numbers[0], numbers[1], numbers[2], numbers[3], numbers[4] })
+    std.io.printf("callback saw the state: {}\n", .{ order.calls.get() > 0 })
+    outside := sorting.with(fn(o: &Order) bool { return o.descending })
+    std.io.printf("state reachable outside lend: {}\n", .{ outside != null })
+}

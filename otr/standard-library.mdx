@@ -15,7 +15,7 @@ var xs = list.List(i64).init(std.mem.heap)
 
 `import std` gives you `std.io`, `std.mem`, `std.fmt`, `std.sort`, `std.math`, `std.testing`, and the types `std.Env`, `std.Io`, `std.Future` and `std.Uring`.
 
-To read a module's full API, run `otr doc` on its source in the otr repository:
+The [standard library reference](/otr/std/index) has a page for every module, with each public declaration. `otr doc` prints the same listing for any module, including your own:
 
 ```bash
 otr doc src/std/std/hash_map.otr

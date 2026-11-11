@@ -1,0 +1,4 @@
+public key 32 bytes, signature 64 bytes
+signature accepted
+changed message: error.InvalidSignature
+same signature again: true

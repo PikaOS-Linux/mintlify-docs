@@ -1,0 +1,8 @@
+8080 65535 -16
+0.25
+300 as u8: error.Overflow
+12a as i32: error.InvalidCharacter
+bar-0017.log
+fits in 4 bytes: false
+512 B 1.5 KiB 20.0 MiB
+4 bytes, first 222

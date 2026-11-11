@@ -1,0 +1,33 @@
+import std
+import std.fmt
+
+pub fn main() !void {
+    port := try fmt.parse_int(u16, "8080", 10)
+    mask := try fmt.parse_int(u32, "ff_ff", 16)
+    auto := try fmt.parse_int(i64, "-0x10", 0)
+    std.io.printf("{} {} {}\n", .{ port, mask, auto })
+
+    ratio := try fmt.parse_float("2.5e-1")
+    std.io.printf("{d}\n", .{ ratio })
+
+    if fmt.parse_int(u8, "300", 10) |_| {} else |e| {
+        std.io.printf("300 as u8: {}\n", .{ e })
+    }
+    if fmt.parse_int(i32, "12a", 10) |_| {} else |e| {
+        std.io.printf("12a as i32: {}\n", .{ e })
+    }
+
+    // Formatting into a buffer on the stack: no allocation, null when it does not fit.
+    var buf: [32]u8 = unsafe { undefined }
+    if fmt.buf_print(&out buf, "{s}-{d:0>4}.log", .{ "bar", 17 }) |name| {
+        std.io.println(name)
+    }
+    var tiny: [4]u8 = unsafe { undefined }
+    std.io.printf("fits in 4 bytes: {}\n", .{ fmt.buf_print(&out tiny, "{}", .{ 123456 }) != null })
+
+    std.io.printf("{} {} {}\n", .{ fmt.bytes(512), fmt.bytes(1536), fmt.bytes(20 * 1024 * 1024) })
+
+    var raw: [4]u8 = unsafe { undefined }
+    key := try fmt.hex_to_bytes(&out raw, "deadBEEF")
+    std.io.printf("{} bytes, first {}\n", .{ key.len, key[0] })
+}

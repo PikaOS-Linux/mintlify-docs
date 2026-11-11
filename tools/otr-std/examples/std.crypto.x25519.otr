@@ -1,0 +1,25 @@
+import std
+import std.crypto.x25519
+
+pub fn main() !void {
+    // Fixed bytes keep the output the same on every run; real secrets are 32 random
+    // bytes each side keeps to itself.
+    alice_secret := std.mem.array(32, u8, fn(i: usize) u8 { return @int_cast(u8, i + 1) })
+    bob_secret := std.mem.array(32, u8, fn(i: usize) u8 { return @int_cast(u8, 200 - i) })
+
+    // Each side sends only its public key.
+    alice_public := x25519.public_key(&alice_secret)
+    bob_public := x25519.public_key(&bob_secret)
+
+    // Each combines its own secret with the other's public key.
+    alice_shared := try x25519.scalarmult(&alice_secret, &bob_public)
+    bob_shared := try x25519.scalarmult(&bob_secret, &alice_public)
+    std.io.printf("both sides agree: {}\n", .{ std.mem.eql(u8, alice_shared[0..], bob_shared[0..]) })
+    std.io.printf("shared secret is {} bytes\n", .{ alice_shared.len })
+
+    // A hostile public key of small order would force a known secret; it is refused.
+    zero := std.mem.splat(32, u8, 0)
+    if x25519.scalarmult(&alice_secret, &zero) |_| {} else |err| {
+        std.io.printf("all-zero public key: {}\n", .{ err })
+    }
+}

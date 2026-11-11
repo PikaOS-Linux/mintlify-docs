@@ -1,0 +1,43 @@
+import std
+import std.list
+import std.testing_allocator
+
+test "counts what a container allocates and frees" {
+    // The state is declared first so that it outlives everything allocating from it.
+    state := testing_allocator.CountingAllocator.init()
+    defer state.deinit()
+    alloc := unsafe { state.allocator() }
+    {
+        var xs = list.List(u64).init(alloc)
+        defer xs.deinit()
+        try xs.try_reserve(8)
+        xs.push(1)
+        live := state.stats()
+        try std.testing.expect(live.allocations == 1)
+        try std.testing.expect(live.live_blocks == 1 and live.live_bytes >= 64)
+    }
+    after := state.stats()
+    try std.testing.expect(after.frees == 1 and after.live_blocks == 0)
+    try std.testing.expect(after.peak_blocks == 1)
+}
+
+test "an injected failure leaves the container intact" {
+    state := testing_allocator.CountingAllocator.init()
+    defer state.deinit()
+    alloc := unsafe { state.allocator() }
+    {
+        var bytes = list.List(u8).init(alloc)
+        defer bytes.deinit()
+        try bytes.try_reserve(16)
+        bytes.push_slice("otter")
+
+        // The next allocation or resize fails, once.
+        state.fail_after(1, false)
+        try std.testing.expect_error(error.NoMemory, bytes.try_reserve(4096))
+        try std.testing.expect_equal_slices(u8, "otter", bytes.items())
+        try std.testing.expect(state.stats().induced_failures == 1)
+
+        try bytes.try_reserve(4096)
+    }
+    try std.testing.expect(state.stats().live_blocks == 0)
+}

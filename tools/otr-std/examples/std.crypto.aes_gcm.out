@@ -1,0 +1,4 @@
+AES-256-GCM: 17 bytes of ciphertext, 16 byte tag
+ciphertext differs from the message: true
+decrypted: meet at the river
+tampered: error.AuthenticationFailed

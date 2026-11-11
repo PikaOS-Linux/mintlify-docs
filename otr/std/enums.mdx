@@ -1,0 +1,160 @@
+---
+title: "std.enums"
+sidebarTitle: "enums"
+description: "Sets of enum values."
+---
+
+Sets of enum values.
+
+```otr
+import std.enums
+```
+
+## Example
+
+```otr
+import std
+import std.enums
+
+const Perm = enum {
+    read
+    write
+    exec
+    admin
+}
+
+pub fn main() void {
+    std.io.printf("{} permissions\n", .{ enums.count(Perm) })
+
+    // from_name turns text such as a config value into the enum, or null.
+    if enums.from_name(Perm, "write") |p| {
+        std.io.printf("parsed {}\n", .{ @tag_name(p) })
+    }
+    std.io.printf("unknown name: {}\n", .{ enums.from_name(Perm, "delete") == null })
+
+    var user = enums.EnumSet(Perm).init()
+    user.insert(.read)
+    user.insert(.write)
+    var group = enums.EnumSet(Perm).init()
+    group.insert(.read)
+    group.insert(.exec)
+
+    std.io.printf("user can write {} exec {}\n", .{ user.contains(.write), user.contains(.exec) })
+
+    // The iterator yields values in declaration order.
+    std.io.print("either:")
+    for p in user.union_with(group).iter() {
+        std.io.printf(" {}", .{ @tag_name(p) })
+    }
+    std.io.print("\nboth:")
+    for p in user.intersect_with(group).iter() {
+        std.io.printf(" {}", .{ @tag_name(p) })
+    }
+    user.remove(.write)
+    std.io.printf("\nuser has {} left\n", .{ user.count() })
+}
+```
+
+```text
+4 permissions
+parsed write
+unknown name: true
+user can write true exec false
+either: read write exec
+both: read
+user has 1 left
+```
+
+## from_name
+
+```otr
+fn from_name(comptime E: type, name: str) ?E
+```
+
+The value of `E` named `name`, if it has one.
+
+## count
+
+```otr
+fn count(comptime E: type) usize
+```
+
+How many values the enum `E` has.
+
+## EnumSet
+
+```otr
+fn EnumSet(comptime E: type) type
+```
+
+A set of values of the enum `E`, one bit each, for an `E` of at most 64 tags.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>bits</code> | <code>u64</code> | Read-only |
+
+### EnumSet.init
+
+```otr
+fn init() Self
+```
+
+### EnumSet.insert
+
+```otr
+fn insert(self: &mut Self, e: E) void
+```
+
+### EnumSet.remove
+
+```otr
+fn remove(self: &mut Self, e: E) void
+```
+
+### EnumSet.contains
+
+```otr
+fn contains(self: &Self, e: E) bool
+```
+
+### EnumSet.union_with
+
+```otr
+fn union_with(self: &Self, other: Self) Self
+```
+
+The values in either set.
+
+### EnumSet.intersect_with
+
+```otr
+fn intersect_with(self: &Self, other: Self) Self
+```
+
+The values in both sets.
+
+### EnumSet.count
+
+```otr
+fn count(self: &Self) usize
+```
+
+### EnumSet.iter
+
+```otr
+fn iter(self: &Self) Iter
+```
+
+The values in the set, in declaration order: `for e in set.iter()`.
+
+### EnumSet.Iter
+
+```otr
+const Iter = struct
+```
+
+#### EnumSet.Iter.next
+
+```otr
+fn next(self: &mut Iter) ?E
+```

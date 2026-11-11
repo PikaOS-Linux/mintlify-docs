@@ -1,0 +1,5 @@
+72 bytes compressed to 58
+gzip magic: 1f 8b
+round trip: true
+capped at 16 bytes: error.TooLarge
+adler32: ce671aa7

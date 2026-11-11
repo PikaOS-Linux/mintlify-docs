@@ -1,0 +1,29 @@
+import std
+import std.flate
+import std.list
+
+pub fn main() !void {
+    heap := std.mem.heap
+    text := "otters hold hands, otters hold hands, otters hold hands while they sleep"
+
+    var zipped = list.List(u8).init(heap)
+    defer zipped.deinit()
+    // The cap is the largest size the output may reach; bound gives the worst case.
+    try flate.compress(.gzip, text, &mut zipped, try flate.bound(text.len, .gzip), .o2)
+    std.io.printf("{} bytes compressed to {}\n", .{ text.len, zipped.len })
+    std.io.printf("gzip magic: {x} {x}\n", .{ zipped[0], zipped[1] })
+
+    var plain = list.List(u8).init(heap)
+    defer plain.deinit()
+    try flate.decompress(.gzip, zipped.items(), &mut plain, 1024)
+    std.io.printf("round trip: {}\n", .{ std.mem.eql(u8, plain.items(), text) })
+
+    // A cap smaller than the data stops a decompression bomb.
+    var small = list.List(u8).init(heap)
+    defer small.deinit()
+    if flate.decompress(.gzip, zipped.items(), &mut small, 16) |_| {} else |err| {
+        std.io.printf("capped at 16 bytes: {}\n", .{ err })
+    }
+
+    std.io.printf("adler32: {x}\n", .{ flate.adler32(text) })
+}

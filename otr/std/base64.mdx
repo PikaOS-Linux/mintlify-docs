@@ -1,0 +1,134 @@
+---
+title: "std.base64"
+sidebarTitle: "base64"
+description: "Base64 (RFC 4648) in the standard alphabet and the URL- and filename-safe one, each with and without = padding."
+---
+
+Base64 (RFC 4648) in the standard alphabet and the URL- and filename-safe one, each with
+and without `=` padding. Encoding and decoding write into a buffer the caller sizes with
+`encoded_len` and `decoded_len`; decoding accepts only canonical text, whose unused
+trailing bits are zero, as Zig's `std.base64` does.
+
+```otr
+import std.base64
+```
+
+## Example
+
+```otr
+import std
+import std.base64
+
+pub fn main() !void {
+    message := "otter shell"
+
+    // The caller sizes the buffers; encoded_len and decoded_len say how much is needed.
+    var text_buf: [64]u8 = unsafe { undefined }
+    text := base64.standard.encode(&mut text_buf, message)
+    std.io.printf("{} -> {} ({} of {} bytes)\n", .{ message, text, text.len, base64.standard.encoded_len(message.len) })
+
+    var bytes_buf: [64]u8 = unsafe { undefined }
+    need := try base64.standard.decoded_len("b3R0ZXIgc2hlbGw=")
+    bytes := try base64.standard.decode(&mut bytes_buf, "b3R0ZXIgc2hlbGw=")
+    std.io.printf("decoded {} bytes: {}\n", .{ need, bytes })
+
+    // The URL-safe alphabet uses - and _ where the standard one has + and /.
+    raw := [3]u8{ 0xfb, 0xff, 0xfe }
+    var a: [8]u8 = unsafe { undefined }
+    var b: [8]u8 = unsafe { undefined }
+    std.io.printf("standard {} url_safe {}\n", .{ base64.standard.encode(&mut a, &raw), base64.url_safe.encode(&mut b, &raw) })
+
+    var c: [8]u8 = unsafe { undefined }
+    std.io.printf("no padding: {}\n", .{ base64.url_safe_no_pad.encode(&mut c, "hi") })
+
+    if base64.standard.decode(&mut bytes_buf, "not base64!!") |_| {} else |e| {
+        std.io.printf("bad input: {}\n", .{ e })
+    }
+}
+```
+
+```text
+otter shell -> b3R0ZXIgc2hlbGw= (16 of 16 bytes)
+decoded 11 bytes: otter shell
+standard +//+ url_safe -__-
+no padding: aGk
+bad input: error.InvalidCharacter
+```
+
+## Error
+
+```otr
+const Error = error
+```
+
+| Variant | Description |
+| --- | --- |
+| <code>InvalidCharacter</code> | A byte outside the alphabet, or `=` where padding cannot be. |
+| <code>InvalidPadding</code> | A length no encoding has, missing or extra `=`, or unused bits that are not zero. |
+
+## standard
+
+```otr
+const standard = Codec("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", true)
+```
+
+`+` and `/` for the last two digits, as MIME and PEM use.
+
+## url_safe
+
+```otr
+const url_safe = Codec("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_", true)
+```
+
+`-` and `_` for the last two digits, so the text can sit in URLs and file names.
+
+## Codec
+
+```otr
+fn Codec(comptime alphabet: []static u8, comptime pad: bool) type
+```
+
+Encoding with the 64 digits `alphabet`, padded to a multiple of four with `=` when
+`pad` is set.
+
+### Codec.encoded_len
+
+```otr
+fn encoded_len(n: usize) usize
+```
+
+How many bytes encoding `n` bytes takes.
+
+### Codec.decoded_len
+
+```otr
+fn decoded_len(text: str) Error!usize
+```
+
+How many bytes `text` decodes to, without checking its digits; `InvalidPadding`
+for a length no encoding has.
+
+### Codec.encode
+
+```otr
+fn encode(out: []mut u8, src: []u8) []mut u8
+```
+
+`src` encoded into the start of `out`, which holds at least `encoded_len(src.len)`
+bytes; returns that prefix.
+
+### Codec.decode
+
+```otr
+fn decode(out: []mut u8, text: str) Error! []mut u8
+```
+
+`text` decoded into the start of `out`, which holds at least
+`decoded_len(text)` bytes; returns that prefix.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>standard_no_pad</code> | <code>Codec("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", false)</code> |
+| <code>url_safe_no_pad</code> | <code>Codec("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_", false)</code> |

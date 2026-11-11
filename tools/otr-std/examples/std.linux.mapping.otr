@@ -1,0 +1,29 @@
+import std
+import std.linux.fd
+import std.linux.mapping
+
+pub fn main() !void {
+    // Zeroed private memory, viewed as bytes or as whole values of a plain type.
+    var scratch = try mapping.Mapping.anonymous(4096)
+    defer scratch.deinit()
+    words := scratch.as_slice_mut(u32)
+    words[1] = 0x01020304
+    std.io.printf("{} words, byte 4 is {}\n", .{ words.len, scratch.bytes()[4] })
+
+    // Memory as a file, the way a buffer is shared with another process.
+    file := try fd.memfd("example", 4096)
+    defer file.deinit()
+
+    var writer = try mapping.Mapping.shared(&file, 4096, 0, true)
+    defer writer.deinit()
+    reader := try mapping.Mapping.shared(&file, 4096, 0, false)
+    defer reader.deinit()
+
+    // Both mappings are the same pages, so a write through one shows in the other.
+    std.mem.copy(u8, &mut writer.bytes_mut()[0..5], "otter")
+    std.io.printf("reader sees: {}\n", .{ reader.bytes()[0..5] })
+
+    // The file sees it too.
+    var buf: [5]u8
+    std.io.printf("file holds: {}\n", .{ try file.pread(&out buf, 0) })
+}

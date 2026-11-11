@@ -1,0 +1,210 @@
+---
+title: "std.cell"
+sidebarTitle: "cell"
+description: "Shared mutation of copyable values on one thread (spec M1)."
+---
+
+Shared mutation of copyable values on one thread (spec M1). No reference into the
+contents is ever handed out, so a `set` cannot invalidate a borrow.
+
+```otr
+import std.cell
+```
+
+## Example
+
+```otr
+import std
+import std.cell
+import std.list
+
+fn record(hits: &cell.Cell(i64), log: &cell.RefCell(list.List(i64)), n: i64) void {
+    // Both parameters are shared references, yet both values change.
+    hits.set(hits.get() + 1)
+    log.update(fn[n](xs: &mut list.List(i64)) void { xs.push(n) })
+}
+
+pub fn main() void {
+    // Cell copies a value in and out; it never lends a reference.
+    hits := cell.Cell(i64).init(0)
+
+    // RefCell lends any value to a callback and checks the borrow at run time.
+    log := cell.RefCell(list.List(i64)).init(list.List(i64).init(std.mem.heap))
+    defer log.deinit()
+
+    record(&hits, &log, 7)
+    record(&hits, &log, 35)
+
+    sum := log.read(fn(xs: &list.List(i64)) i64 {
+        var s: i64 = 0
+        for x in xs.items() {
+            s += x
+        }
+        return s
+    })
+    std.io.printf("hits {} sum {}\n", .{ hits.get(), sum })
+}
+```
+
+```text
+hits 2 sum 42
+```
+
+## Cell
+
+```otr
+fn Cell(comptime T: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>value</code> | <code>mem.UnsafeCell(T)</code> | Read-only |
+
+### Cell.init
+
+```otr
+fn init(v: T) Self
+```
+
+### Cell.get
+
+```otr
+fn get(self: &Self) T
+```
+
+### Cell.set
+
+```otr
+fn set(self: &Self, v: T) void
+```
+
+## RefCell
+
+```otr
+fn RefCell(comptime T: type) type
+```
+
+Shared mutation of any value on one thread, checked when it happens: `update` lends the
+value exclusively for the length of a call and panics if it is lent already, as when a
+callback that is changing it causes another callback that reads it.
+
+| Field | Type | Access | Description |
+| --- | --- | --- | --- |
+| <code>value</code> | <code>mem.UnsafeCell(T)</code> | Read-only |  |
+| <code>loans</code> | <code>Cell(i64)</code> | Read-only | Readers lending the value, or -1 while `update` does. |
+
+### RefCell.init
+
+```otr
+fn init(v: T) Self
+```
+
+### RefCell.read
+
+```otr
+fn read(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f` on the value, shared with other readers, and returns what it returns.
+
+### RefCell.update
+
+```otr
+fn update(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f` on the value, lent exclusively, and returns what it returns.
+
+### RefCell.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+## LazyGlobal
+
+```otr
+fn LazyGlobal(comptime T: type) type
+```
+
+A thread-owned global constructed on first access, so `T` need not be Send.
+The factory runs only after ownership is claimed; recursive initialization panics.
+Like Global, the value lives until process exit and borrows cannot escape a call.
+A fiber cannot wait during initialization or a callback: its thread could change.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>owner</code> | <code>sync.Atomic</code> | Read-only |
+| <code>ready</code> | <code>Cell(bool)</code> | Read-only |
+| <code>make</code> | <code>fn() T</code> | Read-only |
+| <code>value</code> | <code>RefCell(?T)</code> | Read-only |
+
+### LazyGlobal.init
+
+```otr
+fn init(make: fn() T) Self
+```
+
+### LazyGlobal.with
+
+```otr
+fn with(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+### LazyGlobal.read
+
+```otr
+fn read(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+## Global
+
+```otr
+fn Global(comptime T: type) type
+```
+
+A mutable global for one thread: `const config = cell.Global(Config).init(...)`. The
+first thread to use it owns it, and use from any other thread panics, so the value
+needs no lock; each use is scoped to a call, as in `RefCell`, so no borrow of it
+outlives the call. Costs a thread check per use.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>owner</code> | <code>sync.Atomic</code> | Read-only |
+| <code>value</code> | <code>RefCell(T)</code> | Read-only |
+
+### Global.init
+
+```otr
+fn init(v: T) Self
+```
+
+### Global.with
+
+```otr
+fn with(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f` on the value, lent exclusively, and returns what it returns.
+
+### Global.read
+
+```otr
+fn read(self: &Self, f: anytype) @return_type(@type_of(f))
+```
+
+Runs `f` on the value, shared with other readers, and returns what it returns.
+
+### Global.get
+
+```otr
+fn get(self: &Self) T
+```
+
+A copy of the value, for copyable `T`.
+
+### Global.set
+
+```otr
+fn set(self: &Self, v: T) void
+```

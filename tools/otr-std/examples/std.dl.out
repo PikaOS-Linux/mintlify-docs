@@ -1,0 +1,5 @@
+sqrt(16) = 4
+hypot(3, 4) = 5
+floor(2.7) = 2
+has no_such_function: false
+libnot-installed.so: error.NotFound

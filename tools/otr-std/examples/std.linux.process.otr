@@ -1,0 +1,28 @@
+import std
+import std.linux.process
+
+pub fn main() !void {
+    // Block the signals first, so they wait to be read instead of ending the program.
+    watched := process.SigSet.of(&[2]i32{ process.SIG.usr1, process.SIG.usr2 })
+    before := try process.block_signals(watched)
+    std.io.printf("usr1 was blocked before: {}\n", .{ before.has(process.SIG.usr1) })
+
+    // A signalfd turns them into values an event loop reads like any other input.
+    signals := try process.signalfd(watched, true)
+    defer signals.deinit()
+    std.io.printf("pending at start: {}\n", .{ (try process.next_signal(&signals)) != null })
+
+    try process.raise(process.SIG.usr1)
+    if try process.next_signal(&signals) |sig| {
+        std.io.printf("got signal {}, usr1 is {}\n", .{ sig, process.SIG.usr1 })
+    }
+    std.io.printf("pending after: {}\n", .{ (try process.next_signal(&signals)) != null })
+    try process.set_signal_mask(before)
+
+    // The soft limit is what applies; the process may raise it up to the hard limit.
+    files := try process.get_rlimit(process.RLIMIT.nofile)
+    std.io.printf("soft limit within hard limit: {}\n", .{ files.cur <= files.max })
+    try process.set_rlimit(process.RLIMIT.nofile, .{ cur: 64, max: files.max })
+    lowered := try process.get_rlimit(process.RLIMIT.nofile)
+    std.io.printf("open file limit now: {}\n", .{ lowered.cur })
+}

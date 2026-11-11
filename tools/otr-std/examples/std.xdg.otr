@@ -1,0 +1,37 @@
+import std
+import std.path
+import std.process
+import std.xdg
+
+fn show(env: std.Env) void {
+    var buf = path.Buf.init()
+    for d in ([5]xdg.Dir{ .config, .data, .cache, .state, .runtime }) {
+        // Null when neither the variable nor HOME gives an absolute path.
+        std.io.printf("{}: {}\n", .{ @tag_name(d), xdg.base(env, d, &mut buf) orelse "(none)" })
+    }
+
+    // An application keeps its files in a directory of its own under a base.
+    if xdg.base(env, .config, &mut buf) |config| {
+        file := path.join(std.mem.heap, config, "my-app/settings.conf")
+        defer file.deinit()
+        std.io.printf("settings file: {}\n", .{ file.as_str() })
+    }
+
+    // Read-only data is searched for in these, after the data base.
+    for dir in xdg.data_dirs(env) {
+        std.io.printf("data dir: {}\n", .{ dir })
+    }
+}
+
+pub fn main(env: std.Env) !void {
+    // The answers depend on the environment, so this example starts itself again
+    // under a fixed one to print the same on every machine. A program calls
+    // xdg.base with the Env that main receives.
+    if env.get_env("XDG_EXAMPLE") == null {
+        self := try process.executable_path(std.mem.heap)
+        defer self.deinit()
+        fixed := [4]str{ "XDG_EXAMPLE=1", "HOME=/home/jade", "XDG_CACHE_HOME=/var/cache/jade", "XDG_DATA_DIRS=/opt/share:/usr/share" }
+        try process.exec(std.mem.heap, &[1]str{ self.as_str() }, .{ env: &fixed })
+    }
+    show(env)
+}

@@ -1,0 +1,51 @@
+---
+title: "std.socket_ancillary"
+sidebarTitle: "socket_ancillary"
+description: "Caller-sized SCM_RIGHTS operations."
+---
+
+Caller-sized SCM_RIGHTS operations. No allocation and no implicit blocking.
+
+```otr
+import std.socket_ancillary
+```
+
+## Received
+
+```otr
+const Received = ref struct
+```
+
+| Field | Type |
+| --- | --- |
+| <code>bytes</code> | <code>[]mut u8</code> |
+| <code>eof</code> | <code>bool</code> |
+
+## control_words
+
+```otr
+fn control_words(fd_capacity: usize) linux.Error!usize
+```
+
+Each right separately padded, plus credentials and an inherited SO_PASSPIDFD.
+
+## send
+
+```otr
+fn send(sock: &linux.Fd, bytes: []u8, fds: []i32, control: []mut u64) Error!usize
+```
+
+## receive
+
+```otr
+fn receive(sock: &linux.Fd, bytes: []out u8, fds: &mut list.List(linux.Fd), control: []mut u64) Error!Received
+```
+
+`fds` must already have capacity. Failure closes only this operation's rights.
+
+## Constants
+
+| Name | Definition |
+| --- | --- |
+| <code>max_send_fds</code> | <code>253</code> |
+| <code>Error</code> | <code>linux.Error \|\| error &#123; MalformedControl, TruncatedControl, FdCapacity, NoProgress &#125;</code> |

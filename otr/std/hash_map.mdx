@@ -1,0 +1,798 @@
+---
+title: "std.hash_map"
+sidebarTitle: "hash_map"
+description: "Hash maps that own their storage."
+---
+
+Hash maps that own their storage. `HashMap(K, V)` hashes integers, enums, bools and
+static strings by value, and any other key type through its own
+`hash(self: &Self) u64` and `eql(self: &Self, other: &Self) bool`; a key with neither,
+a float among them, is a compile error. `StringMap(V)` owns
+copies of its string keys and is looked up by `str`, since a borrowed `str` cannot be
+stored (spec B8). `ArrayHashMap(K, V)` and `StringArrayHashMap(V)` keep their entries
+in insertion order in dense arrays, for maps that are iterated more than probed.
+
+Iterators borrow their map (spec R3): `iter` shares it and `iter_mut` holds it
+exclusively, so the borrow checker rejects inserting or removing while one is in use
+(B4, B5) and a table can never move under an iterator.
+
+```otr
+import std.hash_map
+```
+
+## Example
+
+```otr
+import std
+import std.hash_map
+
+pub fn main() void {
+    heap := std.mem.heap
+
+    // StringMap owns a copy of each key and is looked up by str.
+    var stock = hash_map.StringMap(u32).init(heap)
+    defer stock.deinit()
+    _ = stock.put("apples", 4)
+    _ = stock.put("pears", 9)
+    old := stock.put("apples", 6) orelse 0
+    std.io.printf("apples was {}, {} keys\n", .{ old, stock.len() })
+
+    if stock.get("pears") |n| {
+        std.io.printf("pears {}\n", .{ n.* })
+    }
+    if stock.get_mut("pears") |n| {
+        n.* -= 1
+    }
+    _ = stock.remove("apples")
+    std.io.printf("apples {} pears {}\n", .{ stock.contains("apples"), stock.get("pears").?.* })
+
+    // HashMap takes integer, enum, bool and static string keys by value.
+    var counts = hash_map.HashMap(u8, u32).init(heap)
+    defer counts.deinit()
+    for c in "mississippi" {
+        counts.get_or_put_value(c, 0).value.* += 1
+    }
+    s: u8 = 's'
+    p: u8 = 'p'
+    z: u8 = 'z'
+    std.io.printf("s {} p {} z {}\n", .{ counts.get(&s).?.*, counts.get(&p).?.*, counts.contains(&z) })
+
+    // Iteration order is not defined, so only order-free results are printed.
+    var total: u32 = 0
+    var it = counts.iter()
+    for e in it {
+        total += e.value.*
+    }
+    std.io.printf("{} letters, {} distinct\n", .{ total, counts.len() })
+}
+```
+
+```text
+apples was 4, 2 keys
+pears 9
+apples false pears 8
+s 4 p 2 z false
+11 letters, 4 distinct
+```
+
+## hash_bytes
+
+```otr
+fn hash_bytes(bytes: []u8) u64
+```
+
+FNV-1a over `bytes`. Stable across versions, for keys written to disk; the tables
+themselves hash with `hash_str`.
+
+## hash_str
+
+```otr
+fn hash_str(bytes: []u8) u64
+```
+
+A fast 64-bit hash of `bytes` in the manner of wyhash: eight bytes per multiply, strings
+of up to 16 bytes, most keys, without a loop, and longer ones in three independent
+chains. Not stable across versions.
+
+## Entry
+
+```otr
+fn Entry(comptime KeyRef: type, comptime V: type) type
+```
+
+An entry seen through a shared borrow of its map. `KeyRef` is `&K`, or `str` for the
+string maps.
+
+| Field | Type |
+| --- | --- |
+| <code>key</code> | <code>KeyRef</code> |
+| <code>value</code> | <code>&amp;V</code> |
+
+## EntryMut
+
+```otr
+fn EntryMut(comptime KeyRef: type, comptime V: type) type
+```
+
+An entry whose value may change; its key may not, since that would move it.
+
+| Field | Type |
+| --- | --- |
+| <code>key</code> | <code>KeyRef</code> |
+| <code>value</code> | <code>&amp;mut V</code> |
+
+## GetOrPut
+
+```otr
+fn GetOrPut(comptime KeyRef: type, comptime V: type) type
+```
+
+What `get_or_put_value` found or made: the entry for the key, and whether it was
+there before.
+
+| Field | Type |
+| --- | --- |
+| <code>found_existing</code> | <code>bool</code> |
+| <code>key</code> | <code>KeyRef</code> |
+| <code>value</code> | <code>&amp;mut V</code> |
+
+## Iter
+
+```otr
+fn Iter(comptime T: type) type
+```
+
+The entries of a map, in no particular order, as shared borrows.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>table</code> | <code>&amp;T</code> | Read-only |
+| <code>i</code> | <code>usize</code> | Read-only |
+
+### Iter.next
+
+```otr
+fn next(self: &mut Self) ?Entry(T.KeyRef, T.Value)
+```
+
+## IterMut
+
+```otr
+fn IterMut(comptime T: type) type
+```
+
+The entries of a map, in no particular order, with values that may change.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>table</code> | <code>&amp;mut T</code> | Read-only |
+| <code>i</code> | <code>usize</code> | Read-only |
+
+### IterMut.next
+
+```otr
+fn next(self: &mut Self) ?EntryMut(T.KeyRef, T.Value)
+```
+
+## HashMap
+
+```otr
+fn HashMap(comptime K: type, comptime V: type) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>table</code> | <code>T</code> | Read-only |
+
+### HashMap.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### HashMap.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### HashMap.len
+
+```otr
+fn len(self: &Self) usize
+```
+
+### HashMap.capacity
+
+```otr
+fn capacity(self: &Self) usize
+```
+
+Slots allocated; at most 80% of them hold entries.
+
+### HashMap.reserve
+
+```otr
+fn reserve(self: &mut Self, additional: usize) void
+```
+
+Makes room for `additional` more entries, so that adding them does not rehash.
+
+### HashMap.contains
+
+```otr
+fn contains(self: &Self, key: &K) bool
+```
+
+### HashMap.get
+
+```otr
+fn get(self: &Self, key: &K) ?&V
+```
+
+### HashMap.get_mut
+
+```otr
+fn get_mut(self: &mut Self, key: &K) ?&mut V
+```
+
+### HashMap.put
+
+```otr
+fn put(self: &mut Self, key: K, value: V) ?V
+```
+
+Stores `value` under `key` and returns the value it replaces. An equal key
+already present stays; the new one is cleaned up if it is a resource.
+
+### HashMap.put_with
+
+```otr
+fn put_with(self: &mut Self, key: K, fill: anytype) ?V
+```
+
+`put`, with the value `fill(out)` writes through `out`, which is the map's own
+memory for it, so a large value is built in place rather than on the stack and
+copied in. Returns the value `key` had.
+
+### HashMap.get_or_put_value
+
+```otr
+fn get_or_put_value(self: &mut Self, key: K, value: V) GetOrPut(&K, V)
+```
+
+The entry for `key`, made with `value` when there is none; otherwise `key` and
+`value` are cleaned up if they are resources. One probe, so counting is
+`m.get_or_put_value(k, 0).value.* += 1`.
+
+### HashMap.get_or_put_with
+
+```otr
+fn get_or_put_with(self: &mut Self, key: K, make: anytype) GetOrPut(&K, V)
+```
+
+The entry for `key`, made with the value `make()` returns when there is none, so
+a costly value is built only on a miss; otherwise `key` is cleaned up if it is a
+resource. One probe either way.
+
+### HashMap.remove
+
+```otr
+fn remove(self: &mut Self, key: &K) ?V
+```
+
+### HashMap.retain
+
+```otr
+fn retain(self: &mut Self, keep: anytype) void
+```
+
+Removes every entry for which `keep(&key, &mut value)` is false.
+
+### HashMap.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+Removes every entry, keeping the storage.
+
+### HashMap.iter
+
+```otr
+fn iter(self: &Self) Iter(T)
+```
+
+The entries, in no particular order. The map stays borrowed while it is used.
+
+### HashMap.iter_mut
+
+```otr
+fn iter_mut(self: &mut Self) IterMut(T)
+```
+
+The entries with values that may change. Nothing else reaches the map meanwhile.
+
+## StringMap
+
+```otr
+fn StringMap(comptime V: type) type
+```
+
+A hash map from strings to `V` that owns copies of its keys, made when a key is first
+stored, and is looked up by `str`. Its entries hand out keys as `str`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>table</code> | <code>T</code> | Read-only |
+
+### StringMap.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### StringMap.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### StringMap.len
+
+```otr
+fn len(self: &Self) usize
+```
+
+### StringMap.capacity
+
+```otr
+fn capacity(self: &Self) usize
+```
+
+Slots allocated; at most 80% of them hold entries.
+
+### StringMap.reserve
+
+```otr
+fn reserve(self: &mut Self, additional: usize) void
+```
+
+Makes room for `additional` more entries, so that adding them does not rehash.
+
+### StringMap.contains
+
+```otr
+fn contains(self: &Self, key: str) bool
+```
+
+### StringMap.get
+
+```otr
+fn get(self: &Self, key: str) ?&V
+```
+
+### StringMap.get_mut
+
+```otr
+fn get_mut(self: &mut Self, key: str) ?&mut V
+```
+
+### StringMap.put
+
+```otr
+fn put(self: &mut Self, key: str, value: V) ?V
+```
+
+Stores `value` under a copy of `key` and returns the value it replaces. The key
+is copied only when it is new.
+
+### StringMap.get_or_put_value
+
+```otr
+fn get_or_put_value(self: &mut Self, key: str, value: V) GetOrPut(str, V)
+```
+
+The entry for `key`, made with a copy of it and `value` when there is none;
+otherwise `value` is cleaned up if it is a resource.
+
+### StringMap.get_or_put_with
+
+```otr
+fn get_or_put_with(self: &mut Self, key: str, make: anytype) GetOrPut(str, V)
+```
+
+The entry for `key`, made with a copy of it and the value `make()` returns when
+there is none, so a costly value is built only on a miss. One probe either way.
+
+### StringMap.remove
+
+```otr
+fn remove(self: &mut Self, key: str) ?V
+```
+
+### StringMap.retain
+
+```otr
+fn retain(self: &mut Self, keep: anytype) void
+```
+
+Removes every entry for which `keep(key, &mut value)` is false; `key` is a `str`.
+
+### StringMap.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+Removes every entry, keeping the storage.
+
+### StringMap.iter
+
+```otr
+fn iter(self: &Self) Iter(T)
+```
+
+The entries, in no particular order. The map stays borrowed while it is used.
+
+### StringMap.iter_mut
+
+```otr
+fn iter_mut(self: &mut Self) IterMut(T)
+```
+
+The entries with values that may change. Nothing else reaches the map meanwhile.
+
+## ArrayIter
+
+```otr
+fn ArrayIter(comptime T: type) type
+```
+
+The entries of an array map in order, as shared borrows.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>table</code> | <code>&amp;T</code> | Read-only |
+| <code>i</code> | <code>usize</code> | Read-only |
+
+### ArrayIter.next
+
+```otr
+fn next(self: &mut Self) ?Entry(T.KeyRef, T.Value)
+```
+
+## ArrayIterMut
+
+```otr
+fn ArrayIterMut(comptime T: type) type
+```
+
+The entries of an array map in order, with values that may change.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>table</code> | <code>&amp;mut T</code> | Read-only |
+| <code>i</code> | <code>usize</code> | Read-only |
+
+### ArrayIterMut.next
+
+```otr
+fn next(self: &mut Self) ?EntryMut(T.KeyRef, T.Value)
+```
+
+## ArrayHashMap
+
+```otr
+fn ArrayHashMap(comptime K: type, comptime V: type) type
+```
+
+A hash map that keeps its entries in insertion order, in dense arrays that iterate
+as fast as a slice. Keys are hashed and compared as in `HashMap`. `swap_remove` is
+O(1) and moves the last entry into the gap; `ordered_remove` keeps the order and
+costs O(n).
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>table</code> | <code>T</code> | Read-only |
+
+### ArrayHashMap.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### ArrayHashMap.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### ArrayHashMap.len
+
+```otr
+fn len(self: &Self) usize
+```
+
+### ArrayHashMap.reserve
+
+```otr
+fn reserve(self: &mut Self, additional: usize) void
+```
+
+Makes room for `additional` more entries, so that adding them does not grow.
+
+### ArrayHashMap.index_of
+
+```otr
+fn index_of(self: &Self, key: &K) ?usize
+```
+
+The position of `key` in insertion order.
+
+### ArrayHashMap.contains
+
+```otr
+fn contains(self: &Self, key: &K) bool
+```
+
+### ArrayHashMap.get
+
+```otr
+fn get(self: &Self, key: &K) ?&V
+```
+
+### ArrayHashMap.get_mut
+
+```otr
+fn get_mut(self: &mut Self, key: &K) ?&mut V
+```
+
+### ArrayHashMap.put
+
+```otr
+fn put(self: &mut Self, key: K, value: V) ?V
+```
+
+Stores `value` under `key` and returns the value it replaces; a new key goes
+last. An equal key already present keeps its place; the new one is cleaned up
+if it is a resource.
+
+### ArrayHashMap.get_or_put_value
+
+```otr
+fn get_or_put_value(self: &mut Self, key: K, value: V) GetOrPut(&K, V)
+```
+
+The entry for `key`, appended with `value` when there is none; otherwise `key`
+and `value` are cleaned up if they are resources.
+
+### ArrayHashMap.get_or_put_with
+
+```otr
+fn get_or_put_with(self: &mut Self, key: K, make: anytype) GetOrPut(&K, V)
+```
+
+The entry for `key`, appended with the value `make()` returns when there is none,
+so a costly value is built only on a miss; otherwise `key` is cleaned up if it is
+a resource.
+
+### ArrayHashMap.swap_remove
+
+```otr
+fn swap_remove(self: &mut Self, key: &K) ?V
+```
+
+Removes `key` and returns its value, moving the last entry into its place.
+
+### ArrayHashMap.ordered_remove
+
+```otr
+fn ordered_remove(self: &mut Self, key: &K) ?V
+```
+
+Removes `key` and returns its value, keeping the order of the rest.
+
+### ArrayHashMap.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+Removes every entry, keeping the storage.
+
+### ArrayHashMap.keys
+
+```otr
+fn keys(self: &Self) []K
+```
+
+The keys in insertion order.
+
+### ArrayHashMap.values
+
+```otr
+fn values(self: &Self) []V
+```
+
+The values in insertion order.
+
+### ArrayHashMap.values_mut
+
+```otr
+fn values_mut(self: &mut Self) []mut V
+```
+
+The values in insertion order, to change in place.
+
+### ArrayHashMap.iter
+
+```otr
+fn iter(self: &Self) ArrayIter(T)
+```
+
+The entries in insertion order.
+
+### ArrayHashMap.iter_mut
+
+```otr
+fn iter_mut(self: &mut Self) ArrayIterMut(T)
+```
+
+The entries in insertion order, with values that may change.
+
+## StringArrayHashMap
+
+```otr
+fn StringArrayHashMap(comptime V: type) type
+```
+
+`ArrayHashMap` with owned copies of string keys, looked up by `str` and handed out as
+`str`.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>table</code> | <code>T</code> | Read-only |
+
+### StringArrayHashMap.init
+
+```otr
+fn init(alloc: mem.Allocator) Self
+```
+
+### StringArrayHashMap.deinit
+
+```otr
+fn deinit(self: Self) void
+```
+
+### StringArrayHashMap.len
+
+```otr
+fn len(self: &Self) usize
+```
+
+### StringArrayHashMap.reserve
+
+```otr
+fn reserve(self: &mut Self, additional: usize) void
+```
+
+Makes room for `additional` more entries, so that adding them does not grow.
+
+### StringArrayHashMap.index_of
+
+```otr
+fn index_of(self: &Self, key: str) ?usize
+```
+
+The position of `key` in insertion order.
+
+### StringArrayHashMap.contains
+
+```otr
+fn contains(self: &Self, key: str) bool
+```
+
+### StringArrayHashMap.get
+
+```otr
+fn get(self: &Self, key: str) ?&V
+```
+
+### StringArrayHashMap.get_mut
+
+```otr
+fn get_mut(self: &mut Self, key: str) ?&mut V
+```
+
+### StringArrayHashMap.put
+
+```otr
+fn put(self: &mut Self, key: str, value: V) ?V
+```
+
+Stores `value` under a copy of `key` and returns the value it replaces; a new
+key goes last and is copied only then.
+
+### StringArrayHashMap.get_or_put_value
+
+```otr
+fn get_or_put_value(self: &mut Self, key: str, value: V) GetOrPut(str, V)
+```
+
+The entry for `key`, appended with a copy of it and `value` when there is none;
+otherwise `value` is cleaned up if it is a resource.
+
+### StringArrayHashMap.get_or_put_with
+
+```otr
+fn get_or_put_with(self: &mut Self, key: str, make: anytype) GetOrPut(str, V)
+```
+
+The entry for `key`, appended with a copy of it and the value `make()` returns
+when there is none, so a costly value is built only on a miss.
+
+### StringArrayHashMap.swap_remove
+
+```otr
+fn swap_remove(self: &mut Self, key: str) ?V
+```
+
+Removes `key` and returns its value, moving the last entry into its place.
+
+### StringArrayHashMap.ordered_remove
+
+```otr
+fn ordered_remove(self: &mut Self, key: str) ?V
+```
+
+Removes `key` and returns its value, keeping the order of the rest.
+
+### StringArrayHashMap.clear
+
+```otr
+fn clear(self: &mut Self) void
+```
+
+Removes every entry, keeping the storage.
+
+### StringArrayHashMap.key_at
+
+```otr
+fn key_at(self: &Self, i: usize) str
+```
+
+The key at position `i` in insertion order.
+
+### StringArrayHashMap.values
+
+```otr
+fn values(self: &Self) []V
+```
+
+The values in insertion order.
+
+### StringArrayHashMap.values_mut
+
+```otr
+fn values_mut(self: &mut Self) []mut V
+```
+
+The values in insertion order, to change in place.
+
+### StringArrayHashMap.iter
+
+```otr
+fn iter(self: &Self) ArrayIter(T)
+```
+
+The entries in insertion order.
+
+### StringArrayHashMap.iter_mut
+
+```otr
+fn iter_mut(self: &mut Self) ArrayIterMut(T)
+```
+
+The entries in insertion order, with values that may change.

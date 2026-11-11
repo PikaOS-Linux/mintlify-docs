@@ -1,0 +1,2 @@
+calls on main 2, on the new thread 1
+worker counted 1000

@@ -1,0 +1,29 @@
+import std
+import std.tz
+
+pub fn main() !void {
+    // A POSIX rule describes the zone here, so the output does not depend on the
+    // machine's zoneinfo files. tz.load(alloc, "Europe/Berlin") reads the system's.
+    berlin := try tz.TimeZone.parse_posix(std.mem.heap, "CET-1CEST,M3.5.0,M10.5.0/3")
+    defer berlin.deinit()
+
+    winter: i64 = 1768478400
+    summer: i64 = 1784116800
+    std.io.printf("{}\n{}\n", .{ berlin.at(winter), berlin.at(summer) })
+
+    off := berlin.offset_at(summer)
+    std.io.printf("{}: {} s east of UTC, dst {}\n", .{ off.abbrev.as_str(), off.seconds, off.is_dst })
+
+    // A wall-clock time in the zone names an instant.
+    meeting := try berlin.from_local(2026, 7, 1, 9, 30, 0)
+    std.io.printf("09:30 on 1 July is {} unix\n", .{ meeting.unix() })
+
+    // 02:30 on 29 March 2026 was skipped: the clock went from 02:00 to 03:00.
+    gap := try berlin.from_local(2026, 3, 29, 2, 30, 0)
+    std.io.printf("02:30 in the gap reads as {}\n", .{ gap })
+
+    utc := tz.TimeZone.utc(std.mem.heap)
+    defer utc.deinit()
+    var buf: [48]u8 = unsafe { undefined }
+    std.io.println(utc.at(summer).strftime(&mut buf, "%Y-%m-%d %H:%M %Z") orelse "")
+}

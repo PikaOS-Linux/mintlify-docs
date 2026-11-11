@@ -1,0 +1,24 @@
+import std
+import std.crypto.md5
+
+fn print_hex(label: str, bytes: []u8) void {
+    std.io.printf("{}: ", .{ label })
+    for b in bytes { std.io.printf("{x:0>2}", .{ b }) }
+    std.io.printf("\n", .{})
+}
+
+pub fn main() void {
+    // MD5 is broken for security; use it only where an old protocol or checksum asks.
+    whole := md5.Md5.hash("hello world")
+    print_hex("md5", whole[0..])
+
+    var h = md5.Md5.init()
+    h.update("hello ")
+    h.update("world")
+    parts := h.final()
+    std.io.printf("same digest in parts: {}\n", .{ std.mem.eql(u8, whole[0..], parts[0..]) })
+
+    empty := md5.Md5.hash("")
+    print_hex("md5 of nothing", empty[0..])
+    std.io.printf("digest is {} bytes\n", .{ md5.Md5.digest_len })
+}

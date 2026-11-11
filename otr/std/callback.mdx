@@ -1,0 +1,145 @@
+---
+title: "std.callback"
+sidebarTitle: "callback"
+description: "Callbacks into an owner, without the owner's address stored anywhere."
+---
+
+Callbacks into an owner, without the owner's address stored anywhere.
+
+A source of events (a timer, a connection, a widget) keeps a `Callbacks` and its owner
+passes itself to `emit` when the event happens, so each connected function gets the
+owner as `&mut Ctx` for the length of the call. Nothing points back at the owner between
+events, which a stored pointer to it would need `unsafe` for. A source that lives inside
+its owner is copied out first, `handlers := app.battery.on_change`, so `emit` can borrow
+the owner whole; `Callbacks` is only its function pointers.
+
+```otr
+import std.callback
+```
+
+## Example
+
+```otr
+import std
+import std.callback
+
+const Player = struct {
+    volume: u8
+    shown: u8
+    loud_warnings: u32
+}
+
+fn show(p: &mut Player, volume: u8) void {
+    p.shown = volume
+}
+
+fn warn_loud(p: &mut Player, volume: u8) void {
+    if volume > 80 { p.loud_warnings += 1 }
+}
+
+pub fn main() !void {
+    var player = Player{ volume: 0, shown: 0, loud_warnings: 0 }
+    // Up to 4 handlers, each called with the owner and the new volume.
+    var on_volume = callback.Callbacks(Player, u8, 4).init()
+    _ = try on_volume.connect(show)
+    warn_id := try on_volume.connect(warn_loud)
+
+    on_volume.emit(&mut player, 50)
+    on_volume.emit(&mut player, 90)
+    std.io.printf("shown {} warnings {}\n", .{ player.shown, player.loud_warnings })
+
+    on_volume.disconnect(warn_id)
+    on_volume.emit(&mut player, 100)
+    std.io.printf("shown {} warnings {}\n", .{ player.shown, player.loud_warnings })
+
+    // A Hook stores a function with a small datum, here the step to add.
+    step := callback.Hook(Player, u8).of(u8, fn(p: &mut Player, by: u8, times: u8) void {
+        p.volume += by * times
+    }, 5)
+    step.run(&mut player, 3)
+    std.io.printf("volume {}\n", .{ player.volume })
+}
+```
+
+```text
+shown 90 warnings 1
+shown 100 warnings 1
+volume 15
+```
+
+## Callbacks
+
+```otr
+fn Callbacks(comptime Ctx: type, comptime Args: type, comptime N: usize) type
+```
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>slots</code> | <code>[N]?Handler</code> | Read-only |
+
+### Callbacks.init
+
+```otr
+fn init() Self
+```
+
+### Callbacks.connect
+
+```otr
+fn connect(self: &mut Self, f: Handler) error { Full }!usize
+```
+
+Adds `f`; the returned id removes it again. Full when `N` are connected.
+
+### Callbacks.disconnect
+
+```otr
+fn disconnect(self: &mut Self, id: usize) void
+```
+
+### Callbacks.emit
+
+```otr
+fn emit(self: &Self, ctx: &mut Ctx, args: Args) void
+```
+
+Runs every connected function, in the order they were added, on `ctx`.
+
+## Hook
+
+```otr
+fn Hook(comptime Ctx: type, comptime Args: type) type
+```
+
+A stored callback: a function given the dispatcher's context and a small datum saved
+with it, such as a pool handle naming the object it is for. It is what C stores as a
+function and a `void *`, without the pointer: the object is reached through the
+context, so nothing refers to it between calls. A `Hook` is copyable, so a dispatcher
+keeping hooks inside the context copies one out before running it on the context.
+
+| Field | Type | Access |
+| --- | --- | --- |
+| <code>call_fn</code> | <code>fn(&amp;mut Ctx, [8]u8, Args) void</code> | Read-only |
+| <code>data</code> | <code>[8]u8</code> | Read-only |
+
+### Hook.of
+
+```otr
+fn of(comptime D: type, comptime f: fn(&mut Ctx, D, Args) void, data: D) Self
+```
+
+The hook that runs `f(ctx, data, args)`. `D` is plain and at most 8 bytes.
+
+### Hook.same
+
+```otr
+fn same(self: &Self, other: &Self) bool
+```
+
+Whether both hooks store the same function and all eight initialized datum bytes.
+
+### Hook.run
+
+```otr
+fn run(self: Self, ctx: &mut Ctx, args: Args) void
+```

@@ -1,0 +1,4 @@
+shared title (owners: 2)
+same value: true
+still alive: shared title
+alive after last owner: false

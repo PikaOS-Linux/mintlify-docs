@@ -1,0 +1,9 @@
+fed 27 of 27 bytes, done: false
+fed 43 of 43 bytes, done: false
+fed 6 of 6 bytes, done: true
+keeps the connection open: true
+status 200
+type text/plain
+  Content-Type: text/plain
+  Content-Length: 11
+body hello otter
