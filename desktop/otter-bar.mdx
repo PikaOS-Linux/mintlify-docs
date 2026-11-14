@@ -4,7 +4,7 @@ sidebarTitle: "Status bar"
 description: "Status bar for workspaces, tray, volume, MPRIS, battery, and other widgets."
 ---
 
-`otter-bar` is the Otter Shell status bar. It anchors to the top or bottom of each output through `zwlr_layer_shell_v1`. Config and theme reload without a restart.
+`otter-bar` is the Otter Shell status bar. It anchors to the top, bottom, left, or right edge of each output through `zwlr_layer_shell_v1`. Config and theme reload without a restart.
 
 ## Features
 
@@ -62,7 +62,8 @@ Key settings:
 
 ```conf
 general_height = 32
-general_position = top
+general_position = top          # top, bottom, left or right
+general_vertical_width = 48     # width of a left or right bar
 general_padding = 8
 
 # Comma-separated widget layout (left to right)
@@ -78,6 +79,32 @@ dnd_enabled = true
 ```
 
 Widget color fields are optional. Omit them to inherit from [theme.conf](/configuration/themes). Saving `theme.conf` updates bar widget colors without editing `otter-bar.conf`.
+
+### Left and right bars
+
+Set `general_position = left` or `right` to run the bar down the side of the screen. It is useful on ultrawide monitors, where width is cheaper than height.
+
+A side bar is a column `general_vertical_width` pixels wide (default `48`). It reserves only that width. `general_height` and `general_width` apply to a top or bottom bar.
+
+The three layout lists keep their meaning along the bar:
+
+| List            | Top or bottom bar | Left or right bar |
+| --------------- | ----------------- | ----------------- |
+| `layout_left`   | Left end          | Top               |
+| `layout_center` | Middle            | Middle            |
+| `layout_right`  | Right end         | Bottom            |
+
+Widgets stack and keep their text upright:
+
+- CPU, memory, temperature, battery, weather, and falcond show an icon with the value under it
+- Workspaces show one chip per row
+- The system tray stacks its icons, and its expand button points up or down
+- The active window and the media player show an icon only. Open the player's popup for the track
+- Popups, menus, and tooltips open beside the bar
+
+Auto-hide slides a side bar off its own edge. You can change the position while the bar runs.
+
+<Note>Lua widgets keep their horizontal form. In a side bar each one gets a single row of the column, so a wide widget is cut off.</Note>
 
 ### Do Not Disturb
 

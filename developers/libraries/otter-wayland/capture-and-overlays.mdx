@@ -83,6 +83,10 @@ The selector paints straight into shared-memory buffers and damages only the are
 
 `selector.edit(E, conn, io, &mut editor, external)` hands the overlay to an editor after a selection, for annotation tools. `open_editor` does the same for a rectangle you supply. The editor is any type that implements the `selection.editor.Editor` interface: `draw`, `motion`, `button`, `scroll`, `key` and `cursor`. Each input method returns an `EditorAction`.
 
+## Popup placement
+
+`layer_popup.LayerPopup` opens from the edge its bar sits on. Set `InitArgs.edge` (or the popup's `edge` field) to a `layer.Edge`: `top`, `bottom`, `left` or `right`. `show_with_scale(g, type, along, away, w, h, scale)` places the popup `along` pixels down the bar's long axis and `away` pixels out from the bar. `show_centered` centres it on a point of that axis and keeps it on the output. `layer.Edge.bar_anchor()` gives the layer-shell anchor of a bar spanning the edge.
+
 ## Popup blur
 
 `layer_popup.LayerPopup.set_background_blur_regions(compositor, regions)` stages rounded `background_effect.RoundedRegion` panels, in surface-local coordinates, for the popup's next draw. Pass the bounds of the panels you paint, not the space a cascading menu reserves. An empty slice clears the blur. For a popup with one panel, `set_background_blur(compositor, enabled)` covers the whole rounded surface.

@@ -38,7 +38,7 @@ import otter_ui_widgets.memory.state as memory
 
 /// Lays the widget out at `x` and returns the x after it.
 fn place(w: &mut memory.Memory, f: &mut font.Font, x: i32, bar_height: u16) i32 {
-    width := w.get_width(f)
+    width := w.get_length(f)
     w.set_area(geo.Rect{ x: x, y: 0, width: @int_cast(u16, width), height: bar_height })
     return x + @as(i32, width)
 }
@@ -59,10 +59,16 @@ pub fn main() void {
 }
 ```
 
+### Vertical bars
+
+Every widget embeds `otter_ui.widget.Widget`, which carries `axis: Axis` (`horizontal` or `vertical`). A host that runs its bar down the left or right edge sets `w.widget.axis = .vertical` before `set_area`, gives the widget the bar's inner width, and reads its height from `get_length`.
+
+In a vertical bar a widget draws a cell: an icon centred at the top and its value under it in upright text. `otter_ui_widgets.bar.cell` holds the cell's sizes and helpers (`icon_rect`, `text_line`, `icon_text`), so your own widgets match the built-in ones.
+
 | Method | When to call it |
 | --- | --- |
 | `init(area, config, ...)` | Once. The config carries colors, thresholds and padding. |
-| `get_width(&mut font)` | During bar layout, to learn how wide the widget wants to be. |
+| `get_length(&mut font)` | During bar layout, to learn the widget's size along the bar: its width in a horizontal bar, its height in a vertical one. |
 | `set_area(rect)` | After layout, with the widget's final rectangle. |
 | `sync_state(...)` | When its data source changed. It returns true when the widget needs a redraw. |
 | `draw_frame(frame, clip)` | While painting, with the current `UiFrame`. |

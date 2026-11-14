@@ -4,14 +4,14 @@ sidebarTitle: "Taskbar"
 description: "Windows-style taskbar with grouped windows, Start, clock, tray, and hover previews."
 ---
 
-`otter-taskbar` groups windows by application on a bottom layer-shell strip alongside **Start**, the clock, and the tray. It reserves space so tiled windows stop above it. The taskbar is part of the `otter-shell` metapackage.
+`otter-taskbar` groups windows by application on a layer-shell strip alongside **Start**, the clock, and the tray. It sits on the bottom edge by default, or on the left or right. It reserves space so tiled windows stop at it. The taskbar is part of the `otter-shell` metapackage.
 
 ## Features
 
 - Grouped running windows, plus pinned apps
 - Start control (Otter icon) with keyboard search. Escape or a click outside dismisses it
 - Task view in Start launches [otter-overview](/desktop/otter-overview). In a Zoolander session it opens Zoolander's own overview with `zoolanderctl eval "zl.toggle_overview()"` instead
-- Clock and date. Left-click the clock for a calendar above the bar
+- Clock and date. Left-click the clock for a calendar above the bar, or beside a left or right one
 - System tray (StatusNotifierItem). Tray menus support Escape, arrows, Tab, Home/End, and Enter or Space
 - Twelve-pixel Show Desktop strip. First click minimizes live windows; the next click restores those same handles
 - Hover previews, content-sized and centered on the app button. They use `ext-image-copy-capture-v1` when the compositor has it. Otherwise you get a placeholder.
@@ -34,6 +34,18 @@ Run it as a session daemon. Autostart it the same way you start [otter-bar](/des
 
 Needs `zwlr_layer_shell_v1`. Auto-hide is off by default. When you turn it on, the bar leaves a two-pixel edge target while hidden.
 
+## Left and right taskbars
+
+Set `position = left` or `right` for a column of icons down the side of the screen, `vertical_width` pixels wide.
+
+- **Start** and task view sit at the top
+- Each application is one square icon. Titles are not shown, whatever `show_labels` says
+- The tray, the time, and the Show Desktop strip sit at the bottom. The date is in the calendar
+- The Start panel, hover previews, the calendar, menus, and tooltips open beside the column
+- Drag pinned icons up or down to reorder them
+
+The taskbar only sees clicks on its own surface. Press Escape to close a panel when you click far away from it.
+
 ## Configuration
 
 Config: `~/.config/otter-shell/otter-taskbar.conf`
@@ -43,7 +55,9 @@ Config: `~/.config/otter-shell/otter-taskbar.conf`
 Key settings:
 
 ```conf
+position = bottom       # bottom, left or right
 height = 48
+vertical_width = 48     # width on the left or right edge
 auto_hide = false
 auto_hide_delay = 500
 button_width = 160
@@ -67,7 +81,9 @@ start_menu_height = 560
 
 | Key                                       | Meaning                                                                                                                    |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `height`                                  | Bar height in pixels. Default 48                                                                                           |
+| `position`                                | Edge the taskbar sits on: `bottom`, `left`, or `right`. Default `bottom`                                                   |
+| `height`                                  | Bar height in pixels on the bottom edge. Default 48                                                                        |
+| `vertical_width`                          | Column width in pixels on the left or right edge. Default 48                                                               |
 | `auto_hide`                               | Opt-in. Default `false`                                                                                                    |
 | `auto_hide_delay`                         | Hide delay in milliseconds. Default 500                                                                                    |
 | `button_width`                            | Task button width. Default 160                                                                                             |

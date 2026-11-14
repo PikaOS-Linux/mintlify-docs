@@ -59,6 +59,8 @@ otter-term --self-test                          # run the built-in PTY self-test
 
 `otter-term` reads `~/.config/otter-shell/otter-term.conf`, then `/etc/otter-shell/otter-term.conf`, then compiled defaults. On startup it normalizes your file, adding missing defaults and removing unknown keys. The file **hot-reloads whenever you save it**. Font, colors, padding, and grid size update without restarting the terminal. The **Terminal** tab in otter-settings edits the same keys.
 
+`font_family` opens the family's regular upright face. Set `font_path` to a font file when you want another style, such as a bold or italic one.
+
 Terminal chrome (tab strip, split rules, status pills, visual bell) follows `theme.conf` and its profile, and hot-reloads when you save it.
 
 ```conf

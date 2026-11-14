@@ -59,7 +59,7 @@ greeter_command = "/usr/bin/zoolander --config=/etc/otter-shell/otter-greeter-zo
 default_session = "zoolander"
 ```
 
-To host the greeter on Hyprland, comment out the Zoolander line and uncomment the Hyprland one. Install `hyprland` first; the package only suggests it.
+To host the greeter on Hyprland, comment out the Zoolander line and uncomment the Hyprland one. The daemon sets `XDG_CURRENT_DESKTOP=Zoolander` only for a Zoolander `greeter_command`; other compositors name themselves. Install `hyprland` first; the package only suggests it.
 
 `otter-greeter-zoolander.lua` is a greeter-only Zoolander config. It turns off XWayland, server-side decorations, borders, gaps, blur, and animations. Its `startup` handler launches `otter-wallpaper`, `otter-theme-gen`, and `otter-greeter-ui`. `otter-greeterd` sets `XDG_CURRENT_DESKTOP=Zoolander` in the greeter environment.
 
