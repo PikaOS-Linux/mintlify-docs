@@ -416,6 +416,34 @@ zl.set_dim({ inactive = true, strength = 0.1, special = 0.3, around = 0.02 })
 zl.set_reduced_motion(true)
 ```
 
+## Render GPU
+
+`zl.set_render_gpu(name)` picks the GPU that draws the desktop on a machine with two, such as a laptop with an integrated and a discrete GPU. Zoolander drives the screens of both GPUs either way. Only the GPU that renders changes.
+
+| Name | Description | Type | Default |
+| --- | --- | --- | --- |
+| `zl.set_render_gpu(name)` | `"auto"`, `"integrated"` or `"discrete"`. Returns `true` on success and `false` for any other value, which leaves the setting unchanged. | string | `"auto"` |
+
+| Value | Renders on | Trade-off |
+| --- | --- | --- |
+| `auto` | The GPU your displays are on. On a laptop, that is the GPU behind the built-in screen. | |
+| `integrated` | The GPU behind the built-in screen. | Lowest power draw. Rendering shares the processor's cooling. |
+| `discrete` | The other GPU. | The processor runs cooler under load, because the discrete GPU has its own cooling. It draws more power, so battery life is shorter. |
+
+```lua
+zl.set_render_gpu("discrete")
+```
+
+The setting takes effect the next time you log in. Zoolander creates its renderer before it loads your config, so it saves the value in `$XDG_STATE_HOME/zoolander/render-gpu` and reads it at the next start. After you change it, log out and back in. Then run `zoolanderctl status` and check the `renderer` line.
+
+The setting changes nothing in these cases:
+
+- The machine has one GPU.
+- The machine has no built-in screen, as on a desktop.
+- The discrete GPU drives no display ports of its own. Zoolander only renders on a GPU that has at least one connector. Run `zoolander --drm-list` to see the candidates.
+
+An explicit `--drm=DEVICE` on the command line overrides the setting.
+
 ## Bell sound
 
 `zl.set_bell_sound(name)` picks the sound played when an app rings the system bell through `xdg-system-bell`.

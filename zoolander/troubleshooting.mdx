@@ -119,7 +119,26 @@ The session works but uses more CPU. To get Vulkan:
 - Check that you have not set `VK_LOADER_DRIVERS_SELECT` to a driver for a different GPU. The packaged binary ignores `VK_DRIVER_FILES` and `VK_ICD_FILENAMES`; see [Variables that apps or Zoolander do not see](#variables-that-apps-or-zoolander-do-not-see).
 - On a hybrid laptop, the display may be wired to the integrated GPU. Zoolander then renders there. Use `--drm-list` to see which card drives your panel.
 
-Even with Vulkan, if the display plane and the driver share no scanout modifier, Zoolander copies frames into dumb buffers. That works but costs CPU time.
+## A hybrid laptop runs hot
+
+On a laptop with two GPUs, Zoolander renders on the GPU behind the built-in screen. That is usually the integrated GPU, which shares the processor's cooling. Under load, such as several video streams, the processor can run hot. Run `zoolanderctl status` and read the `renderer` line to see which GPU renders.
+
+To render on the discrete GPU instead, add this to your config, then log out and back in:
+
+```lua
+zl.set_render_gpu("discrete")
+```
+
+This needs a discrete GPU that drives at least one display port, which `zoolander --drm-list` shows. You can also set it in the settings app under **Graphics**. The discrete GPU has its own cooling, so the processor runs cooler. It draws more power, so expect shorter battery life. See [Render GPU](/zoolander/configuring/variables#render-gpu).
+
+PRIME variables such as `__NV_PRIME_RENDER_OFFLOAD` do not change the GPU Zoolander renders on. They only affect apps.
+
+The screens on the other GPU show what the rendering GPU draws. Each frame, Zoolander copies what changed across. The log line `scanout path:` at start says how:
+
+| Log line | Meaning |
+| --- | --- |
+| `frames copied on the GPU into the device's own buffers` | The copy runs on the GPU. This is the normal path for a second GPU. |
+| `every frame read back on the CPU into dumb buffers` | The rendering GPU's driver imports none of the other GPU's buffers, so the copy runs on the CPU. This costs CPU time. Try `zl.set_render_gpu` with the other value. |
 
 ## Direct scanout does not engage
 

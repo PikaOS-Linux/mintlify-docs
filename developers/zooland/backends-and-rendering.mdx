@@ -116,7 +116,15 @@ All updates use atomic commits:
 
 ### Formats and modifiers
 
-Scanout images are allocated with libgbm from the modifiers that the plane and the Vulkan driver share, then imported into Vulkan. With no modifier in common, frames are copied into dumb buffers.
+Scanout images are allocated with libgbm from the modifiers that the plane and the Vulkan driver share, then imported into Vulkan. With no modifier in common, each frame is drawn in the renderer's own memory and its damage is copied across. The backend tries three targets in order:
+
+1. A GBM buffer in a single-plane layout the plane lists and the driver renders to. Tiled layouts come first, then LINEAR.
+2. A dumb buffer of the KMS device, exported as a dma-buf and imported as LINEAR. This is the path for a second GPU whose GBM allocates nothing another vendor's driver renders to.
+3. A CPU readback into dumb buffers, when the renderer imports neither.
+
+The first two copies run on the GPU and are clipped to the frame's damage rects. The readback takes the bounding box of the damage in one wait.
+
+A backend created with `Options.primary` is a second GPU that only drives connectors. It creates no renderer and always takes this copy path.
 
 Modifiers compare as whole values. NVIDIA encodings are never normalized.
 

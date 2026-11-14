@@ -105,7 +105,7 @@ zoolander [OPTIONS] [--spawn CMD [ARGS...]]
 | `--headless-size=WxH` | Size of the first headless output. Each side is 1 to 2147483647. | `WxH` | `64x48` |
 | `--headless-size2=WxH` | Add a second headless output of this size. | `WxH` | none |
 | `--drm` | Use the DRM backend on an auto-picked device. Fails instead of falling back if DRM cannot start. | flag | off |
-| `--drm=DEVICE` | Use the DRM backend on this device, for example `/dev/dri/card1`. | path | |
+| `--drm=DEVICE` | Use the DRM backend on this device, for example `/dev/dri/card1`. Repeat the flag to add devices: the first one renders, and the later ones only drive their own connectors. | path | |
 | `--drm-list` | List DRM candidates in ranked order, plus rejected cards and the reason, then exit. | flag | |
 | `--config=PATH` | Load this Lua file instead of the default config. | path | see [Config location](/zoolander/configuring/overview#config-location) |
 | `--spawn CMD [ARGS...]` | Start a client after startup. Takes the rest of the command line, so put it last. Accepts at most 16 words in total. | command | none |
